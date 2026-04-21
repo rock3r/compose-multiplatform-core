@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("AndroidXPlugin")
+    id("AndroidXComposePlugin")
     id("JetBrainsAndroidXPlugin")
 }
 
@@ -60,6 +61,13 @@ androidXMultiplatform {
         jvmAndAndroidMain {
             dependencies {
                 implementation(libs.kotlinReflect)
+            }
+        }
+
+        jvmMain {
+            dependencies {
+                implementation(libs.skikoCurrentOs)
+                implementation(project(":compose:foundation:foundation"))
             }
         }
 
