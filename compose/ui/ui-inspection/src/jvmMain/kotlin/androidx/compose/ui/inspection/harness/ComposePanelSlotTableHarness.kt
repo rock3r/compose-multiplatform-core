@@ -53,15 +53,20 @@ fun main() {
                         addActionListener {
                             val layoutInspector = inspector.attachToCurrentProcess()
                             val snapshots = layoutInspector.layoutInfos.value
-                            val names =
-                                snapshots.values
-                                    .flatMap { roots -> roots.flatMap { it.flattenedNames() } }
-                                    .take(12)
                             println(
                                 "[slot-table-snapshot] panels=${snapshots.size} " +
-                                    "nodes=${snapshots.values.sumOf { it.size }} " +
-                                    "sample=$names"
+                                    "roots=${snapshots.values.sumOf { it.size }}"
                             )
+                            snapshots.forEach { (panelId, roots) ->
+                                println("panel=$panelId")
+                                if (roots.isEmpty()) {
+                                    println("  <empty>")
+                                } else {
+                                    roots.forEachIndexed { index, root ->
+                                        root.printTree(prefix = "", isLast = index == roots.lastIndex)
+                                    }
+                                }
+                            }
                             layoutInspector.detach()
                         }
                     },
@@ -104,12 +109,17 @@ private fun ProbeBranch(seed: String, depth: Int) {
 @Composable
 private fun ProbeLeaf(seed: String) {
     if (seed.length % 2 == 0) {
-        BasicText("Stupid agent")
+        BasicText("Leaf even")
     } else {
-        BasicText("Idiot agent")
+        BasicText("Leaf odd")
     }
 }
 
-private fun InspectorNode.flattenedNames(): List<String> {
-    return listOf(name) + children.flatMap { child -> child.flattenedNames() }
+private fun InspectorNode.printTree(prefix: String, isLast: Boolean) {
+    val branch = if (isLast) "└─" else "├─"
+    println("$prefix$branch$name [key=$key children=${children.size}]")
+    val childPrefix = prefix + if (isLast) "  " else "│ "
+    children.forEachIndexed { index, child ->
+        child.printTree(prefix = childPrefix, isLast = index == children.lastIndex)
+    }
 }
