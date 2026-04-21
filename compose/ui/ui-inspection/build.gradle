@@ -80,6 +80,7 @@ androidXMultiplatform {
                 // because compose:ui-inspector can be run only in app with compose:ui:ui
                 // thus all its transitive dependencies will be present too.
                 implementation(libs.protobufLite)
+                implementation(project(":compose:ui:ui-inspection-proto"))
                 compileOnly(libs.kotlinCoroutinesAndroid)
                 compileOnly("androidx.collection:collection:1.4.2")
                 compileOnly(androidx.projectOrArtifact(":inspection:inspection"))
@@ -93,10 +94,7 @@ androidXMultiplatform {
                 }
             }
             kotlin.srcDirs += "src/androidMain/java"
-            resources.srcDirs += [
-                    "src/androidMain/proto",
-                    "src/androidMain/resources"
-            ]
+            resources.srcDirs += "src/androidMain/resources"
         }
 
         androidDeviceTest {
