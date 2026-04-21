@@ -17,7 +17,6 @@
 package androidx.compose.ui.inspection
 
 import androidx.compose.ui.inspection.rules.ComposeInspectionRule
-import androidx.compose.ui.inspection.rules.sendCommand
 import androidx.compose.ui.inspection.testdata.ParametersTestActivity
 import androidx.compose.ui.inspection.util.GetComposablesCommand
 import androidx.compose.ui.inspection.util.GetParameterDetailsCommand

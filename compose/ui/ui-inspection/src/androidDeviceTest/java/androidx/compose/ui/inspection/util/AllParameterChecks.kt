@@ -16,7 +16,6 @@
 
 package androidx.compose.ui.inspection.util
 
-import androidx.compose.ui.inspection.rules.sendCommand
 import androidx.inspection.testing.InspectorTester
 import com.google.common.truth.Truth.assertThat
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ComposableNode

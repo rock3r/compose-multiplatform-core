@@ -18,7 +18,6 @@ package androidx.compose.ui.inspection
 
 import android.view.inspector.WindowInspector
 import androidx.compose.ui.inspection.rules.JvmtiRule
-import androidx.compose.ui.inspection.rules.sendCommand
 import androidx.compose.ui.inspection.testdata.RecompositionTestActivity
 import androidx.compose.ui.inspection.util.GetAllParametersCommand
 import androidx.compose.ui.inspection.util.GetComposablesCommand
