@@ -16,8 +16,6 @@
 
 package androidx.compose.ui.inspection.inspector
 
-import android.util.Log
-import android.view.View
 import androidx.collection.mutableIntListOf
 import androidx.compose.runtime.internal.ComposableLambda
 import androidx.compose.ui.AbsoluteAlignment
@@ -29,7 +27,6 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.inspection.SPAM_LOG_TAG
 import androidx.compose.ui.inspection.inspector.ParameterType.DimensionDp
 import androidx.compose.ui.inspection.util.copy
 import androidx.compose.ui.inspection.util.removeLast
@@ -61,12 +58,31 @@ import kotlin.reflect.jvm.javaGetter
 
 private val reflectionScope: ReflectionScope = ReflectionScope()
 
+internal interface ParameterFactoryPlatform {
+    fun isPlatformView(value: Any): Boolean
+
+    fun platformViewName(value: Any): String
+
+    fun warn(message: String)
+}
+
+internal object NoOpParameterFactoryPlatform : ParameterFactoryPlatform {
+    override fun isPlatformView(value: Any): Boolean = false
+
+    override fun platformViewName(value: Any): String = value::class.simpleName ?: "View"
+
+    override fun warn(message: String) {}
+}
+
 /**
  * Factory of [NodeParameter]s.
  *
  * Each parameter value is converted to a user readable value.
  */
-internal class ParameterFactory(private val inlineClassConverter: InlineClassConverter) {
+internal class ParameterFactory(
+    private val inlineClassConverter: InlineClassConverter,
+    private val platform: ParameterFactoryPlatform = NoOpParameterFactoryPlatform,
+) {
     /** A map from known values to a user readable string representation. */
     private val valueLookup = mutableMapOf<Any, String>()
 
@@ -468,7 +484,8 @@ internal class ParameterFactory(private val inlineClassConverter: InlineClassCon
                 is String -> NodeParameter(name, ParameterType.String, value)
                 is TextUnit -> createFromTextUnit(name, value)
                 is ImageVector -> createFromImageVector(name, value)
-                is View -> NodeParameter(name, ParameterType.String, value.javaClass.simpleName)
+                platform.isPlatformView(value) ->
+                    NodeParameter(name, ParameterType.String, platform.platformViewName(value))
                 else -> null
             }
         }
@@ -668,7 +685,7 @@ internal class ParameterFactory(private val inlineClassConverter: InlineClassCon
                     .flatMap { it.declaredMemberProperties.asSequence() }
                     .associateBy { it.name }
             } catch (_: Throwable) {
-                Log.w(SPAM_LOG_TAG, "Could not decompose ${kClass.simpleName}")
+                platform.warn("Could not decompose ${kClass.simpleName}")
                 null
             }
         }
@@ -681,7 +698,7 @@ internal class ParameterFactory(private val inlineClassConverter: InlineClassCon
                 property.getter.call(instance)
             } catch (_: Throwable) {
                 // TODO: Remove this warning since this is expected with nullable inline types
-                Log.w(SPAM_LOG_TAG, "Could not get value of ${property.name}")
+                platform.warn("Could not get value of ${property.name}")
                 null
             }
 

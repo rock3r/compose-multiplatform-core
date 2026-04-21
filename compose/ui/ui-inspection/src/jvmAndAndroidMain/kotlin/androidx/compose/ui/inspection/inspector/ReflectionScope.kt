@@ -16,7 +16,6 @@
 
 package androidx.compose.ui.inspection.inspector
 
-import android.annotation.SuppressLint
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
 import kotlin.jvm.internal.FunctionBase
@@ -73,7 +72,6 @@ import kotlin.reflect.jvm.internal.ReflectionFactoryImpl
  * installed. Only within `reflectionScope.withReflectiveAccess{ }` factory from kotlin-reflect is
  * used.
  */
-@SuppressLint("BanUncheckedReflection")
 class ReflectionScope {
 
     companion object {
@@ -103,7 +101,6 @@ class ReflectionScope {
     }
 }
 
-@SuppressLint("BanUncheckedReflection")
 private fun allowHiddenApi() {
     try {
         val vmDebug = Class.forName("dalvik.system.VMDebug")
