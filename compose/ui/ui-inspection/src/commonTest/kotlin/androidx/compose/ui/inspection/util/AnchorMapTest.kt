@@ -16,12 +16,10 @@
 
 package androidx.compose.ui.inspection.util
 
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.JUnit4
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertSame
 
-@RunWith(JUnit4::class)
 class AnchorMapTest {
     @Test
     fun testMap() {
@@ -45,8 +43,8 @@ class AnchorMapTest {
 
     private fun check(map: AnchorMap, anchor: Anchor, expectedId: Int) {
         val id = map[anchor]
-        assertThat(id).isEqualTo(expectedId)
-        assertThat(map[id]).isSameInstanceAs(anchor)
+        assertEquals(expectedId, id)
+        assertSame(anchor, map[id])
     }
 
     private class Anchor(private val hash: Int) {

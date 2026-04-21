@@ -16,8 +16,8 @@
 
 package androidx.compose.ui.inspection.recompositions
 
-import com.google.common.truth.Truth.assertThat
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 private const val ANCHOR1 = "anchor1"
 private const val ANCHOR2 = "anchor2"
@@ -38,20 +38,20 @@ class StateReadCacheTest {
         data1.incrementCount()
         cache.addStateRead(ANCHOR1, VALUE1, Exception())
         cache.addStateRead(ANCHOR1, VALUE2, Exception())
-        assertThat(cache.currentStateReads).isEqualTo(2)
+        assertEquals(2, cache.currentStateReads)
         data1.incrementCount()
         cache.addStateRead(ANCHOR1, VALUE1, Exception())
         cache.addStateRead(ANCHOR1, VALUE2, Exception())
-        assertThat(cache.currentStateReads).isEqualTo(4)
+        assertEquals(4, cache.currentStateReads)
         data2.incrementCount()
         cache.addStateRead(ANCHOR2, VALUE1, Exception())
-        assertThat(cache.currentStateReads).isEqualTo(5)
+        assertEquals(5, cache.currentStateReads)
         data2.incrementCount()
 
         // When adding 1 more state read, the state reads for ANCHOR1 and recomposition 1
         // will be discarded i.e. 2 state reads are discarded.
         cache.addStateRead(ANCHOR2, VALUE1, Exception())
-        assertThat(cache.currentStateReads).isEqualTo(4)
+        assertEquals(4, cache.currentStateReads)
 
         // Attempt to read state reads for the 2 first recompositions but only 1 is left:
         val reads =
@@ -61,9 +61,9 @@ class StateReadCacheTest {
                 recompositionNumberEnd = 2,
                 includeExtra = false,
             )
-        assertThat(reads.size).isEqualTo(1)
-        assertThat(reads.single().recomposition).isEqualTo(2)
+        assertEquals(1, reads.size)
+        assertEquals(2, reads.single().recomposition)
         // This should remove 2 state reads from the cache:
-        assertThat(cache.currentStateReads).isEqualTo(2)
+        assertEquals(2, cache.currentStateReads)
     }
 }

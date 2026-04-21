@@ -37,9 +37,6 @@ import kotlinx.coroutines.launch
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.StateReadSettings
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.StateReadSettings.MethodCase
 
-/** The elements of the result for a [StateReadHandler.getReadsAndRemove] call. */
-class ObservedReadResult(val recomposition: Int, val reads: List<StateReadRecord>)
-
 /** An extension of [RecompositionHandler] that keeps track of state reads. */
 class StateReadHandler(artTooling: ArtTooling, anchorMap: AnchorMap) :
     RecompositionHandler<RecompositionDataWithStateReads>(
