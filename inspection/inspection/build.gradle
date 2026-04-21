@@ -22,6 +22,7 @@
  * modifying its settings.
  */
 import androidx.build.SoftwareType
+import java.util.Properties
 
 plugins {
     id("AndroidXPlugin")
@@ -48,17 +49,52 @@ androidx {
     doNotDocumentReason = "Not shipped externally"
 }
 
+def hasConfiguredNdk() {
+    def sdkDirPath = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (sdkDirPath == null) {
+        def localProperties = new Properties()
+        def localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.withInputStream { localProperties.load(it) }
+            sdkDirPath = localProperties.getProperty("sdk.dir")
+        }
+    }
+    if (sdkDirPath == null) {
+        return false
+    }
+    def sdkDir = new File(sdkDirPath)
+    def ndkBundle = new File(sdkDir, "ndk-bundle")
+    if (new File(ndkBundle, "source.properties").exists()) {
+        return true
+    }
+    def ndkRoot = new File(sdkDir, "ndk")
+    if (!ndkRoot.exists()) {
+        return false
+    }
+    if (new File(ndkRoot, "source.properties").exists()) {
+        return true
+    }
+    return (ndkRoot.listFiles() ?: []).any { candidate ->
+        new File(candidate, "source.properties").exists()
+    }
+}
+
 android {
     defaultConfig {
         // studio pipeline works only starting with Android O
         minSdk = 26
     }
 
-    externalNativeBuild {
-        cmake {
-            path "src/main/native/CMakeLists.txt"
-            version = libs.versions.cmake.get()
+    if (hasConfiguredNdk()) {
+        externalNativeBuild {
+            cmake {
+                path "src/main/native/CMakeLists.txt"
+                version = libs.versions.cmake.get()
+            }
         }
+    } else {
+        logger.lifecycle("Skipping inspection native build; no Android NDK found")
     }
+
     namespace = "androidx.inspection"
 }
