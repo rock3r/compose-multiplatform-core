@@ -22,6 +22,17 @@ plugins {
     id("com.google.protobuf")
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.annotationProcessorPath = files()
+    options.compilerArgs.removeAll { arg ->
+        arg.contains("ErrorProne") || arg.startsWith("-Xep") || arg.startsWith("-Xplugin")
+    }
+}
+
+tasks.matching { it.name.startsWith("runErrorProne") }.configureEach {
+    enabled = false
+}
+
 dependencies {
     compileOnly(libs.protobufLite)
 }

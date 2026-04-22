@@ -38,11 +38,12 @@ plugins {
 
 androidXMultiplatform {
     def androidTarget = androidLibrary {
-        compileSdk = 35
+        compileSdk = 36
         // layout inspection supported starting on Android Q
         minSdk = 29
         namespace = "androidx.compose.ui.inspection"
     }
+
     jvm()
 
     defaultPlatform(PlatformIdentifier.ANDROID)
