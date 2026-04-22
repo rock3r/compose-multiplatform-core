@@ -18,6 +18,7 @@ package androidx.inspection.gradle
 
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.dsl.LibraryExtension
+import com.android.build.api.variant.KotlinMultiplatformAndroidComponentsExtension
 import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import com.android.build.api.variant.Variant
 import org.gradle.api.GradleException
@@ -28,6 +29,7 @@ import org.gradle.api.artifacts.MinimalExternalModuleDependency
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.attributes.Attribute
+import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.StopExecutionException
 import org.gradle.kotlin.dsl.apply
@@ -40,8 +42,9 @@ import org.gradle.kotlin.dsl.dependencies
  */
 class InspectionPlugin : Plugin<Project> {
     override fun apply(project: Project) {
-        var foundLibraryPlugin = false
-        var foundReleaseVariant = false
+        var foundSupportedAndroidPlugin = false
+        var foundPackagingVariant = false
+        var protobufConfigured = false
         val extension = project.extensions.create<InspectionExtension>(EXTENSION_NAME, project)
 
         val publishInspector =
@@ -51,60 +54,108 @@ class InspectionPlugin : Plugin<Project> {
                 it.setupInspectorAttribute()
             }
 
-        project.configurations.create(EXPORT_INSPECTOR_DEPENDENCIES) {
-            // to allow including these dependencies in an SBOM
-            it.description = "Re-publishes dependencies of the inspector"
-            it.isCanBeConsumed = true
-            it.isCanBeResolved = true
-            it.extendsFrom(project.configurations.getByName("implementation"))
-            it.setupReleaseAttribute()
+        val exportInspectorDependencies =
+            project.configurations.create(EXPORT_INSPECTOR_DEPENDENCIES) {
+                // to allow including these dependencies in an SBOM
+                it.description = "Re-publishes dependencies of the inspector"
+                it.isCanBeConsumed = true
+                it.isCanBeResolved = true
+                it.setupReleaseAttribute()
+            }
+
+        fun attachExportDependencies(baseConfigurationName: String) {
+            val baseConfiguration = project.configurations.findByName(baseConfigurationName) ?: return
+            if (!exportInspectorDependencies.extendsFrom.contains(baseConfiguration)) {
+                exportInspectorDependencies.extendsFrom(baseConfiguration)
+            }
+        }
+
+        fun registerInspectorTasks(
+            variant: Variant,
+            minSdkVersion: Int,
+            bootClasspath: FileCollection,
+        ) {
+            val unzip = project.registerUnzipTask(variant)
+            val shadowJar = project.registerShadowDependenciesTask(variant, extension, unzip)
+            val bundleTask =
+                project.registerBundleInspectorTask(
+                    variant,
+                    minSdkVersion,
+                    bootClasspath,
+                    extension.name,
+                    shadowJar,
+                )
+            publishInspector.outgoing.variants {
+                val configVariant = it.create("inspectorJar")
+                configVariant.artifact(bundleTask)
+            }
         }
 
         project.pluginManager.withPlugin("com.android.library") {
-            foundLibraryPlugin = true
+            foundSupportedAndroidPlugin = true
+            attachExportDependencies("implementation")
+
+            if (!protobufConfigured) {
+                protobufConfigured = true
+                project.apply(plugin = "com.google.protobuf")
+                project.dependencies {
+                    add("implementation", project.getLibraryByName("protobufLite"))
+                }
+            }
+
             val libExtension = project.extensions.getByType(LibraryExtension::class.java)
             val componentsExtension =
                 project.extensions.findByType(LibraryAndroidComponentsExtension::class.java)
                     ?: throw GradleException("android plugin must be used")
-            componentsExtension.onVariants { variant: Variant ->
+
+            val minSdk =
+                libExtension.defaultConfig.minSdk
+                    ?: throw GradleException("androidx.inspection requires minSdk to be set")
+
+            val bootClasspath = project.files(componentsExtension.sdkComponents.bootClasspath)
+
+            componentsExtension.onVariants { variant ->
                 if (variant.name == "release") {
-                    foundReleaseVariant = true
-                    val unzip = project.registerUnzipTask(variant)
-                    val shadowJar =
-                        project.registerShadowDependenciesTask(variant, extension, unzip)
-                    val bundleTask =
-                        project.registerBundleInspectorTask(
-                            variant,
-                            libExtension,
-                            componentsExtension,
-                            extension.name,
-                            shadowJar,
-                        )
-                    publishInspector.outgoing.variants {
-                        val configVariant = it.create("inspectorJar")
-                        configVariant.artifact(bundleTask)
-                    }
+                    foundPackagingVariant = true
+                    registerInspectorTasks(variant, minSdk, bootClasspath)
                 }
             }
         }
 
-        project.apply(plugin = "com.google.protobuf")
+        project.pluginManager.withPlugin("com.android.kotlin.multiplatform.library") {
+            foundSupportedAndroidPlugin = true
+            attachExportDependencies("androidMainImplementation")
 
-        project.dependencies { add("implementation", project.getLibraryByName("protobufLite")) }
+            val componentsExtension =
+                project.extensions.findByType(KotlinMultiplatformAndroidComponentsExtension::class.java)
+                    ?: throw GradleException("android kotlin multiplatform plugin must be used")
+
+            val bootClasspath = project.files(componentsExtension.sdkComponents.bootClasspath)
+
+            componentsExtension.onVariants { variant ->
+                if (variant.name == "androidMain") {
+                    foundPackagingVariant = true
+                    registerInspectorTasks(variant, variant.minSdk.apiLevel, bootClasspath)
+                }
+            }
+        }
 
         project.afterEvaluate {
-            if (!foundLibraryPlugin) {
+            attachExportDependencies("androidMainImplementation")
+
+            if (!foundSupportedAndroidPlugin) {
                 throw StopExecutionException(
-                    """A required plugin, com.android.library, was not found.
-                        The androidx.inspection plugin currently only supports android library
-                        modules, so ensure that com.android.library is applied in the project
-                        build.gradle file."""
+                    """A required plugin was not found.
+                        The androidx.inspection plugin supports android library modules using
+                        com.android.library or com.android.kotlin.multiplatform.library."""
                         .trimIndent()
                 )
             }
-            if (!foundReleaseVariant) {
+            val usesKmpAndroidPlugin =
+                project.pluginManager.hasPlugin("com.android.kotlin.multiplatform.library")
+            if (!foundPackagingVariant && !usesKmpAndroidPlugin) {
                 throw StopExecutionException(
-                    "The androidx.inspection plugin requires " + "release build variant."
+                    "The androidx.inspection plugin requires a release/androidMain variant."
                 )
             }
         }

@@ -17,8 +17,6 @@
 package androidx.inspection.gradle
 
 import com.android.build.api.artifact.SingleArtifact
-import com.android.build.api.dsl.LibraryExtension
-import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import com.android.build.api.variant.Variant
 import java.io.ByteArrayOutputStream
 import java.nio.charset.Charset
@@ -27,6 +25,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.FileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
@@ -105,8 +104,8 @@ fun Project.registerUnzipTask(variant: Variant): TaskProvider<Copy> {
 
 fun Project.registerBundleInspectorTask(
     variant: Variant,
-    libraryExtension: LibraryExtension,
-    libraryComponentsExtension: LibraryAndroidComponentsExtension,
+    minSdkVersion: Int,
+    bootClasspath: FileCollection,
     jarName: String?,
     jar: TaskProvider<out Jar>,
 ): TaskProvider<Zip> {
@@ -114,7 +113,7 @@ fun Project.registerBundleInspectorTask(
     val output = taskWorkingDir(variant, "dexedInspector").map { it.file(name) }
     val dex =
         tasks.register(variant.taskName("dexInspector"), DexInspectorTask::class.java) { task ->
-            task.minSdkVersion = libraryExtension.defaultConfig.minSdk!!
+            task.minSdkVersion = minSdkVersion
             task.d8Executable.setFrom(
                 configurations.detachedConfiguration(
                     dependencies.create("com.android.tools:r8:8.11.18")
@@ -123,7 +122,7 @@ fun Project.registerBundleInspectorTask(
             task.jars.from(jar.get().archiveFile)
             task.outputFile.set(output)
             task.compileClasspath.from(
-                files(libraryComponentsExtension.sdkComponents.bootClasspath),
+                bootClasspath,
                 variant.compileConfiguration.incoming
                     .artifactView {
                         it.attributes {

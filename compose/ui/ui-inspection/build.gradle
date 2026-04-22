@@ -24,16 +24,20 @@
 
 import androidx.build.PlatformIdentifier
 import androidx.build.SoftwareType
+import org.gradle.api.GradleException
+import org.gradle.api.tasks.Copy
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.konan.target.KonanTarget
 
 plugins {
     id("AndroidXPlugin")
     id("AndroidXComposePlugin")
     id("JetBrainsAndroidXPlugin")
+    id("androidx.inspection")
 }
 
 androidXMultiplatform {
-    androidLibrary {
+    def androidTarget = androidLibrary {
         compileSdk = 35
         // layout inspection supported starting on Android Q
         minSdk = 29
@@ -43,12 +47,52 @@ androidXMultiplatform {
 
     defaultPlatform(PlatformIdentifier.ANDROID)
 
+    def prepareJvmtiHeader = tasks.register("prepareJvmtiHeader", Copy) {
+        def jvmtiHeader = providers.provider {
+            def javaHome = System.getenv("JAVA_HOME") ?: System.getProperty("java.home")
+            def header = new File(javaHome, "include/jvmti.h")
+            if (!header.exists()) {
+                throw new GradleException("Cannot find jvmti.h at ${header}")
+            }
+            header
+        }
+        from(jvmtiHeader)
+        into(layout.buildDirectory.dir("generated/jvmti"))
+    }
+
+    def composeInspectionJni = createNativeCompilation("compose_inspection_jni") {
+        configureEachTarget { nativeCompilation ->
+            nativeCompilation.sources.from(
+                    fileTree("src/androidMain/cpp").matching { include "**/*.cpp" }
+            )
+            nativeCompilation.includes.from(
+                    prepareJvmtiHeader.map { it.destinationDir }
+            )
+            nativeCompilation.freeArgs.addAll("-Wall", "-Werror")
+            nativeCompilation.linkerArgs.addAll(
+                    "-landroid",
+                    "-llog",
+                    "-Wl,-z,max-page-size=16384"
+            )
+        }
+        configureTargets([
+                KonanTarget.ANDROID_ARM32.INSTANCE,
+                KonanTarget.ANDROID_ARM64.INSTANCE,
+                KonanTarget.ANDROID_X64.INSTANCE,
+                KonanTarget.ANDROID_X86.INSTANCE,
+        ])
+    }
+
+    if (androidTarget != null) {
+        addNativeLibrariesToJniLibs(androidTarget, composeInspectionJni)
+    }
+
     sourceSets {
         commonMain {
             dependencies {
-                implementation(project(":collection:collection"))
-                implementation(project(":compose:runtime:runtime"))
-                implementation(project(":compose:ui:ui"))
+                compileOnly(project(":collection:collection"))
+                compileOnly(project(":compose:runtime:runtime"))
+                compileOnly(project(":compose:ui:ui"))
             }
         }
 
@@ -127,6 +171,13 @@ androidXMultiplatform {
             resources.srcDirs += "src/androidDeviceTest/res"
         }
     }
+}
+
+inspection {
+    name = "compose-ui-inspection.jar"
+    allowedModules.addAll(
+            "org.jetbrains.kotlin:kotlin-reflect"
+    )
 }
 
 androidx {

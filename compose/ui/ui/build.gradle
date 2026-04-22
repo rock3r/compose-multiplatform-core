@@ -25,6 +25,7 @@
 import androidx.build.SoftwareType
 import androidx.build.PlatformIdentifier
 import androidx.build.ProjectLayoutType
+import com.android.build.api.variant.KotlinMultiplatformAndroidComponentsExtension
 import org.jetbrains.androidx.build.UpdateTranslationsTask
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -323,10 +324,10 @@ androidx {
 }
 
 if (!ProjectLayoutType.isPlayground(project)) {
-    androidComponents {
-        onVariants(selector().all(), { variant ->
+    extensions.getByType(KotlinMultiplatformAndroidComponentsExtension).onVariants { variant ->
+        if (variant.name == "androidMain") {
             packageInspector(variant, project, project(":compose:ui:ui-inspection"))
-        })
+        }
     }
 }
 

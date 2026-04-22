@@ -121,8 +121,8 @@ private fun Project.listSbomConfigurationNamesForArchive(task: AbstractArchiveTa
     }
     if (
         projectPath.contains("inspection") &&
-            (taskName == "assembleInspectorJarRelease" ||
-                taskName == "inspectionShadowDependenciesRelease")
+            (taskName.startsWith("assembleInspectorJar") ||
+                taskName.startsWith("inspectionShadowDependencies"))
     ) {
         return listOf(EXPORT_INSPECTOR_DEPENDENCIES)
     }
