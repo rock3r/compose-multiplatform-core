@@ -31,4 +31,8 @@ interface ComposeMultiplatformLayoutInspector {
 
         fun detach()
     }
+
+    companion object {
+        // Used in JVM module
+    }
 }
