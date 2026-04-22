@@ -18,10 +18,15 @@ import androidx.build.SoftwareType
 
 plugins {
     id("AndroidXPlugin")
-    id("java-library")
+    id("kotlin")
     id("com.google.protobuf")
 }
 
+// This module contains only generated protobuf Java sources, so ErrorProne adds little value.
+// In AndroidX, Gradle usually runs on JDK 21, where ErrorProne works as configured.
+// In compose-multiplatform-core, Gradle/IDE sync often runs on JDK 17; loading
+// ErrorProneJavacPlugin there can fail with UnsupportedClassVersionError (class file 65).
+// Strip ErrorProne wiring in this generated-code-only module to keep JDK 17 sync/builds working.
 tasks.withType(JavaCompile).configureEach {
     options.annotationProcessorPath = files()
     options.compilerArgs.removeAll { arg ->
