@@ -26,123 +26,29 @@ import androidx.compose.ui.inspection.inspector.NodeParameter
 import androidx.compose.ui.inspection.inspector.NodeParameterReference
 import androidx.compose.ui.inspection.inspector.ParameterKind
 import androidx.compose.ui.inspection.inspector.ParameterType
-import androidx.compose.ui.inspection.inspector.systemPackages
 import androidx.compose.ui.inspection.recompositions.ObservedReadResult
 import androidx.compose.ui.inspection.recompositions.StateReadRecord
-import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.Bounds
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ComposableNode
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ComposableRoot
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.LambdaValue
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.Parameter
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ParameterReference
-import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.Quad
-import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.Rect
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.StackTraceLine
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.StateRead
 import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.StateReadGroup
 
-internal fun InspectorNode.toComposableNode(context: ConversionContext): ComposableNode {
-    return toNodeBuilder(context).build()
-}
-
-/**
- * Convert an [InspectorNode] to protobuf [ComposableNode]. If the reduceChildNesting option is set:
- * store a subtree with single child nodes as children of this node and mark the node with
- * [ComposableNode.Flags.NESTED_SINGLE_CHILDREN].
- */
-private fun InspectorNode.toNodeBuilder(context: ConversionContext): ComposableNode.Builder {
-    val builder = toFlatNode(context)
-    if (!context.reduceChildNesting || children.size != 1) {
-        children.forEach { child -> builder.addChildren(child.toNodeBuilder(context)) }
-    } else {
-        var nested = children.single()
-
-        while (nested.children.size == 1) {
-            builder.addChildren(nested.toFlatNode(context))
-            builder.flags = builder.flags or ComposableNode.Flags.NESTED_SINGLE_CHILDREN_VALUE
-            nested = nested.children.single()
-        }
-        builder.addChildren(nested.toNodeBuilder(context))
-    }
-    return builder
-}
-
-/** Convert an [InspectorNode] to protobuf [ComposableNode] without child nesting. */
-private fun InspectorNode.toFlatNode(context: ConversionContext): ComposableNode.Builder {
-    val inspectorNode = this
-    return ComposableNode.newBuilder().apply {
-        id = inspectorNode.id
-
-        packageHash = inspectorNode.packageHash
-        filename = context.stringTable.put(inspectorNode.fileName)
-        lineNumber = inspectorNode.lineNumber
-        offset = inspectorNode.offset
-
-        name = context.stringTable.put(inspectorNode.name)
-
-        bounds =
-            Bounds.newBuilder()
-                .apply {
-                    layout =
-                        Rect.newBuilder()
-                            .apply {
-                                x = inspectorNode.left + context.windowPos.x
-                                y = inspectorNode.top + context.windowPos.y
-                                w = inspectorNode.width
-                                h = inspectorNode.height
-                            }
-                            .build()
-                    if (inspectorNode.bounds != null) {
-                        render =
-                            Quad.newBuilder()
-                                .apply {
-                                    x0 = inspectorNode.bounds.x0
-                                    y0 = inspectorNode.bounds.y0
-                                    x1 = inspectorNode.bounds.x1
-                                    y1 = inspectorNode.bounds.y1
-                                    x2 = inspectorNode.bounds.x2
-                                    y2 = inspectorNode.bounds.y2
-                                    x3 = inspectorNode.bounds.x3
-                                    y3 = inspectorNode.bounds.y3
-                                }
-                                .build()
-                    }
-                }
-                .build()
-
-        flags = flags()
-        viewId = inspectorNode.viewId
-        context.recompositionHandler.getCounts(inspectorNode.anchorId)?.let {
-            recomposeCount = it.count
-            recomposeSkips = it.skips
-        }
-
-        anchorHash = inspectorNode.anchorId
-    }
-}
-
-private fun InspectorNode.flags(): Int {
-    var flags = 0
-    if (packageHash in systemPackages) {
-        flags = flags or ComposableNode.Flags.SYSTEM_CREATED_VALUE
-    }
-    if (mergedSemantics.isNotEmpty()) {
-        flags = flags or ComposableNode.Flags.HAS_MERGED_SEMANTICS_VALUE
-    }
-    if (unmergedSemantics.isNotEmpty()) {
-        flags = flags or ComposableNode.Flags.HAS_UNMERGED_SEMANTICS_VALUE
-    }
-    if (inlined) {
-        flags = flags or ComposableNode.Flags.INLINED_VALUE
-    }
-    if (hasDrawModifier) {
-        flags = flags or ComposableNode.Flags.HAS_DRAW_MODIFIER_VALUE
-    }
-    if (hasChildDrawModifier) {
-        flags = flags or ComposableNode.Flags.HAS_CHILD_DRAW_MODIFIER_VALUE
-    }
-    return flags
-}
+internal fun InspectorNode.toComposableNode(context: ConversionContext): ComposableNode =
+    toComposableNode(
+        stringTable = context.stringTable,
+        windowX = context.windowPos.x,
+        windowY = context.windowPos.y,
+        reduceChildNesting = context.reduceChildNesting,
+        recomposeCountLookup = { anchorId ->
+            context.recompositionHandler.getCounts(anchorId)?.let {
+                RecomposeCount(it.count, it.skips)
+            }
+        },
+    )
 
 fun ParameterType.convert(): Parameter.Type {
     return when (this) {

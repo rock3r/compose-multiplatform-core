@@ -1,10 +1,12 @@
 package androidx.compose.ui.inspection
 
-import androidx.compose.ui.inspection.inspector.InspectorNode
 import androidx.compose.ui.inspection.jvm.JvmGetComposablesCommandHandler
+import androidx.compose.ui.inspection.proto.StringTable
+import androidx.compose.ui.inspection.proto.toComposableNode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ComposableNode
 
 /**
  * JVM prototype implementation for [ComposeMultiplatformLayoutInspector].
@@ -18,17 +20,20 @@ internal class JvmComposeMultiplatformLayoutInspector(
     override fun attachToCurrentProcess(): ComposeMultiplatformLayoutInspector.LayoutInspector {
         val initialSnapshot =
             commandHandler.handleGetComposablesCommand().associate { snapshot ->
-                snapshot.panelId to snapshot.nodes
+                val stringTable = StringTable()
+                snapshot.panelId to snapshot.nodes.map { node -> node.toComposableNode(stringTable) }
             }
 
         return AttachedJvmLayoutInspector(initialSnapshot)
     }
 
-    private class AttachedJvmLayoutInspector(initialLayoutInfos: Map<Long, List<InspectorNode>>) :
-        ComposeMultiplatformLayoutInspector.LayoutInspector {
-        private val state = MutableStateFlow(initialLayoutInfos)
+    private class AttachedJvmLayoutInspector(
+        initialComposableNodes: Map<Long, List<ComposableNode>>
+    ) : ComposeMultiplatformLayoutInspector.LayoutInspector {
+        private val state = MutableStateFlow(initialComposableNodes)
 
-        override val layoutInfos: StateFlow<Map<Long, List<InspectorNode>>> = state.asStateFlow()
+        override val composableNodes: StateFlow<Map<Long, List<ComposableNode>>> =
+            state.asStateFlow()
 
         override fun detach() {
             // No refresh loop yet, so there is nothing to tear down.

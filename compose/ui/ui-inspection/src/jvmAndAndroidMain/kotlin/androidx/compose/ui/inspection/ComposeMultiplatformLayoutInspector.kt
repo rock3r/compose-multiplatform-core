@@ -16,8 +16,8 @@
 
 package androidx.compose.ui.inspection
 
-import androidx.compose.ui.inspection.inspector.InspectorNode
 import kotlinx.coroutines.flow.StateFlow
+import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ComposableNode
 
 interface ComposeMultiplatformLayoutInspector {
 
@@ -27,7 +27,11 @@ interface ComposeMultiplatformLayoutInspector {
         /**
          * Platform-neutral snapshot keyed by platform view/panel id.
          */
-        val layoutInfos: StateFlow<Map<Long, List<InspectorNode>>>
+        val composableNodes: StateFlow<Map<Long, List<ComposableNode>>>
+
+        @Deprecated("Use composableNodes")
+        val layoutInfos: StateFlow<Map<Long, List<ComposableNode>>>
+            get() = composableNodes
 
         fun detach()
     }

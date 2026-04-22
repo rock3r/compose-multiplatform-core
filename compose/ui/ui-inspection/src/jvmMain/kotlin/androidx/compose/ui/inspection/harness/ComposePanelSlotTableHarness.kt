@@ -17,9 +17,9 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.inspection.JvmComposeMultiplatformLayoutInspector
-import androidx.compose.ui.inspection.inspector.InspectorNode
 import androidx.compose.ui.inspection.jvm.JvmGetComposablesCommandHandler
 import androidx.compose.ui.inspection.jvm.setInspectableContent
+import layoutinspector.compose.inspection.LayoutInspectorComposeProtocol.ComposableNode
 import androidx.compose.ui.layout.LayoutInfo
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.boundsInRoot
@@ -74,7 +74,7 @@ fun main() {
                     JButton("Snapshot slot tables").apply {
                         addActionListener {
                             val layoutInspector = inspector.attachToCurrentProcess()
-                            val snapshots = layoutInspector.layoutInfos.value
+                            val snapshots = layoutInspector.composableNodes.value
                             println(
                                 "[slot-table-snapshot] panels=${snapshots.size} " +
                                     "roots=${snapshots.values.sumOf { it.size }}"
@@ -205,15 +205,16 @@ private fun Modifier.harnessDebugTag(tag: String): Modifier =
         this
     }
 
-private fun InspectorNode.printTree(prefix: String, isLast: Boolean) {
+private fun ComposableNode.printTree(prefix: String, isLast: Boolean) {
     val branch = if (isLast) "└─" else "├─"
+    val layoutBounds = bounds.layout
     println(
-        "$prefix$branch$name [key=$key bounds=[$left,$top ${width}x$height] " +
-            "children=${children.size}]"
+        "$prefix$branch<name#${name}> [id=$id bounds=[${layoutBounds.x},${layoutBounds.y} " +
+            "${layoutBounds.w}x${layoutBounds.h}] children=${childrenCount}]"
     )
     val childPrefix = prefix + if (isLast) "  " else "│ "
-    children.forEachIndexed { index, child ->
-        child.printTree(prefix = childPrefix, isLast = index == children.lastIndex)
+    childrenList.forEachIndexed { index, child ->
+        child.printTree(prefix = childPrefix, isLast = index == childrenList.lastIndex)
     }
 }
 
