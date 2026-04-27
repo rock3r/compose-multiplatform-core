@@ -77,6 +77,16 @@ internal object ComposeFeatureFlags {
     }
 
     /**
+     * Indicates whether [androidx.compose.ui.awt.ComposePanel] should try the experimental JBR-owned
+     * Skia direct-canvas path when [androidx.compose.ui.awt.RenderSettings.SwingGraphics] is used.
+     *
+     * The flag is ignored when the running JBR/Skiko pair does not expose a compatible interop ABI.
+     */
+    val useJbrSkiaInteropInComposePanel = FeatureFlag {
+        System.getProperty("compose.swing.render.on.jbr.skia").toBoolean()
+    }
+
+    /**
      * Indicates whether interop blending is enabled.
      * It allows drawing compose elements above interop and apply clip/shape modifiers to it.
      *

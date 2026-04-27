@@ -16,11 +16,14 @@
 
 package androidx.compose.ui.scene.skia
 
+import androidx.compose.ui.ComposeFeatureFlags
 import androidx.compose.ui.scene.ComposeSceneMediator
 import java.awt.Component
 import java.awt.Dimension
 import java.awt.Graphics
+import java.awt.Graphics2D
 import java.awt.event.FocusEvent
+import java.lang.reflect.Method
 import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.SkiaLayerAnalytics
 import org.jetbrains.skiko.SkikoRenderDelegate
@@ -64,6 +67,9 @@ internal class SwingSkiaLayerComponent(
 
             override fun paint(g: Graphics) {
                 mediator.onChangeDensity()
+                if (ComposeFeatureFlags.useJbrSkiaInteropInComposePanel.value) {
+                    JbrSkiaInteropRuntime.acquireCanvasOrNull(g)?.close()
+                }
                 super.paint(g)
             }
 
@@ -131,4 +137,45 @@ internal class SwingSkiaLayerComponent(
     }
 
     override fun onRenderApiChanged(action: () -> Unit) = Unit
+}
+
+internal object JbrSkiaInteropRuntime {
+    private const val CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaInterop"
+    private const val METHOD_NAME = "acquireCanvasOrNull"
+    private const val FALLBACK_MARKER = "SKIKO_JBR_INTEROP_FALLBACK"
+
+    @Volatile
+    private var resolveAttempted = false
+
+    @Volatile
+    private var acquireCanvasMethod: Method? = null
+
+    @Volatile
+    private var fallbackLogged = false
+
+    fun acquireCanvasOrNull(graphics: Graphics): AutoCloseable? {
+        val graphics2D = graphics as? Graphics2D ?: return null
+        val method = acquireCanvasMethod ?: resolveAcquireCanvasMethod() ?: return null
+        return runCatching { method.invoke(null, graphics2D) as? AutoCloseable }
+            .onFailure { logFallbackOnce("skiko-jbr-runtime-error") }
+            .getOrNull()
+    }
+
+    private fun resolveAcquireCanvasMethod(): Method? {
+        if (resolveAttempted) return acquireCanvasMethod
+        resolveAttempted = true
+        acquireCanvasMethod = runCatching {
+            Class.forName(CLASS_NAME).getMethod(METHOD_NAME, Graphics2D::class.java)
+        }.onFailure {
+            logFallbackOnce("skiko-jbr-runtime-missing")
+        }.getOrNull()
+        return acquireCanvasMethod
+    }
+
+    private fun logFallbackOnce(reason: String) {
+        if (!fallbackLogged) {
+            fallbackLogged = true
+            System.err.println("$FALLBACK_MARKER reason=$reason")
+        }
+    }
 }
