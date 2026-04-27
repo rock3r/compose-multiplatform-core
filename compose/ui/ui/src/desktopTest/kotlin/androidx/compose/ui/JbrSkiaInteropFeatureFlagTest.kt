@@ -44,4 +44,15 @@ class JbrSkiaInteropFeatureFlagTest {
 
         assertNull(JbrSkiaInteropRuntime.acquireCanvasOrNull(graphics))
     }
+
+    @Test
+    fun jbrSkiaSwingLayerReturnsNullWhenSkikoLayerClassIsAbsent() {
+        assertNull(
+            JbrSkiaInteropRuntime.createSwingLayerOrNull(
+                renderDelegate = { _, _, _, _ -> },
+                analytics = org.jetbrains.skiko.SkiaLayerAnalytics.Empty,
+                accessibleContextProvider = null
+            )
+        )
+    }
 }
