@@ -24,8 +24,10 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.event.FocusEvent
 import java.lang.reflect.Method
+import javax.accessibility.AccessibleContext
 import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.SkiaLayerAnalytics
+import org.jetbrains.skiko.SkiaLayerProperties
 import org.jetbrains.skiko.SkikoRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
@@ -47,6 +49,33 @@ internal class SwingSkiaLayerComponent(
      * See also backendLayer for standalone Compose in [WindowSkiaLayerComponent]
      */
     override val hierarchyRoot: SkiaSwingLayer =
+        createHierarchyRoot(mediator, renderDelegate, skiaLayerAnalytics)
+
+    private fun createHierarchyRoot(
+        mediator: ComposeSceneMediator,
+        renderDelegate: SkikoRenderDelegate,
+        skiaLayerAnalytics: SkiaLayerAnalytics,
+    ): SkiaSwingLayer {
+        if (ComposeFeatureFlags.useJbrSkiaInteropInComposePanel.value) {
+            val delegateWithDensityRefresh = SkikoRenderDelegate { canvas, width, height, nanoTime ->
+                mediator.onChangeDensity()
+                renderDelegate.onRender(canvas, width, height, nanoTime)
+            }
+            JbrSkiaInteropRuntime.createSwingLayerOrNull(
+                renderDelegate = delegateWithDensityRefresh,
+                analytics = skiaLayerAnalytics,
+                accessibleContextProvider = mediator.accessibility.accessibleContextProvider
+            )?.let { return it }
+        }
+
+        return createDefaultHierarchyRoot(mediator, renderDelegate, skiaLayerAnalytics)
+    }
+
+    private fun createDefaultHierarchyRoot(
+        mediator: ComposeSceneMediator,
+        renderDelegate: SkikoRenderDelegate,
+        skiaLayerAnalytics: SkiaLayerAnalytics,
+    ): SkiaSwingLayer =
         object : SkiaSwingLayer(
             renderDelegate = renderDelegate,
             analytics = skiaLayerAnalytics,
@@ -141,6 +170,7 @@ internal class SwingSkiaLayerComponent(
 
 internal object JbrSkiaInteropRuntime {
     private const val CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaInterop"
+    private const val SWING_LAYER_CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaSwingLayer"
     private const val METHOD_NAME = "acquireCanvasOrNull"
     private const val FALLBACK_MARKER = "SKIKO_JBR_INTEROP_FALLBACK"
 
@@ -151,7 +181,31 @@ internal object JbrSkiaInteropRuntime {
     private var acquireCanvasMethod: Method? = null
 
     @Volatile
+    private var layerResolveAttempted = false
+
+    @Volatile
+    private var swingLayerConstructor: java.lang.reflect.Constructor<*>? = null
+
+    @Volatile
     private var fallbackLogged = false
+
+    fun createSwingLayerOrNull(
+        renderDelegate: SkikoRenderDelegate,
+        analytics: SkiaLayerAnalytics,
+        accessibleContextProvider: ((Component) -> AccessibleContext)?,
+    ): SkiaSwingLayer? {
+        val constructor = swingLayerConstructor ?: resolveSwingLayerConstructor() ?: return null
+        return runCatching {
+            constructor.newInstance(
+                renderDelegate,
+                analytics,
+                accessibleContextProvider,
+                SkiaLayerProperties()
+            ) as? SkiaSwingLayer
+        }.onFailure {
+            logFallbackOnce("skiko-jbr-layer-error")
+        }.getOrNull()
+    }
 
     fun acquireCanvasOrNull(graphics: Graphics): AutoCloseable? {
         val graphics2D = graphics as? Graphics2D ?: return null
@@ -170,6 +224,22 @@ internal object JbrSkiaInteropRuntime {
             logFallbackOnce("skiko-jbr-runtime-missing")
         }.getOrNull()
         return acquireCanvasMethod
+    }
+
+    private fun resolveSwingLayerConstructor(): java.lang.reflect.Constructor<*>? {
+        if (layerResolveAttempted) return swingLayerConstructor
+        layerResolveAttempted = true
+        swingLayerConstructor = runCatching {
+            Class.forName(SWING_LAYER_CLASS_NAME).getConstructor(
+                SkikoRenderDelegate::class.java,
+                SkiaLayerAnalytics::class.java,
+                Function1::class.java,
+                SkiaLayerProperties::class.java
+            )
+        }.onFailure {
+            logFallbackOnce("skiko-jbr-layer-missing")
+        }.getOrNull()
+        return swingLayerConstructor
     }
 
     private fun logFallbackOnce(reason: String) {
