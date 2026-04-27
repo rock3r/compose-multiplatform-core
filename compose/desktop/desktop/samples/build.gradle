@@ -105,6 +105,19 @@ tasks.register('runSwingOffscreenRendering', JavaExec) {
     jvmArgs("-Dcompose.swing.render.on.graphics=true")
 }
 
+tasks.register('runSwingJbrSkiaInterop', JavaExec) {
+    dependsOn(":compose:desktop:desktop:jvmJar")
+    mainClass = "androidx.compose.desktop.examples.swingexample.Main_jvmKt"
+    def compilation = kotlin.jvm().compilations["main"]
+    classpath =
+            compilation.output.allOutputs +
+                    compilation.runtimeDependencyFiles
+    jvmArgs(
+            "-Dcompose.swing.render.on.graphics=true",
+            "-Dcompose.swing.render.on.jbr.skia=true"
+    )
+}
+
 tasks.register('runMouseClicks', JavaExec) {
     dependsOn(":compose:desktop:desktop:jvmJar")
     mainClass = "androidx.compose.desktop.examples.mouseclicks.Main_jvmKt"
