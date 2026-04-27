@@ -116,6 +116,9 @@ tasks.register('runSwingJbrSkiaInterop', JavaExec) {
             "-Dcompose.swing.render.on.graphics=true",
             "-Dcompose.swing.render.on.jbr.skia=true"
     )
+    if (project.hasProperty("jbrSkiaInteropJvmArgs")) {
+        jvmArgs(project.property("jbrSkiaInteropJvmArgs").toString().split("\\s+").findAll { !it.isBlank() })
+    }
 }
 
 tasks.register('runMouseClicks', JavaExec) {
