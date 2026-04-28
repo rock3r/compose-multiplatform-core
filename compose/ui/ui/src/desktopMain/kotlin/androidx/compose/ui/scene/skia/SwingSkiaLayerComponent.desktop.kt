@@ -29,6 +29,7 @@ import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.SkiaLayerAnalytics
 import org.jetbrains.skiko.SkiaLayerProperties
 import org.jetbrains.skiko.SkikoRenderDelegate
+import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
 /**
@@ -57,9 +58,17 @@ internal class SwingSkiaLayerComponent(
         skiaLayerAnalytics: SkiaLayerAnalytics,
     ): SkiaSwingLayer {
         if (ComposeFeatureFlags.useJbrSkiaInteropInComposePanel.value) {
-            val delegateWithDensityRefresh = SkikoRenderDelegate { canvas, width, height, nanoTime ->
-                mediator.onChangeDensity()
-                renderDelegate.onRender(canvas, width, height, nanoTime)
+            val delegateWithDensityRefresh = object : SkikoRenderDelegate, JbrSkiaCommandRenderDelegate {
+                override fun onRender(canvas: org.jetbrains.skia.Canvas, width: Int, height: Int, nanoTime: Long) {
+                    mediator.onChangeDensity()
+                    renderDelegate.onRender(canvas, width, height, nanoTime)
+                }
+
+                override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
+                    mediator.onChangeDensity()
+                    return (mediator as? JbrSkiaCommandRenderDelegate)
+                        ?.renderJbrSkiaCommandFrame(width, height, nanoTime)
+                }
             }
             JbrSkiaInteropRuntime.createSwingLayerOrNull(
                 renderDelegate = delegateWithDensityRefresh,

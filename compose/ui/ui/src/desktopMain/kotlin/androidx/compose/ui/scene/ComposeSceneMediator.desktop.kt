@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.SkiaCanvasHolder
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -123,12 +124,14 @@ import javax.swing.SwingUtilities.isEventDispatchThread
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.skia.Canvas as SkCanvas
+import org.jetbrains.skia.PictureRecorder
 import org.jetbrains.skia.Surface
 import org.jetbrains.skiko.ClipRectangle
 import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.GraphicsApi
 import org.jetbrains.skiko.SkikoRenderDelegate
 import org.jetbrains.skiko.hostOs
+import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
 /**
@@ -158,7 +161,7 @@ internal class ComposeSceneMediator(
 
     skiaLayerComponentFactory: (ComposeSceneMediator) -> SkiaLayerComponent,
     composeSceneFactory: (ComposeSceneMediator) -> ComposeScene,
-) : SkikoRenderDelegate {
+) : SkikoRenderDelegate, JbrSkiaCommandRenderDelegate {
     private var isDisposed = false
     private var isComponentAttached = false
     private val invisibleComponent = InvisibleComponent()
@@ -765,6 +768,32 @@ internal class ComposeSceneMediator(
                     scene.render(frameRecomposer, this@withSceneOffset, nanoTime)
                 }
             }
+        }
+    }
+
+    override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
+        return try {
+            val recorder = PictureRecorder()
+            try {
+                val canvas = recorder.beginRecording(0f, 0f, width.toFloat(), height.toFloat())
+                JbrSkiaCommandRecorder.record {
+                    outOfFrameExecutor.onBeforeFrame()
+                    interopContainer.postponingExecutingScheduledUpdates {
+                        canvas.withSceneOffset {
+                            with(sceneRenderingScope) {
+                                scene.size = IntSize(width, height)
+                                scene.render(frameRecomposer, this@withSceneOffset, nanoTime)
+                            }
+                        }
+                    }
+                }
+            } finally {
+                recorder.finishRecordingAsPicture().close()
+                recorder.close()
+            }
+        } catch (e: Throwable) {
+            exceptionHandler?.onException(e) ?: throw e
+            null
         }
     }
 
