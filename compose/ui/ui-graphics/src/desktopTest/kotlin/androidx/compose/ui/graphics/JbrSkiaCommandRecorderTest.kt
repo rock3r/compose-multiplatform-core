@@ -18,11 +18,12 @@ package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class JbrSkiaCommandRecorderTest {
     @Test
-    fun writesAbi15AntialiasRecordFlag() {
+    fun writesAntialiasRecordFlag() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
                 left = 1f,
@@ -48,7 +49,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 18, 1, 1,
+                1246972723, 16, 0, 18, 1, 1,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
                 2, 36, 0, Color.Blue.toArgb(), 3, 4, 10, 20, 0,
             ),
@@ -74,7 +75,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 12, 1, 1,
+                1246972723, 16, 0, 12, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
             ),
             commands,
@@ -100,7 +101,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 29, 1, 1,
+                1246972723, 16, 0, 29, 1, 1,
                 7, 12, 0,
                 10, 20, 0, 1250, 2500,
                 11, 20, 0, 1500, 500,
@@ -121,7 +122,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 16, 1, 1,
+                1246972723, 16, 0, 16, 1, 1,
                 9, 32, 1, 1, 2, 10, 10, 0,
                 9, 32, 1, 3, 4, 10, 10, 1,
             ),
@@ -141,7 +142,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 11, 1, 1,
+                1246972723, 16, 0, 11, 1, 1,
                 13, 32, 0, 1, 2, 10, 10, 360,
                 8, 12, 0,
             ),
@@ -151,6 +152,7 @@ class JbrSkiaCommandRecorderTest {
 
     @Test
     fun writesImageArgbRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(2, 2)
         Canvas(image).run {
             drawRect(0f, 0f, 1f, 1f, Paint().apply { color = Color.Red })
@@ -179,7 +181,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 29, 1, 1,
+                1246972723, 16, 0, 29, 1, 1,
                 15, 48, 0, -1599677274, -472603669, 2, 2, 4,
                 Color.Red.toArgb(), Color.Green.toArgb(), Color.Blue.toArgb(), Color.White.toArgb(),
                 16, 68, 1,
@@ -189,6 +191,34 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun clearsImageCacheBeforeRedefiningAfterThreshold() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+
+        val commands = JbrSkiaCommandRecorder.record {
+            repeat(257) { index ->
+                val image = ImageBitmap(1, 1)
+                Canvas(image).drawRect(0f, 0f, 1f, 1f, Paint().apply {
+                    color = Color(index or 0xff000000.toInt())
+                })
+                JbrSkiaCommandRecorder.drawImageRect(
+                    image = image,
+                    srcLeft = 0f,
+                    srcTop = 0f,
+                    srcRight = 1f,
+                    srcBottom = 1f,
+                    dstLeft = 0f,
+                    dstTop = 0f,
+                    dstRight = 1f,
+                    dstBottom = 1f,
+                    paint = Paint(),
+                )
+            }
+        }!!
+
+        assertTrue(commands.toList().windowed(3).any { it == listOf(18, 12, 0) })
     }
 
     @Test
@@ -206,7 +236,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 15, 0, 10, 1, 1,
+                1246972723, 16, 0, 10, 1, 1,
                 17, 40, 1, 1250, 18500, 13000, Color.White.toArgb(), 2, 'H'.code, 'i'.code,
             ),
             commands,
