@@ -18,11 +18,13 @@ package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private val active = ThreadLocal<Recorder?>()
+    private val definedImageKeys = ConcurrentHashMap.newKeySet<Long>()
 
     fun record(block: () -> Unit): IntArray? {
         val previous = active.get()
@@ -349,8 +351,21 @@ object JbrSkiaCommandRecorder {
             }
             val pixels = IntArray(image.width * image.height)
             image.readPixels(pixels)
+            val cacheKey = pixels.imageCacheKey(image.width, image.height)
+            if (definedImageKeys.add(cacheKey)) {
+                commands.addCommand(
+                    COMMAND_DEFINE_IMAGE_ARGB,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    cacheKey.highInt(),
+                    cacheKey.lowInt(),
+                    image.width,
+                    image.height,
+                    pixels.size,
+                    *pixels,
+                )
+            }
             commands.addCommand(
-                COMMAND_DRAW_IMAGE_ARGB,
+                COMMAND_DRAW_IMAGE_REF,
                 paint.recordFlags(),
                 srcLeft.fixed1000(),
                 srcTop.fixed1000(),
@@ -360,12 +375,12 @@ object JbrSkiaCommandRecorder {
                 dstTop.fixed1000(),
                 dstRight.fixed1000(),
                 dstBottom.fixed1000(),
+                cacheKey.highInt(),
+                cacheKey.lowInt(),
                 image.width,
                 image.height,
                 paint.imageAlpha1000(),
                 paint.filterQuality.value,
-                pixels.size,
-                *pixels,
             )
             return true
         }
@@ -428,6 +443,22 @@ object JbrSkiaCommandRecorder {
 
         private fun Float.fixed1000(): Int =
             (this * 1000f).roundToInt()
+
+        private fun Long.highInt(): Int = (this ushr 32).toInt()
+
+        private fun Long.lowInt(): Int = this.toInt()
+
+        private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
+            var hash = -3750763034362895579L
+            fun mix(value: Int) {
+                hash = hash xor value.toLong()
+                hash *= 1099511628211L
+            }
+            mix(width)
+            mix(height)
+            forEach(::mix)
+            return hash
+        }
 
         private fun StrokeCap.commandValue(): Int = when (this) {
             StrokeCap.Butt -> 0
@@ -521,9 +552,10 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
-    private const val COMMAND_DRAW_IMAGE_ARGB = 14
+    private const val COMMAND_DEFINE_IMAGE_ARGB = 15
+    private const val COMMAND_DRAW_IMAGE_REF = 16
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 13
+    private const val COMMAND_STREAM_ABI_ID = 14
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
