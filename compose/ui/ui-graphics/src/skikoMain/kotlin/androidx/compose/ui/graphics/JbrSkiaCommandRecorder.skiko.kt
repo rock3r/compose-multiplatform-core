@@ -172,6 +172,7 @@ object JbrSkiaCommandRecorder {
             }
             commands.addCommand(
                 COMMAND_CLIP_RECT,
+                COMMAND_RECORD_FLAG_ANTIALIAS,
                 state.x(left),
                 state.y(top),
                 state.width(right - left),
@@ -188,6 +189,7 @@ object JbrSkiaCommandRecorder {
             if (!paint.isSupportedSolidColor) return
             commands.addCommand(
                 COMMAND_STROKE_LINE,
+                paint.recordFlags(),
                 paint.commandColor(),
                 state.x(p1.x),
                 state.y(p1.y),
@@ -208,13 +210,14 @@ object JbrSkiaCommandRecorder {
             val width = state.width(right - left)
             val height = state.height(bottom - top)
             when (paint.style) {
-                PaintingStyle.Fill -> commands.addCommand(COMMAND_FILL_RECT, paint.commandColor(), x, y, width, height, 0)
+                PaintingStyle.Fill -> commands.addCommand(COMMAND_FILL_RECT, paint.recordFlags(), paint.commandColor(), x, y, width, height, 0)
                 PaintingStyle.Stroke -> {
                     val stroke = state.stroke(paint.strokeWidth)
-                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x, y, x + width, y, stroke)
-                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y, x + width, y + height, stroke)
-                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y + height, x, y + height, stroke)
-                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x, y + height, x, y, stroke)
+                    val recordFlags = paint.recordFlags()
+                    commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x, y, x + width, y, stroke)
+                    commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x + width, y, x + width, y + height, stroke)
+                    commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x + width, y + height, x, y + height, stroke)
+                    commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x, y + height, x, y, stroke)
                 }
                 else -> countUnsupported("paintStyle")
             }
@@ -244,6 +247,7 @@ object JbrSkiaCommandRecorder {
             }
             commands.addCommand(
                 COMMAND_FILL_RECT,
+                paint.recordFlags(),
                 paint.commandColor(),
                 state.x(left),
                 state.y(top),
@@ -269,6 +273,7 @@ object JbrSkiaCommandRecorder {
             }
             commands.addCommand(
                 op,
+                paint.recordFlags(),
                 paint.commandColor(),
                 state.x(left),
                 state.y(top),
@@ -315,9 +320,13 @@ object JbrSkiaCommandRecorder {
         private fun Paint.commandColor(): Int =
             color.copy(alpha = color.alpha * alpha).toArgb()
 
+        private fun Paint.recordFlags(): Int =
+            if (isAntiAlias) COMMAND_RECORD_FLAG_ANTIALIAS else COMMAND_RECORD_FLAGS_NONE
+
         private fun addClearRect(left: Float, top: Float, right: Float, bottom: Float) {
             commands.addCommand(
                 COMMAND_CLEAR_RECT,
+                COMMAND_RECORD_FLAGS_NONE,
                 state.x(left),
                 state.y(top),
                 state.width(right - left),
@@ -345,10 +354,10 @@ object JbrSkiaCommandRecorder {
         val streamSize: Int
             get() = COMMAND_STREAM_HEADER_SIZE + payload.size
 
-        fun addCommand(op: Int, vararg args: Int) {
+        fun addCommand(op: Int, recordFlags: Int = COMMAND_RECORD_FLAGS_NONE, vararg args: Int) {
             payload.add(op)
             payload.add((args.size + 3) * Int.SIZE_BYTES)
-            payload.add(COMMAND_RECORD_FLAGS_NONE)
+            payload.add(recordFlags)
             args.forEach(payload::add)
         }
 
@@ -389,10 +398,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RESTORE = 8
     private const val COMMAND_CLIP_RECT = 9
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 7
+    private const val COMMAND_STREAM_ABI_ID = 8
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
     private const val COMMAND_PAINT_FORMAT_SOLID_ARGB = 1
     private const val COMMAND_RECORD_FLAGS_NONE = 0
+    private const val COMMAND_RECORD_FLAG_ANTIALIAS = 1
 }
