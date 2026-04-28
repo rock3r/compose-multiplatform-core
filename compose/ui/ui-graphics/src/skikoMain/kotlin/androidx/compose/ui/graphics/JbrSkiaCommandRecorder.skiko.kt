@@ -20,9 +20,10 @@ import androidx.compose.ui.geometry.Offset
 import kotlin.math.roundToInt
 
 object JbrSkiaCommandRecorder {
+    private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private val active = ThreadLocal<Recorder?>()
 
-    fun record(block: () -> Unit): IntArray {
+    fun record(block: () -> Unit): IntArray? {
         val previous = active.get()
         val recorder = Recorder()
         active.set(recorder)
@@ -30,6 +31,7 @@ object JbrSkiaCommandRecorder {
             block()
             return recorder.toCommandArray()
         } finally {
+            recorder.logFrame()
             active.set(previous)
         }
     }
@@ -89,9 +91,26 @@ object JbrSkiaCommandRecorder {
     private class Recorder {
         private val commands = ArrayList<Int>(1024)
         private val stack = ArrayDeque<State>()
+        private val unsupportedReasons = linkedMapOf<String, Int>()
         private var state = State()
 
-        fun toCommandArray(): IntArray = commands.toIntArray()
+        fun toCommandArray(): IntArray? =
+            if (java.lang.Boolean.getBoolean(STRICT_PROPERTY) && unsupportedCount > 0) {
+                null
+            } else {
+                commands.toIntArray()
+            }
+
+        fun logFrame() {
+            val unsupported = unsupportedCount
+            val reasons = unsupportedReasons.entries.joinToString(separator = " ") { (reason, count) ->
+                "$reason=$count"
+            }
+            val suffix = if (reasons.isEmpty()) "" else " $reasons"
+            System.err.println(
+                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.size} unsupported=$unsupported$suffix"
+            )
+        }
 
         fun save() {
             stack.addLast(state)
@@ -102,6 +121,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun saveLayer() {
+            countUnsupported("saveLayer")
             save()
             state = state.copy(supported = false)
         }
@@ -118,6 +138,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun unsupportedTransform() {
+            countUnsupported("transform")
             state = state.copy(supported = false)
         }
 
@@ -137,6 +158,10 @@ object JbrSkiaCommandRecorder {
         }
 
         fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            if (paint.blendMode == BlendMode.Clear) {
+                addClearRect(left, top, right, bottom)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -151,7 +176,7 @@ object JbrSkiaCommandRecorder {
                     commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y + height, x, y + height, stroke))
                     commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x, y + height, x, y, stroke))
                 }
-                else -> Unit
+                else -> countUnsupported("paintStyle")
             }
         }
 
@@ -164,7 +189,19 @@ object JbrSkiaCommandRecorder {
             radiusY: Float,
             paint: Paint,
         ) {
-            if (!paint.isSupportedSolidColor || paint.style != PaintingStyle.Fill) return
+            if (paint.blendMode == BlendMode.Clear) {
+                addClearRect(left, top, right, bottom)
+                return
+            }
+            if (!paint.isSupportedSolidColor) return
+            if (paint.style == PaintingStyle.Stroke) {
+                drawRect(left, top, right, bottom, paint)
+                return
+            }
+            if (paint.style != PaintingStyle.Fill) {
+                countUnsupported("roundRectStyle")
+                return
+            }
             commands.addAll(
                 listOf(
                     COMMAND_FILL_RECT,
@@ -179,11 +216,18 @@ object JbrSkiaCommandRecorder {
         }
 
         fun drawOval(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            if (paint.blendMode == BlendMode.Clear) {
+                addClearRect(left, top, right, bottom)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val op = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_FILL_OVAL
                 PaintingStyle.Stroke -> COMMAND_STROKE_OVAL
-                else -> return
+                else -> {
+                    countUnsupported("paintStyle")
+                    return
+                }
             }
             commands.addAll(
                 listOf(
@@ -205,14 +249,55 @@ object JbrSkiaCommandRecorder {
         }
 
         private val Paint.isSupportedSolidColor: Boolean
-            get() = state.supported &&
-                blendMode == BlendMode.SrcOver &&
-                shader == null &&
-                colorFilter == null &&
-                pathEffect == null
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
 
         private fun Paint.commandColor(): Int =
             color.copy(alpha = color.alpha * alpha).toArgb()
+
+        private fun addClearRect(left: Float, top: Float, right: Float, bottom: Float) {
+            commands.addAll(
+                listOf(
+                    COMMAND_CLEAR_RECT,
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            )
+        }
+
+        private fun countUnsupported(reason: String) {
+            unsupportedReasons[reason] = unsupportedReasons.getOrElse(reason) { 0 } + 1
+        }
+
+        private val unsupportedCount: Int
+            get() = unsupportedReasons.values.sum()
+
+        private fun Any.toReasonToken(): String =
+            toString().replace("[^A-Za-z0-9]".toRegex(), "_")
     }
 
     private data class State(
@@ -235,4 +320,5 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_LINE = 3
     private const val COMMAND_FILL_OVAL = 4
     private const val COMMAND_STROKE_OVAL = 5
+    private const val COMMAND_CLEAR_RECT = 6
 }
