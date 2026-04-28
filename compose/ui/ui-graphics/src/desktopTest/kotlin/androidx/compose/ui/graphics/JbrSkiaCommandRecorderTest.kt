@@ -21,7 +21,7 @@ import org.junit.Test
 
 class JbrSkiaCommandRecorderTest {
     @Test
-    fun writesAbi10AntialiasRecordFlag() {
+    fun writesAbi11AntialiasRecordFlag() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
                 left = 1f,
@@ -47,7 +47,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 10, 0, 18, 1, 1,
+                1246972723, 11, 0, 18, 1, 1,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
                 2, 36, 0, Color.Blue.toArgb(), 3, 4, 10, 20, 0,
             ),
@@ -73,7 +73,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 10, 0, 12, 1, 1,
+                1246972723, 11, 0, 12, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
             ),
             commands,
@@ -99,13 +99,30 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 10, 0, 29, 1, 1,
+                1246972723, 11, 0, 29, 1, 1,
                 7, 12, 0,
                 10, 20, 0, 1250, 2500,
                 11, 20, 0, 1500, 500,
                 12, 16, 0, 18000,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 10, 0,
                 8, 12, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesClipRectOp() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.clipRect(1f, 2f, 11f, 12f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.clipRect(3f, 4f, 13f, 14f, ClipOp.Difference)
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 11, 0, 16, 1, 1,
+                9, 32, 1, 1, 2, 10, 10, 0,
+                9, 32, 1, 3, 4, 10, 10, 1,
             ),
             commands,
         )
