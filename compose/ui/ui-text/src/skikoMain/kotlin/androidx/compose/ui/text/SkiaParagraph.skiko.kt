@@ -29,9 +29,12 @@ import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.drawscope.DrawStyle
 import androidx.compose.ui.graphics.skiaCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeRect
 import androidx.compose.ui.text.internal.requirePrecondition
 import androidx.compose.ui.text.platform.SkiaParagraphIntrinsics
@@ -604,7 +607,9 @@ internal class SkiaParagraph(
                 width = width
             )
         }
-        if (!recordJbrSkiaTextImage()) {
+        val recordedSimpleText =
+            shadow == null && textDecoration == null && recordJbrSkiaSimpleText(color)
+        if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -631,7 +636,13 @@ internal class SkiaParagraph(
                 width = width
             )
         }
-        if (!recordJbrSkiaTextImage()) {
+        val recordedSimpleText =
+            blendMode == BlendMode.SrcOver &&
+                drawStyle == null &&
+                shadow == null &&
+                textDecoration == null &&
+                recordJbrSkiaSimpleText(color)
+        if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -663,10 +674,39 @@ internal class SkiaParagraph(
                 width = width
             )
         }
-        if (!recordJbrSkiaTextImage()) {
+        val solidColor = (brush as? SolidColor)?.value?.let { it.copy(alpha = it.alpha * alpha) }
+        val recordedSimpleText =
+            solidColor != null &&
+                blendMode == BlendMode.SrcOver &&
+                drawStyle == null &&
+                shadow == null &&
+                textDecoration == null &&
+                recordJbrSkiaSimpleText(solidColor)
+        if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
+    }
+
+    private fun recordJbrSkiaSimpleText(color: Color): Boolean {
+        if (!color.isSpecified || text.isEmpty() || text.length > 4096 || lineCount != 1) {
+            return false
+        }
+        if (text.any { it.code > 0x7f }) {
+            return false
+        }
+        val fontSize = defaultFont.size
+        if (!fontSize.isFinite() || fontSize <= 0f) {
+            return false
+        }
+        return JbrSkiaCommandRecorder.drawTextUtf16(
+            text = text,
+            x = 0f,
+            baseline = firstBaseline,
+            fontSize = fontSize,
+            color = color.toArgb(),
+            antiAlias = true,
+        )
     }
 
     private fun recordJbrSkiaTextImage(): Boolean {

@@ -75,6 +75,16 @@ object JbrSkiaCommandRecorder {
         active.get()?.unsupportedDraw(reason)
     }
 
+    fun drawTextUtf16(
+        text: String,
+        x: Float,
+        baseline: Float,
+        fontSize: Float,
+        color: Int,
+        antiAlias: Boolean,
+    ): Boolean =
+        active.get()?.drawTextUtf16(text, x, baseline, fontSize, color, antiAlias) ?: false
+
     internal fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
         active.get()?.clipRect(left, top, right, bottom, clipOp)
     }
@@ -385,6 +395,30 @@ object JbrSkiaCommandRecorder {
             return true
         }
 
+        fun drawTextUtf16(
+            text: String,
+            x: Float,
+            baseline: Float,
+            fontSize: Float,
+            color: Int,
+            antiAlias: Boolean,
+        ): Boolean {
+            if (text.isEmpty() || text.length > 4096 || !fontSize.isFinite() || fontSize <= 0f) {
+                return false
+            }
+            commands.addCommand(
+                COMMAND_DRAW_TEXT_UTF16,
+                if (antiAlias) COMMAND_RECORD_FLAG_ANTIALIAS else COMMAND_RECORD_FLAGS_NONE,
+                x.fixed1000(),
+                baseline.fixed1000(),
+                fontSize.fixed1000(),
+                color,
+                text.length,
+                *IntArray(text.length) { text[it].code },
+            )
+            return true
+        }
+
         private val Paint.isSupportedSolidColor: Boolean
             get() {
                 var supported = true
@@ -554,8 +588,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_LAYER = 13
     private const val COMMAND_DEFINE_IMAGE_ARGB = 15
     private const val COMMAND_DRAW_IMAGE_REF = 16
+    private const val COMMAND_DRAW_TEXT_UTF16 = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 14
+    private const val COMMAND_STREAM_ABI_ID = 15
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
