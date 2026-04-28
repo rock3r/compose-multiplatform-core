@@ -129,12 +129,12 @@ object JbrSkiaCommandRecorder {
         }
 
         fun save() {
-            commands.add(COMMAND_SAVE)
+            commands.addCommand(COMMAND_SAVE)
             stack.addLast(state)
         }
 
         fun restore() {
-            commands.add(COMMAND_RESTORE)
+            commands.addCommand(COMMAND_RESTORE)
             state = stack.removeLastOrNull() ?: State()
         }
 
@@ -170,14 +170,12 @@ object JbrSkiaCommandRecorder {
                 state = state.copy(supported = false)
                 return
             }
-            commands.addAll(
-                listOf(
-                    COMMAND_CLIP_RECT,
-                    state.x(left),
-                    state.y(top),
-                    state.width(right - left),
-                    state.height(bottom - top),
-                )
+            commands.addCommand(
+                COMMAND_CLIP_RECT,
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
             )
         }
 
@@ -188,16 +186,14 @@ object JbrSkiaCommandRecorder {
 
         fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
             if (!paint.isSupportedSolidColor) return
-            commands.addAll(
-                listOf(
-                    COMMAND_STROKE_LINE,
-                    paint.commandColor(),
-                    state.x(p1.x),
-                    state.y(p1.y),
-                    state.x(p2.x),
-                    state.y(p2.y),
-                    state.stroke(paint.strokeWidth),
-                )
+            commands.addCommand(
+                COMMAND_STROKE_LINE,
+                paint.commandColor(),
+                state.x(p1.x),
+                state.y(p1.y),
+                state.x(p2.x),
+                state.y(p2.y),
+                state.stroke(paint.strokeWidth),
             )
         }
 
@@ -212,13 +208,13 @@ object JbrSkiaCommandRecorder {
             val width = state.width(right - left)
             val height = state.height(bottom - top)
             when (paint.style) {
-                PaintingStyle.Fill -> commands.addAll(listOf(COMMAND_FILL_RECT, paint.commandColor(), x, y, width, height, 0))
+                PaintingStyle.Fill -> commands.addCommand(COMMAND_FILL_RECT, paint.commandColor(), x, y, width, height, 0)
                 PaintingStyle.Stroke -> {
                     val stroke = state.stroke(paint.strokeWidth)
-                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x, y, x + width, y, stroke))
-                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y, x + width, y + height, stroke))
-                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y + height, x, y + height, stroke))
-                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x, y + height, x, y, stroke))
+                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x, y, x + width, y, stroke)
+                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y, x + width, y + height, stroke)
+                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y + height, x, y + height, stroke)
+                    commands.addCommand(COMMAND_STROKE_LINE, paint.commandColor(), x, y + height, x, y, stroke)
                 }
                 else -> countUnsupported("paintStyle")
             }
@@ -246,16 +242,14 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("roundRectStyle")
                 return
             }
-            commands.addAll(
-                listOf(
-                    COMMAND_FILL_RECT,
-                    paint.commandColor(),
-                    state.x(left),
-                    state.y(top),
-                    state.width(right - left),
-                    state.height(bottom - top),
-                    ((radiusX + radiusY) / 2f * state.averageScale).roundToInt().coerceAtLeast(0),
-                )
+            commands.addCommand(
+                COMMAND_FILL_RECT,
+                paint.commandColor(),
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
+                ((radiusX + radiusY) / 2f * state.averageScale).roundToInt().coerceAtLeast(0),
             )
         }
 
@@ -273,19 +267,19 @@ object JbrSkiaCommandRecorder {
                     return
                 }
             }
-            commands.addAll(
-                listOf(
-                    op,
-                    paint.commandColor(),
-                    state.x(left),
-                    state.y(top),
-                    state.width(right - left),
-                    state.height(bottom - top),
-                )
+            commands.addCommand(
+                op,
+                paint.commandColor(),
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
+                *if (paint.style == PaintingStyle.Stroke) {
+                    intArrayOf(state.stroke(paint.strokeWidth))
+                } else {
+                    intArrayOf()
+                },
             )
-            if (paint.style == PaintingStyle.Stroke) {
-                commands.add(state.stroke(paint.strokeWidth))
-            }
         }
 
         fun drawCircle(center: Offset, radius: Float, paint: Paint) {
@@ -322,14 +316,12 @@ object JbrSkiaCommandRecorder {
             color.copy(alpha = color.alpha * alpha).toArgb()
 
         private fun addClearRect(left: Float, top: Float, right: Float, bottom: Float) {
-            commands.addAll(
-                listOf(
-                    COMMAND_CLEAR_RECT,
-                    state.x(left),
-                    state.y(top),
-                    state.width(right - left),
-                    state.height(bottom - top),
-                )
+            commands.addCommand(
+                COMMAND_CLEAR_RECT,
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
             )
         }
 
@@ -345,6 +337,12 @@ object JbrSkiaCommandRecorder {
                 stream[3] = commands.size
                 commands.forEachIndexed { index, command -> stream[COMMAND_STREAM_HEADER_SIZE + index] = command }
             }
+
+        private fun MutableList<Int>.addCommand(op: Int, vararg args: Int) {
+            add(op)
+            add(args.size + 2)
+            args.forEach(::add)
+        }
 
         private val unsupportedCount: Int
             get() = unsupportedReasons.values.sum()
@@ -378,7 +376,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RESTORE = 8
     private const val COMMAND_CLIP_RECT = 9
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 4
+    private const val COMMAND_STREAM_ABI_ID = 5
     private const val COMMAND_STREAM_HEADER_SIZE = 4
     private const val COMMAND_STREAM_FLAGS_NONE = 0
 }
