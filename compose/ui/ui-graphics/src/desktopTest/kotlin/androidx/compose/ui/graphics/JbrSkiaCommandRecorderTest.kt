@@ -21,7 +21,7 @@ import org.junit.Test
 
 class JbrSkiaCommandRecorderTest {
     @Test
-    fun writesAbi8AntialiasRecordFlag() {
+    fun writesAbi9AntialiasRecordFlag() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
                 left = 1f,
@@ -47,9 +47,34 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 8, 0, 18, 1, 1,
+                1246972723, 9, 0, 18, 1, 1,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
                 2, 36, 0, Color.Blue.toArgb(), 3, 4, 10, 20, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesStrokeMetadata() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = androidx.compose.ui.geometry.Offset(1f, 2f),
+                p2 = androidx.compose.ui.geometry.Offset(11f, 12f),
+                paint = Paint().apply {
+                    color = Color.White
+                    strokeWidth = 3f
+                    strokeCap = StrokeCap.Round
+                    strokeJoin = StrokeJoin.Bevel
+                    strokeMiterLimit = 4.5f
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 9, 0, 12, 1, 1,
+                3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
             ),
             commands,
         )
