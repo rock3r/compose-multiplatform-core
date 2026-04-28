@@ -310,7 +310,21 @@ internal class SkiaBackedCanvas(
         dstBottom: Float,
         paint: Paint
     ) {
-        JbrSkiaCommandRecorder.unsupportedDraw("image")
+        val imageRecorded = JbrSkiaCommandRecorder.drawImageRect(
+            image = image,
+            srcLeft = srcLeft,
+            srcTop = srcTop,
+            srcRight = srcRight,
+            srcBottom = srcBottom,
+            dstLeft = dstLeft,
+            dstTop = dstTop,
+            dstRight = dstRight,
+            dstBottom = dstBottom,
+            paint = paint,
+        )
+        if (!imageRecorded) {
+            JbrSkiaCommandRecorder.unsupportedDraw("image")
+        }
         val bitmap = image.asSkiaBitmap()
 
         Image.makeFromBitmap(bitmap).use { skiaImage ->

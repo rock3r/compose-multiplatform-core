@@ -109,6 +109,21 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawCircle(center, radius, paint)
     }
 
+    internal fun drawImageRect(
+        image: ImageBitmap,
+        srcLeft: Float,
+        srcTop: Float,
+        srcRight: Float,
+        srcBottom: Float,
+        dstLeft: Float,
+        dstTop: Float,
+        dstRight: Float,
+        dstBottom: Float,
+        paint: Paint,
+    ): Boolean =
+        active.get()?.drawImageRect(image, srcLeft, srcTop, srcRight, srcBottom, dstLeft, dstTop, dstRight, dstBottom, paint)
+            ?: false
+
     private class Recorder {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
@@ -317,6 +332,44 @@ object JbrSkiaCommandRecorder {
             drawOval(center.x - radius, center.y - radius, center.x + radius, center.y + radius, paint)
         }
 
+        fun drawImageRect(
+            image: ImageBitmap,
+            srcLeft: Float,
+            srcTop: Float,
+            srcRight: Float,
+            srcBottom: Float,
+            dstLeft: Float,
+            dstTop: Float,
+            dstRight: Float,
+            dstBottom: Float,
+            paint: Paint,
+        ): Boolean {
+            if (!paint.isSupportedImagePaint || image.width <= 0 || image.height <= 0 || image.width > 512 || image.height > 512) {
+                return false
+            }
+            val pixels = IntArray(image.width * image.height)
+            image.readPixels(pixels)
+            commands.addCommand(
+                COMMAND_DRAW_IMAGE_ARGB,
+                paint.recordFlags(),
+                srcLeft.fixed1000(),
+                srcTop.fixed1000(),
+                srcRight.fixed1000(),
+                srcBottom.fixed1000(),
+                dstLeft.fixed1000(),
+                dstTop.fixed1000(),
+                dstRight.fixed1000(),
+                dstBottom.fixed1000(),
+                image.width,
+                image.height,
+                paint.imageAlpha1000(),
+                paint.filterQuality.value,
+                pixels.size,
+                *pixels,
+            )
+            return true
+        }
+
         private val Paint.isSupportedSolidColor: Boolean
             get() {
                 var supported = true
@@ -350,6 +403,14 @@ object JbrSkiaCommandRecorder {
                     colorFilter == null &&
                     pathEffect == null
 
+        private val Paint.isSupportedImagePaint: Boolean
+            get() =
+                state.supported &&
+                    blendMode == BlendMode.SrcOver &&
+                    shader == null &&
+                    colorFilter == null &&
+                    pathEffect == null
+
         private fun Paint.commandColor(): Int =
             color.copy(alpha = color.alpha * alpha).toArgb()
 
@@ -361,6 +422,9 @@ object JbrSkiaCommandRecorder {
 
         private fun Paint.layerAlpha1000(): Int =
             (color.alpha * alpha * 1000f).roundToInt().coerceIn(0, 1000)
+
+        private fun Paint.imageAlpha1000(): Int =
+            (alpha * 1000f).roundToInt().coerceIn(0, 1000)
 
         private fun Float.fixed1000(): Int =
             (this * 1000f).roundToInt()
@@ -457,8 +521,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
+    private const val COMMAND_DRAW_IMAGE_ARGB = 14
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 12
+    private const val COMMAND_STREAM_ABI_ID = 13
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

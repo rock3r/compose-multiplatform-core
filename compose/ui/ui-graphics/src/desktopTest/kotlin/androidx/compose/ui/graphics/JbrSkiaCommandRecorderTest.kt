@@ -22,7 +22,7 @@ import org.junit.Test
 
 class JbrSkiaCommandRecorderTest {
     @Test
-    fun writesAbi12AntialiasRecordFlag() {
+    fun writesAbi13AntialiasRecordFlag() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
                 left = 1f,
@@ -48,7 +48,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 12, 0, 18, 1, 1,
+                1246972723, 13, 0, 18, 1, 1,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
                 2, 36, 0, Color.Blue.toArgb(), 3, 4, 10, 20, 0,
             ),
@@ -74,7 +74,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 12, 0, 12, 1, 1,
+                1246972723, 13, 0, 12, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
             ),
             commands,
@@ -100,7 +100,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 12, 0, 29, 1, 1,
+                1246972723, 13, 0, 29, 1, 1,
                 7, 12, 0,
                 10, 20, 0, 1250, 2500,
                 11, 20, 0, 1500, 500,
@@ -121,7 +121,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 12, 0, 16, 1, 1,
+                1246972723, 13, 0, 16, 1, 1,
                 9, 32, 1, 1, 2, 10, 10, 0,
                 9, 32, 1, 3, 4, 10, 10, 1,
             ),
@@ -141,9 +141,50 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 12, 0, 11, 1, 1,
+                1246972723, 13, 0, 11, 1, 1,
                 13, 32, 0, 1, 2, 10, 10, 360,
                 8, 12, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesImageArgbRecord() {
+        val image = ImageBitmap(2, 2)
+        Canvas(image).run {
+            drawRect(0f, 0f, 1f, 1f, Paint().apply { color = Color.Red })
+            drawRect(1f, 0f, 2f, 1f, Paint().apply { color = Color.Green })
+            drawRect(0f, 1f, 1f, 2f, Paint().apply { color = Color.Blue })
+            drawRect(1f, 1f, 2f, 2f, Paint().apply { color = Color.White })
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 2f,
+                srcBottom = 2f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint().apply {
+                    color = Color.White
+                    alpha = 0.5f
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 13, 0, 20, 1, 1,
+                14, 80, 1,
+                0, 0, 2000, 2000,
+                10000, 20000, 30000, 40000,
+                2, 2, 502, FilterQuality.Medium.value, 4,
+                Color.Red.toArgb(), Color.Green.toArgb(), Color.Blue.toArgb(), Color.White.toArgb(),
             ),
             commands,
         )
