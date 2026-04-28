@@ -108,7 +108,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun saveLayer(bounds: Rect, paint: Paint) {
-        JbrSkiaCommandRecorder.saveLayer()
+        JbrSkiaCommandRecorder.saveLayer(bounds, paint)
         internalSkiaCanvas.saveLayer(
             bounds.left,
             bounds.top,

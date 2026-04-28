@@ -17,6 +17,7 @@
 package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import kotlin.math.roundToInt
 
 object JbrSkiaCommandRecorder {
@@ -44,8 +45,8 @@ object JbrSkiaCommandRecorder {
         active.get()?.restore()
     }
 
-    internal fun saveLayer() {
-        active.get()?.saveLayer()
+    internal fun saveLayer(bounds: Rect, paint: Paint) {
+        active.get()?.saveLayer(bounds, paint)
     }
 
     internal fun translate(dx: Float, dy: Float) {
@@ -142,10 +143,22 @@ object JbrSkiaCommandRecorder {
             state = stack.removeLastOrNull() ?: State()
         }
 
-        fun saveLayer() {
-            countUnsupported("saveLayer")
-            save()
-            state = state.copy(supported = false)
+        fun saveLayer(bounds: Rect, paint: Paint) {
+            if (!paint.isSupportedLayerPaint) {
+                countUnsupported("saveLayer")
+                save()
+                state = state.copy(supported = false)
+                return
+            }
+            commands.addCommand(
+                COMMAND_SAVE_LAYER,
+                COMMAND_RECORD_FLAGS_NONE,
+                state.x(bounds.left),
+                state.y(bounds.top),
+                state.width(bounds.width),
+                state.height(bounds.height),
+                paint.layerAlpha1000(),
+            )
         }
 
         fun translate(dx: Float, dy: Float) {
@@ -330,6 +343,13 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
+        private val Paint.isSupportedLayerPaint: Boolean
+            get() =
+                blendMode == BlendMode.SrcOver &&
+                    shader == null &&
+                    colorFilter == null &&
+                    pathEffect == null
+
         private fun Paint.commandColor(): Int =
             color.copy(alpha = color.alpha * alpha).toArgb()
 
@@ -338,6 +358,9 @@ object JbrSkiaCommandRecorder {
 
         private fun Paint.strokeMiter1000(): Int =
             (strokeMiterLimit * 1000f).roundToInt().coerceAtLeast(0)
+
+        private fun Paint.layerAlpha1000(): Int =
+            (color.alpha * alpha * 1000f).roundToInt().coerceIn(0, 1000)
 
         private fun Float.fixed1000(): Int =
             (this * 1000f).roundToInt()
@@ -433,8 +456,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_TRANSLATE = 10
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
+    private const val COMMAND_SAVE_LAYER = 13
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 11
+    private const val COMMAND_STREAM_ABI_ID = 12
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
