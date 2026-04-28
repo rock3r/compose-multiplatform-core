@@ -109,7 +109,7 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawCircle(center, radius, paint)
     }
 
-    internal fun drawImageRect(
+    fun drawImageRect(
         image: ImageBitmap,
         srcLeft: Float,
         srcTop: Float,
@@ -344,7 +344,7 @@ object JbrSkiaCommandRecorder {
             dstBottom: Float,
             paint: Paint,
         ): Boolean {
-            if (!paint.isSupportedImagePaint || image.width <= 0 || image.height <= 0 || image.width > 512 || image.height > 512) {
+            if (!paint.isSupportedImagePaint || image.width <= 0 || image.height <= 0 || image.width > 2048 || image.height > 2048) {
                 return false
             }
             val pixels = IntArray(image.width * image.height)

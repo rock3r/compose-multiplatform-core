@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asComposePath
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.isUnspecified
+import kotlin.math.ceil
 import kotlin.math.floor
 import org.jetbrains.skia.FontMetrics
 import org.jetbrains.skia.IRange
@@ -560,7 +563,9 @@ internal class SkikoParagraph(
                 width = width
             )
         }
-        JbrSkiaCommandRecorder.markUnsupportedDraw("text")
+        if (!recordJbrSkiaTextImage()) {
+            JbrSkiaCommandRecorder.markUnsupportedDraw("text")
+        }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
     }
 
@@ -585,7 +590,9 @@ internal class SkikoParagraph(
                 width = width
             )
         }
-        JbrSkiaCommandRecorder.markUnsupportedDraw("text")
+        if (!recordJbrSkiaTextImage()) {
+            JbrSkiaCommandRecorder.markUnsupportedDraw("text")
+        }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
     }
 
@@ -615,8 +622,35 @@ internal class SkikoParagraph(
                 width = width
             )
         }
-        JbrSkiaCommandRecorder.markUnsupportedDraw("text")
+        if (!recordJbrSkiaTextImage()) {
+            JbrSkiaCommandRecorder.markUnsupportedDraw("text")
+        }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
+    }
+
+    private fun recordJbrSkiaTextImage(): Boolean {
+        val bitmapWidth = ceil(width).toInt()
+        val bitmapHeight = ceil(height).toInt()
+        if (bitmapWidth <= 0 || bitmapHeight <= 0 || bitmapWidth > 2048 || bitmapHeight > 2048) {
+            return false
+        }
+
+        val image = ImageBitmap(bitmapWidth, bitmapHeight)
+        val imageCanvas = Canvas(image)
+        imageCanvas.skiaCanvas.clear(0x00000000)
+        paragraph.paint(imageCanvas.skiaCanvas, 0.0f, 0.0f)
+        return JbrSkiaCommandRecorder.drawImageRect(
+            image = image,
+            srcLeft = 0f,
+            srcTop = 0f,
+            srcRight = bitmapWidth.toFloat(),
+            srcBottom = bitmapHeight.toFloat(),
+            dstLeft = 0f,
+            dstTop = 0f,
+            dstRight = bitmapWidth.toFloat(),
+            dstBottom = bitmapHeight.toFloat(),
+            paint = Paint(),
+        )
     }
 
     /**
