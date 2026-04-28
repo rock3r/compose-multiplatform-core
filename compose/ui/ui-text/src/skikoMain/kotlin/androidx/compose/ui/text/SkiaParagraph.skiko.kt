@@ -700,7 +700,7 @@ internal class SkiaParagraph(
         }
         if (maxLines != 1 && lineCount != 1) return false
         if (text.any { it == '\n' || it == '\r' }) return false
-        if (text.any { it.code > 0x7f }) {
+        if (text.any { it.isSurrogate() || it.code > 0xff }) {
             return false
         }
         val fontSize = jbrSkiaSimpleTextFontSize()
