@@ -121,6 +121,32 @@ tasks.register('runSwingJbrSkiaInterop', JavaExec) {
     }
 }
 
+tasks.register('runSwingJbrSkiaSmoke', JavaExec) {
+    dependsOn(":compose:desktop:desktop:jvmJar")
+    mainClass = "androidx.compose.desktop.examples.jbrskiainterop.SimpleSmoke_jvmKt"
+    def compilation = kotlin.jvm().compilations["main"]
+    classpath =
+            compilation.output.allOutputs +
+                    compilation.runtimeDependencyFiles
+    jvmArgs("-Dcompose.swing.render.on.graphics=true")
+}
+
+tasks.register('runSwingJbrSkiaSmokeInterop', JavaExec) {
+    dependsOn(":compose:desktop:desktop:jvmJar")
+    mainClass = "androidx.compose.desktop.examples.jbrskiainterop.SimpleSmoke_jvmKt"
+    def compilation = kotlin.jvm().compilations["main"]
+    classpath =
+            compilation.output.allOutputs +
+                    compilation.runtimeDependencyFiles
+    jvmArgs(
+            "-Dcompose.swing.render.on.graphics=true",
+            "-Dcompose.swing.render.on.jbr.skia=true"
+    )
+    if (project.hasProperty("jbrSkiaInteropJvmArgs")) {
+        jvmArgs(project.property("jbrSkiaInteropJvmArgs").toString().split("\\s+").findAll { !it.isBlank() })
+    }
+}
+
 tasks.register('runMouseClicks', JavaExec) {
     dependsOn(":compose:desktop:desktop:jvmJar")
     mainClass = "androidx.compose.desktop.examples.mouseclicks.Main_jvmKt"

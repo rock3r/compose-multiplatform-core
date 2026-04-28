@@ -8,6 +8,8 @@ DURATION_SECONDS="${DURATION_SECONDS:-20}"
 SAMPLE_INTERVAL_SECONDS="${SAMPLE_INTERVAL_SECONDS:-1}"
 GRADLE="${GRADLE:-${ROOT_DIR}/gradlew}"
 TASK_PREFIX=":compose:desktop:desktop:desktop-samples"
+OLD_TASK="${OLD_TASK:-${TASK_PREFIX}:runSwing}"
+NEW_TASK="${NEW_TASK:-${TASK_PREFIX}:runSwingJbrSkiaInterop}"
 FALLBACK_MARKER="SKIKO_JBR_INTEROP_FALLBACK"
 SKIKO_PICTURE_MARKER="SKIKO_JBR_INTEROP_PICTURE_FRAME"
 JBR_PICTURE_MARKER="JBR_SKIA_INTEROP_PICTURE_FRAME"
@@ -33,6 +35,8 @@ Environment:
   SKIKO_VERSION            Optional Skiko version override, for example 0.0.0-SNAPSHOT.
   NEW_JVM_ARGS             Optional JVM args passed to runSwingJbrSkiaInterop through -PjbrSkiaInteropJvmArgs.
   CAPTURE_WINDOW_QUERY     Optional window title/owner to capture during new mode.
+  OLD_TASK                 Optional old-mode Gradle task. Defaults to ${TASK_PREFIX}:runSwing.
+  NEW_TASK                 Optional new-mode Gradle task. Defaults to ${TASK_PREFIX}:runSwingJbrSkiaInterop.
 EOF
 }
 
@@ -205,8 +209,8 @@ write_report() {
     echo
     echo "## Modes"
     echo
-    echo "- old: ${TASK_PREFIX}:runSwing"
-    echo "- new: ${TASK_PREFIX}:runSwingJbrSkiaInterop"
+    echo "- old: ${OLD_TASK}"
+    echo "- new: ${NEW_TASK}"
     echo
     echo "## Process Samples"
     echo
@@ -244,7 +248,7 @@ write_report() {
     echo
     echo "CPU and RSS samples are coarse process-tree samples from ps. They are useful as a smoke signal only."
     echo "Picture marker counts come from structured Skiko/JBR logs. They are the primary signal that the JBR-owned replay path was used."
-    echo "The serialized picture byte counts are expected to be high in this probe and should be treated as a performance risk."
+    echo "Serialized picture byte counts are content-dependent; large values should be treated as a performance risk."
   } > "${report}"
 
   echo "${report}"
@@ -254,6 +258,6 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
 fi
 
-run_mode old "${TASK_PREFIX}:runSwing"
-run_mode new "${TASK_PREFIX}:runSwingJbrSkiaInterop"
+run_mode old "${OLD_TASK}"
+run_mode new "${NEW_TASK}"
 write_report
