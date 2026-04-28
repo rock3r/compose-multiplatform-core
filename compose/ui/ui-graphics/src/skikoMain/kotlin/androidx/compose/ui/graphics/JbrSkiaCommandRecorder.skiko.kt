@@ -172,11 +172,6 @@ object JbrSkiaCommandRecorder {
         }
 
         fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
-            if (clipOp != ClipOp.Intersect) {
-                countUnsupported("clipRect_${clipOp.toReasonToken()}")
-                state = state.copy(supported = false)
-                return
-            }
             commands.addCommand(
                 COMMAND_CLIP_RECT,
                 COMMAND_RECORD_FLAG_ANTIALIAS,
@@ -184,6 +179,7 @@ object JbrSkiaCommandRecorder {
                 state.y(top),
                 state.width(right - left),
                 state.height(bottom - top),
+                clipOp.commandValue(),
             )
         }
 
@@ -360,6 +356,12 @@ object JbrSkiaCommandRecorder {
             else -> 0
         }
 
+        private fun ClipOp.commandValue(): Int = when (this) {
+            ClipOp.Intersect -> 0
+            ClipOp.Difference -> 1
+            else -> 0
+        }
+
         private fun addClearRect(left: Float, top: Float, right: Float, bottom: Float) {
             commands.addCommand(
                 COMMAND_CLEAR_RECT,
@@ -432,7 +434,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 10
+    private const val COMMAND_STREAM_ABI_ID = 11
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
