@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asComposePath
@@ -600,6 +601,7 @@ internal class SkiaParagraph(
                 width = width
             )
         }
+        JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
     }
 
@@ -624,6 +626,7 @@ internal class SkiaParagraph(
                 width = width
             )
         }
+        JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
     }
 
@@ -653,6 +656,7 @@ internal class SkiaParagraph(
                 width = width
             )
         }
+        JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
     }
 

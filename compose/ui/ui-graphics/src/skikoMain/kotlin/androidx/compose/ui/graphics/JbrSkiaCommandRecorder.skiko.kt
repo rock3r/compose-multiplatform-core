@@ -64,6 +64,10 @@ object JbrSkiaCommandRecorder {
         active.get()?.unsupportedDraw(reason)
     }
 
+    fun markUnsupportedDraw(reason: String) {
+        active.get()?.unsupportedDraw(reason)
+    }
+
     internal fun clipRect() {
         active.get()?.clipRect()
     }
