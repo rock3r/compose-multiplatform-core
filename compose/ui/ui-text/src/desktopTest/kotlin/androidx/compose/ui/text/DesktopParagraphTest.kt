@@ -18,7 +18,10 @@ package androidx.compose.ui.text
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -625,6 +628,27 @@ class DesktopParagraphTest {
         paragraph2.paint()
         assertThat(paragraph1.testOffset()).isEqualTo(offset1)
         assertThat(paragraph2.testOffset()).isEqualTo(offset2)
+    }
+
+    @Test
+    fun paint_withFillDrawStyle_recordsJbrSkiaSimpleText() {
+        val paragraph = simpleParagraph(
+            text = "Hi",
+            style = TextStyle(fontSize = 20.sp),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = JbrSkiaCommandRecorder.record {
+            paragraph.paint(
+                canvas = Canvas(ImageBitmap(200, 100)),
+                color = Color.Black,
+                drawStyle = Fill,
+            )
+        }
+
+        assertThat(commands!!.toList()).contains(17)
+        assertThat(commands.toList()).doesNotContain(16)
     }
 
     @Test

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.drawscope.DrawStyle
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.skiaCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeRect
@@ -638,7 +639,7 @@ internal class SkiaParagraph(
         }
         val recordedSimpleText =
             blendMode == BlendMode.SrcOver &&
-                drawStyle == null &&
+                drawStyle.isJbrSkiaFillStyle() &&
                 hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaSimpleText(color)
         if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
@@ -677,7 +678,7 @@ internal class SkiaParagraph(
         val recordedSimpleText =
             solidColor != null &&
                 blendMode == BlendMode.SrcOver &&
-                drawStyle == null &&
+                drawStyle.isJbrSkiaFillStyle() &&
                 hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaSimpleText(solidColor)
         if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
@@ -689,6 +690,9 @@ internal class SkiaParagraph(
     private fun hasNoJbrSkiaTextEffects(shadow: Shadow?, textDecoration: TextDecoration?): Boolean =
         (shadow == null || shadow == Shadow.None) &&
             (textDecoration == null || textDecoration == TextDecoration.None)
+
+    private fun DrawStyle?.isJbrSkiaFillStyle(): Boolean =
+        this == null || this == Fill
 
     private fun recordJbrSkiaSimpleText(color: Color): Boolean {
         if (!color.isSpecified || text.isEmpty() || text.length > 4096) {
