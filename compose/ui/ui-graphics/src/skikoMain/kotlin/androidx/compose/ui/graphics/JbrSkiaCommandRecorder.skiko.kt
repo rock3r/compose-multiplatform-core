@@ -23,6 +23,7 @@ import kotlin.math.roundToInt
 
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
+    private const val MAX_DEFINED_IMAGE_KEYS = 256
     private val active = ThreadLocal<Recorder?>()
     private val definedImageKeys = ConcurrentHashMap.newKeySet<Long>()
 
@@ -73,6 +74,10 @@ object JbrSkiaCommandRecorder {
 
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
+    }
+
+    internal fun clearImageCacheForTesting() {
+        definedImageKeys.clear()
     }
 
     fun drawTextUtf16(
@@ -366,6 +371,10 @@ object JbrSkiaCommandRecorder {
             val pixels = IntArray(image.width * image.height)
             image.readPixels(pixels)
             val cacheKey = pixels.imageCacheKey(image.width, image.height)
+            if (!definedImageKeys.contains(cacheKey) && definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
+                definedImageKeys.clear()
+                commands.addCommand(COMMAND_CLEAR_IMAGE_CACHE)
+            }
             if (definedImageKeys.add(cacheKey)) {
                 imageDefineCount++
                 commands.addCommand(
@@ -596,8 +605,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DEFINE_IMAGE_ARGB = 15
     private const val COMMAND_DRAW_IMAGE_REF = 16
     private const val COMMAND_DRAW_TEXT_UTF16 = 17
+    private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 15
+    private const val COMMAND_STREAM_ABI_ID = 16
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
