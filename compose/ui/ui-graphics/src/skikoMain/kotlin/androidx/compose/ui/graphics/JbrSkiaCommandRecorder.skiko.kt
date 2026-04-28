@@ -56,6 +56,10 @@ object JbrSkiaCommandRecorder {
         active.get()?.scale(sx, sy)
     }
 
+    internal fun rotate(degrees: Float) {
+        active.get()?.rotate(degrees)
+    }
+
     internal fun unsupportedTransform() {
         active.get()?.unsupportedTransform()
     }
@@ -145,14 +149,17 @@ object JbrSkiaCommandRecorder {
         }
 
         fun translate(dx: Float, dy: Float) {
-            state = state.copy(
-                translateX = state.translateX + dx * state.scaleX,
-                translateY = state.translateY + dy * state.scaleY,
-            )
+            commands.addCommand(COMMAND_TRANSLATE, COMMAND_RECORD_FLAGS_NONE, dx.fixed1000(), dy.fixed1000())
         }
 
         fun scale(sx: Float, sy: Float) {
-            state = state.copy(scaleX = state.scaleX * sx, scaleY = state.scaleY * sy)
+            commands.addCommand(COMMAND_SCALE, COMMAND_RECORD_FLAGS_NONE, sx.fixed1000(), sy.fixed1000())
+        }
+
+        fun rotate(degrees: Float) {
+            if (degrees != 0f) {
+                commands.addCommand(COMMAND_ROTATE, COMMAND_RECORD_FLAGS_NONE, degrees.fixed1000())
+            }
         }
 
         fun unsupportedTransform() {
@@ -253,11 +260,11 @@ object JbrSkiaCommandRecorder {
                 COMMAND_FILL_RECT,
                 paint.recordFlags(),
                 paint.commandColor(),
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-                ((radiusX + radiusY) / 2f * state.averageScale).roundToInt().coerceAtLeast(0),
+                left.roundToInt(),
+                top.roundToInt(),
+                (right - left).roundToInt().coerceAtLeast(0),
+                (bottom - top).roundToInt().coerceAtLeast(0),
+                ((radiusX + radiusY) / 2f).roundToInt().coerceAtLeast(0),
             )
         }
 
@@ -336,6 +343,9 @@ object JbrSkiaCommandRecorder {
         private fun Paint.strokeMiter1000(): Int =
             (strokeMiterLimit * 1000f).roundToInt().coerceAtLeast(0)
 
+        private fun Float.fixed1000(): Int =
+            (this * 1000f).roundToInt()
+
         private fun StrokeCap.commandValue(): Int = when (this) {
             StrokeCap.Butt -> 0
             StrokeCap.Round -> 1
@@ -401,19 +411,13 @@ object JbrSkiaCommandRecorder {
     }
 
     private data class State(
-        val translateX: Float = 0f,
-        val translateY: Float = 0f,
-        val scaleX: Float = 1f,
-        val scaleY: Float = 1f,
         val supported: Boolean = true,
     ) {
-        val averageScale: Float get() = (kotlin.math.abs(scaleX) + kotlin.math.abs(scaleY)) / 2f
-
-        fun x(value: Float): Int = (translateX + value * scaleX).roundToInt()
-        fun y(value: Float): Int = (translateY + value * scaleY).roundToInt()
-        fun width(value: Float): Int = (value * scaleX).roundToInt().coerceAtLeast(0)
-        fun height(value: Float): Int = (value * scaleY).roundToInt().coerceAtLeast(0)
-        fun stroke(value: Float): Int = (value * averageScale).roundToInt().coerceAtLeast(1)
+        fun x(value: Float): Int = value.roundToInt()
+        fun y(value: Float): Int = value.roundToInt()
+        fun width(value: Float): Int = value.roundToInt().coerceAtLeast(0)
+        fun height(value: Float): Int = value.roundToInt().coerceAtLeast(0)
+        fun stroke(value: Float): Int = value.roundToInt().coerceAtLeast(1)
     }
 
     private const val COMMAND_FILL_RECT = 2
@@ -424,8 +428,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE = 7
     private const val COMMAND_RESTORE = 8
     private const val COMMAND_CLIP_RECT = 9
+    private const val COMMAND_TRANSLATE = 10
+    private const val COMMAND_SCALE = 11
+    private const val COMMAND_ROTATE = 12
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 9
+    private const val COMMAND_STREAM_ABI_ID = 10
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

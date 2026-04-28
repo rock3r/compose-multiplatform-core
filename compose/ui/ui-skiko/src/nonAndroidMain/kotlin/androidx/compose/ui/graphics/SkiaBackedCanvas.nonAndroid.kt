@@ -130,7 +130,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun rotate(degrees: Float) {
-        if (degrees != 0f) JbrSkiaCommandRecorder.unsupportedTransform()
+        JbrSkiaCommandRecorder.rotate(degrees)
         internalSkiaCanvas.rotate(degrees)
     }
 

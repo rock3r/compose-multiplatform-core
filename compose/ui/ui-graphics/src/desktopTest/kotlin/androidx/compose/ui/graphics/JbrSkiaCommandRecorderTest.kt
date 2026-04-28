@@ -21,7 +21,7 @@ import org.junit.Test
 
 class JbrSkiaCommandRecorderTest {
     @Test
-    fun writesAbi9AntialiasRecordFlag() {
+    fun writesAbi10AntialiasRecordFlag() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
                 left = 1f,
@@ -47,7 +47,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 9, 0, 18, 1, 1,
+                1246972723, 10, 0, 18, 1, 1,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
                 2, 36, 0, Color.Blue.toArgb(), 3, 4, 10, 20, 0,
             ),
@@ -73,8 +73,39 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 9, 0, 12, 1, 1,
+                1246972723, 10, 0, 12, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesBasicTransformRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1.25f, 2.5f)
+            JbrSkiaCommandRecorder.scale(1.5f, 0.5f)
+            JbrSkiaCommandRecorder.rotate(18f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 10, 0, 29, 1, 1,
+                7, 12, 0,
+                10, 20, 0, 1250, 2500,
+                11, 20, 0, 1500, 500,
+                12, 16, 0, 18000,
+                2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 10, 0,
+                8, 12, 0,
             ),
             commands,
         )
