@@ -148,6 +148,7 @@ object JbrSkiaCommandRecorder {
         private var imageDefineCount = 0
         private var imageRefCount = 0
         private var textCommandCount = 0
+        private var imageCacheClearCount = 0
         private var state = State()
 
         fun toCommandArray(): IntArray? =
@@ -165,7 +166,8 @@ object JbrSkiaCommandRecorder {
             val suffix = if (reasons.isEmpty()) "" else " $reasons"
             System.err.println(
                 "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported" +
-                    " textCommands=$textCommandCount imageDefines=$imageDefineCount imageRefs=$imageRefCount$suffix"
+                    " textCommands=$textCommandCount imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
+                    " imageCacheClears=$imageCacheClearCount$suffix"
             )
         }
 
@@ -373,6 +375,7 @@ object JbrSkiaCommandRecorder {
             val cacheKey = pixels.imageCacheKey(image.width, image.height)
             if (!definedImageKeys.contains(cacheKey) && definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
                 definedImageKeys.clear()
+                imageCacheClearCount++
                 commands.addCommand(COMMAND_CLEAR_IMAGE_CACHE)
             }
             if (definedImageKeys.add(cacheKey)) {
