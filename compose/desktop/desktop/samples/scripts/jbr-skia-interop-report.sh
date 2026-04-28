@@ -9,6 +9,9 @@ SAMPLE_INTERVAL_SECONDS="${SAMPLE_INTERVAL_SECONDS:-1}"
 GRADLE="${GRADLE:-${ROOT_DIR}/gradlew}"
 TASK_PREFIX=":compose:desktop:desktop:desktop-samples"
 FALLBACK_MARKER="SKIKO_JBR_INTEROP_FALLBACK"
+SKIKO_PICTURE_MARKER="SKIKO_JBR_INTEROP_PICTURE_FRAME"
+JBR_PICTURE_MARKER="JBR_SKIA_INTEROP_PICTURE_FRAME"
+SCREENSHOT_COUNTS_MARKER="JBR_SKIA_SCREENSHOT_COUNTS"
 
 mkdir -p "${OUT_DIR}"
 
@@ -27,6 +30,9 @@ Environment:
   SAMPLE_INTERVAL_SECONDS  Seconds between ps samples. Default: 1.
   GRADLE                   Gradle executable. Defaults to ROOT_DIR/gradlew.
   JAVA_HOME                Optional local JBR to use for both sample modes.
+  SKIKO_VERSION            Optional Skiko version override, for example 0.0.0-SNAPSHOT.
+  NEW_JVM_ARGS             Optional JVM args passed to runSwingJbrSkiaInterop through -PjbrSkiaInteropJvmArgs.
+  CAPTURE_WINDOW_QUERY     Optional window title/owner to capture during new mode.
 EOF
 }
 
@@ -83,6 +89,8 @@ run_mode() {
   local task="$2"
   local log="${OUT_DIR}/${mode}.log"
   local csv="${OUT_DIR}/${mode}-ps.csv"
+  local screenshot="${OUT_DIR}/${mode}-window.png"
+  local screenshot_assertion="${OUT_DIR}/${mode}-screenshot-assertion.log"
 
   printf 'timestamp,mode,pid,cpu_percent,rss_kb\n' > "${csv}"
 
@@ -93,15 +101,30 @@ run_mode() {
 
   (
     cd "${ROOT_DIR}"
-    "${GRADLE}" --no-daemon "${task}"
+    if [[ "${mode}" == "new" && -n "${NEW_JVM_ARGS:-}" ]]; then
+      "${GRADLE}" --no-daemon "${task}" "-PjbrSkiaInteropJvmArgs=${NEW_JVM_ARGS}"
+    else
+      "${GRADLE}" --no-daemon "${task}"
+    fi
   ) > "${log}" 2>&1 &
 
   local root_pid="$!"
   local end_time=$(( $(date +%s) + DURATION_SECONDS ))
+  local screenshot_done=false
 
   set +e
   while kill -0 "${root_pid}" 2>/dev/null && [[ "$(date +%s)" -lt "${end_time}" ]]; do
     sample_process_tree "${mode}" "${root_pid}" "${csv}"
+    if [[ "${mode}" == "new"
+        && "${screenshot_done}" == "false"
+        && -n "${CAPTURE_WINDOW_QUERY:-}"
+        && $(grep -c "${SKIKO_PICTURE_MARKER}" "${log}" 2>/dev/null) -gt 0 ]]; then
+      if "${SCRIPT_DIR}/capture-macos-window.sh" "${CAPTURE_WINDOW_QUERY}" "${screenshot}" > "${OUT_DIR}/${mode}-capture.log" 2>&1; then
+        if "${SCRIPT_DIR}/assert-jbr-skia-window-screenshot.sh" "${screenshot}" > "${screenshot_assertion}" 2>&1; then
+          screenshot_done=true
+        fi
+      fi
+    fi
     sleep "${SAMPLE_INTERVAL_SECONDS}"
   done
 
@@ -130,17 +153,47 @@ summarize_csv() {
   ' "${csv}"
 }
 
+picture_marker_summary() {
+  local marker="$1"
+  local log="$2"
+  awk -v marker="${marker}" '
+    index($0, marker) {
+      frames++
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^bytes=/) {
+          split($i, value, "=")
+          bytes += value[2]
+          if (value[2] > maxBytes) maxBytes = value[2]
+        }
+      }
+    }
+    END {
+      if (frames == 0) {
+        printf "frames=0 avg_bytes=0 max_bytes=0"
+      } else {
+        printf "frames=%d avg_bytes=%.0f max_bytes=%.0f", frames, bytes / frames, maxBytes
+      }
+    }
+  ' "${log}"
+}
+
 write_report() {
   local report="${OUT_DIR}/report.md"
   local old_summary
   local new_summary
   local old_markers
   local new_markers
+  local skiko_picture_summary
+  local jbr_picture_summary
+  local screenshot_counts
 
   old_summary="$(summarize_csv "${OUT_DIR}/old-ps.csv")"
   new_summary="$(summarize_csv "${OUT_DIR}/new-ps.csv")"
   old_markers="$(grep -c "${FALLBACK_MARKER}" "${OUT_DIR}/old.log" 2>/dev/null || true)"
   new_markers="$(grep -c "${FALLBACK_MARKER}" "${OUT_DIR}/new.log" 2>/dev/null || true)"
+  skiko_picture_summary="$(picture_marker_summary "${SKIKO_PICTURE_MARKER}" "${OUT_DIR}/new.log")"
+  jbr_picture_summary="$(picture_marker_summary "${JBR_PICTURE_MARKER}" "${OUT_DIR}/new.log")"
+  screenshot_counts="$(grep "${SCREENSHOT_COUNTS_MARKER}" "${OUT_DIR}/new-screenshot-assertion.log" 2>/dev/null || true)"
 
   {
     echo "# JBR Skia Interop Sample Report"
@@ -165,6 +218,21 @@ write_report() {
     echo "- old marker count: ${old_markers}"
     echo "- new marker count: ${new_markers}"
     echo
+    echo "## Picture Replay Markers"
+    echo
+    echo "- Skiko picture frames: ${skiko_picture_summary}"
+    echo "- JBR picture replays: ${jbr_picture_summary}"
+    echo
+    echo "## Screenshot Assertion"
+    echo
+    if [[ -n "${screenshot_counts}" ]]; then
+      echo "- ${screenshot_counts}"
+      echo "- screenshot: new-window.png"
+      echo "- assertion log: new-screenshot-assertion.log"
+    else
+      echo "- not run"
+    fi
+    echo
     echo "## Files"
     echo
     echo "- old log: old.log"
@@ -175,7 +243,8 @@ write_report() {
     echo "## Notes"
     echo
     echo "CPU and RSS samples are coarse process-tree samples from ps. They are useful as a smoke signal only."
-    echo "Until the native JBR Skia/Metal scope exists, zero-copy frame counts are unavailable and the expected new-mode result is a structured fallback marker."
+    echo "Picture marker counts come from structured Skiko/JBR logs. They are the primary signal that the JBR-owned replay path was used."
+    echo "The serialized picture byte counts are expected to be high in this probe and should be treated as a performance risk."
   } > "${report}"
 
   echo "${report}"
