@@ -378,7 +378,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RESTORE = 8
     private const val COMMAND_CLIP_RECT = 9
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 3
+    private const val COMMAND_STREAM_ABI_ID = 4
     private const val COMMAND_STREAM_HEADER_SIZE = 4
     private const val COMMAND_STREAM_FLAGS_NONE = 0
 }
