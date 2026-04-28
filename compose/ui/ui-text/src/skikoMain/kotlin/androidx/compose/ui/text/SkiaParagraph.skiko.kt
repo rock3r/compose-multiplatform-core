@@ -608,7 +608,7 @@ internal class SkiaParagraph(
             )
         }
         val recordedSimpleText =
-            shadow == null && textDecoration == null && recordJbrSkiaSimpleText(color)
+            hasNoJbrSkiaTextEffects(shadow, textDecoration) && recordJbrSkiaSimpleText(color)
         if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
@@ -639,8 +639,7 @@ internal class SkiaParagraph(
         val recordedSimpleText =
             blendMode == BlendMode.SrcOver &&
                 drawStyle == null &&
-                shadow == null &&
-                textDecoration == null &&
+                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaSimpleText(color)
         if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
@@ -679,8 +678,7 @@ internal class SkiaParagraph(
             solidColor != null &&
                 blendMode == BlendMode.SrcOver &&
                 drawStyle == null &&
-                shadow == null &&
-                textDecoration == null &&
+                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaSimpleText(solidColor)
         if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
@@ -688,14 +686,20 @@ internal class SkiaParagraph(
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
     }
 
+    private fun hasNoJbrSkiaTextEffects(shadow: Shadow?, textDecoration: TextDecoration?): Boolean =
+        (shadow == null || shadow == Shadow.None) &&
+            (textDecoration == null || textDecoration == TextDecoration.None)
+
     private fun recordJbrSkiaSimpleText(color: Color): Boolean {
-        if (!color.isSpecified || text.isEmpty() || text.length > 4096 || lineCount != 1) {
+        if (!color.isSpecified || text.isEmpty() || text.length > 4096) {
             return false
         }
+        if (maxLines != 1 && lineCount != 1) return false
+        if (text.any { it == '\n' || it == '\r' }) return false
         if (text.any { it.code > 0x7f }) {
             return false
         }
-        val fontSize = defaultFont.size
+        val fontSize = jbrSkiaSimpleTextFontSize()
         if (!fontSize.isFinite() || fontSize <= 0f) {
             return false
         }
@@ -707,6 +711,16 @@ internal class SkiaParagraph(
             color = color.toArgb(),
             antiAlias = true,
         )
+    }
+
+    private fun jbrSkiaSimpleTextFontSize(): Float {
+        val fontSize = defaultFont.size
+        if (fontSize.isFinite() && fontSize > 0f) return fontSize
+        val lineHeight = lineMetrics.firstOrNull()?.height?.toFloat()
+        if (lineHeight != null && lineHeight.isFinite() && lineHeight > 0f) {
+            return lineHeight * 0.75f
+        }
+        return 0f
     }
 
     private fun recordJbrSkiaTextImage(): Boolean {

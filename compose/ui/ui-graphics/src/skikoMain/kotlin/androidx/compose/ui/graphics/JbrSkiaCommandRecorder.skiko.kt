@@ -140,6 +140,9 @@ object JbrSkiaCommandRecorder {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
         private val unsupportedReasons = linkedMapOf<String, Int>()
+        private var imageDefineCount = 0
+        private var imageRefCount = 0
+        private var textCommandCount = 0
         private var state = State()
 
         fun toCommandArray(): IntArray? =
@@ -156,7 +159,8 @@ object JbrSkiaCommandRecorder {
             }
             val suffix = if (reasons.isEmpty()) "" else " $reasons"
             System.err.println(
-                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported$suffix"
+                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported" +
+                    " textCommands=$textCommandCount imageDefines=$imageDefineCount imageRefs=$imageRefCount$suffix"
             )
         }
 
@@ -363,6 +367,7 @@ object JbrSkiaCommandRecorder {
             image.readPixels(pixels)
             val cacheKey = pixels.imageCacheKey(image.width, image.height)
             if (definedImageKeys.add(cacheKey)) {
+                imageDefineCount++
                 commands.addCommand(
                     COMMAND_DEFINE_IMAGE_ARGB,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -374,6 +379,7 @@ object JbrSkiaCommandRecorder {
                     *pixels,
                 )
             }
+            imageRefCount++
             commands.addCommand(
                 COMMAND_DRAW_IMAGE_REF,
                 paint.recordFlags(),
@@ -406,6 +412,7 @@ object JbrSkiaCommandRecorder {
             if (text.isEmpty() || text.length > 4096 || !fontSize.isFinite() || fontSize <= 0f) {
                 return false
             }
+            textCommandCount++
             commands.addCommand(
                 COMMAND_DRAW_TEXT_UTF16,
                 if (antiAlias) COMMAND_RECORD_FLAG_ANTIALIAS else COMMAND_RECORD_FLAGS_NONE,
