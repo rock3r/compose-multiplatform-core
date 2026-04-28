@@ -105,7 +105,7 @@ object JbrSkiaCommandRecorder {
     }
 
     private class Recorder {
-        private val commands = ArrayList<Int>(1024)
+        private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
         private val unsupportedReasons = linkedMapOf<String, Int>()
         private var state = State()
@@ -124,7 +124,7 @@ object JbrSkiaCommandRecorder {
             }
             val suffix = if (reasons.isEmpty()) "" else " $reasons"
             System.err.println(
-                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${COMMAND_STREAM_HEADER_SIZE + commands.size} unsupported=$unsupported$suffix"
+                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported$suffix"
             )
         }
 
@@ -330,28 +330,38 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun commandStream(): IntArray =
-            IntArray(COMMAND_STREAM_HEADER_SIZE + commands.size).also { stream ->
-                stream[0] = COMMAND_STREAM_MAGIC
-                stream[1] = COMMAND_STREAM_ABI_ID
-                stream[2] = COMMAND_STREAM_FLAGS_NONE
-                stream[3] = commands.size
-                stream[4] = COMMAND_COORDINATE_SPACE_SWING_USER
-                stream[5] = COMMAND_PAINT_FORMAT_SOLID_ARGB
-                commands.forEachIndexed { index, command -> stream[COMMAND_STREAM_HEADER_SIZE + index] = command }
-            }
-
-        private fun MutableList<Int>.addCommand(op: Int, vararg args: Int) {
-            add(op)
-            add((args.size + 3) * Int.SIZE_BYTES)
-            add(COMMAND_RECORD_FLAGS_NONE)
-            args.forEach(::add)
-        }
+            commands.toIntArray()
 
         private val unsupportedCount: Int
             get() = unsupportedReasons.values.sum()
 
         private fun Any.toReasonToken(): String =
             toString().replace("[^A-Za-z0-9]".toRegex(), "_")
+    }
+
+    private class CommandStreamWriter {
+        private val payload = ArrayList<Int>(1024)
+
+        val streamSize: Int
+            get() = COMMAND_STREAM_HEADER_SIZE + payload.size
+
+        fun addCommand(op: Int, vararg args: Int) {
+            payload.add(op)
+            payload.add((args.size + 3) * Int.SIZE_BYTES)
+            payload.add(COMMAND_RECORD_FLAGS_NONE)
+            args.forEach(payload::add)
+        }
+
+        fun toIntArray(): IntArray =
+            IntArray(streamSize).also { stream ->
+                stream[0] = COMMAND_STREAM_MAGIC
+                stream[1] = COMMAND_STREAM_ABI_ID
+                stream[2] = COMMAND_STREAM_FLAGS_NONE
+                stream[3] = payload.size
+                stream[4] = COMMAND_COORDINATE_SPACE_SWING_USER
+                stream[5] = COMMAND_PAINT_FORMAT_SOLID_ARGB
+                payload.forEachIndexed { index, command -> stream[COMMAND_STREAM_HEADER_SIZE + index] = command }
+            }
     }
 
     private data class State(
