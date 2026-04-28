@@ -60,6 +60,18 @@ object JbrSkiaCommandRecorder {
         active.get()?.unsupportedTransform()
     }
 
+    internal fun unsupportedDraw(reason: String) {
+        active.get()?.unsupportedDraw(reason)
+    }
+
+    internal fun clipRect() {
+        active.get()?.clipRect()
+    }
+
+    internal fun clipPath() {
+        active.get()?.clipPath()
+    }
+
     internal fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
         active.get()?.drawLine(p1, p2, paint)
     }
@@ -139,6 +151,20 @@ object JbrSkiaCommandRecorder {
 
         fun unsupportedTransform() {
             countUnsupported("transform")
+            state = state.copy(supported = false)
+        }
+
+        fun unsupportedDraw(reason: String) {
+            countUnsupported(reason)
+        }
+
+        fun clipRect() {
+            countUnsupported("clipRect")
+            state = state.copy(supported = false)
+        }
+
+        fun clipPath() {
+            countUnsupported("clipPath")
             state = state.copy(supported = false)
         }
 

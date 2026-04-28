@@ -147,6 +147,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
+        JbrSkiaCommandRecorder.clipRect()
         val antiAlias = true
         internalSkiaCanvas.clipRect(
             left = left,
@@ -159,6 +160,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun clipPath(path: Path, clipOp: ClipOp) {
+        JbrSkiaCommandRecorder.clipPath()
         val antiAlias = true
         internalSkiaCanvas.clipPath(path.materializeSkiaPath(), clipOp.toSkia(), antiAlias)
     }
@@ -236,6 +238,7 @@ internal class SkiaBackedCanvas : Canvas {
         useCenter: Boolean,
         paint: Paint
     ) {
+        JbrSkiaCommandRecorder.unsupportedDraw("arc")
         internalSkiaCanvas.drawArc(
             left = left,
             top = top,
@@ -249,6 +252,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun drawPath(path: Path, paint: Paint) {
+        JbrSkiaCommandRecorder.unsupportedDraw("path")
         internalSkiaCanvas.drawPath(
             path = path.materializeSkiaPath(),
             paint = paint.skiaPaint,
@@ -305,6 +309,7 @@ internal class SkiaBackedCanvas : Canvas {
         dstBottom: Float,
         paint: Paint
     ) {
+        JbrSkiaCommandRecorder.unsupportedDraw("image")
         val bitmap = image.asSkiaBitmap()
 
         Image.makeFromBitmap(bitmap).use { skiaImage ->
@@ -326,6 +331,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun drawPoints(pointMode: PointMode, points: List<Offset>, paint: Paint) {
+        JbrSkiaCommandRecorder.unsupportedDraw("points")
         when (pointMode) {
             // Draw a line between each pair of points, each point has at most one line
             // If the number of points is odd, then the last point is ignored.
@@ -383,6 +389,7 @@ internal class SkiaBackedCanvas : Canvas {
      * @throws IllegalArgumentException if a non even number of points is provided
      */
     override fun drawRawPoints(pointMode: PointMode, points: FloatArray, paint: Paint) {
+        JbrSkiaCommandRecorder.unsupportedDraw("rawPoints")
         if (points.size % 2 != 0) {
             throw IllegalArgumentException("points must have an even number of values")
         }
@@ -437,6 +444,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint) {
+        JbrSkiaCommandRecorder.unsupportedDraw("vertices")
         internalSkiaCanvas.drawVertices(
             vertexMode = vertices.vertexMode.toSkiaVertexMode(),
             positions = vertices.positions,
