@@ -98,14 +98,17 @@ internal class SkiaBackedCanvas(
     }
 
     override fun save() {
+        JbrSkiaCommandRecorder.save()
         internalSkiaCanvas.save()
     }
 
     override fun restore() {
+        JbrSkiaCommandRecorder.restore()
         internalSkiaCanvas.restore()
     }
 
     override fun saveLayer(bounds: Rect, paint: Paint) {
+        JbrSkiaCommandRecorder.saveLayer()
         internalSkiaCanvas.saveLayer(
             bounds.left,
             bounds.top,
@@ -116,23 +119,28 @@ internal class SkiaBackedCanvas(
     }
 
     override fun translate(dx: Float, dy: Float) {
+        JbrSkiaCommandRecorder.translate(dx, dy)
         internalSkiaCanvas.translate(dx, dy)
     }
 
     override fun scale(sx: Float, sy: Float) {
+        JbrSkiaCommandRecorder.scale(sx, sy)
         internalSkiaCanvas.scale(sx, sy)
     }
 
     override fun rotate(degrees: Float) {
+        if (degrees != 0f) JbrSkiaCommandRecorder.unsupportedTransform()
         internalSkiaCanvas.rotate(degrees)
     }
 
     override fun skew(sx: Float, sy: Float) {
+        if (sx != 0f || sy != 0f) JbrSkiaCommandRecorder.unsupportedTransform()
         internalSkiaCanvas.skew(sx, sy)
     }
 
     override fun concat(matrix: Matrix) {
         if (!matrix.isIdentity()) {
+            JbrSkiaCommandRecorder.unsupportedTransform()
             internalSkiaCanvas.concat(matrix.toSkia())
         }
     }
@@ -156,6 +164,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
+        JbrSkiaCommandRecorder.drawLine(p1, p2, paint)
         internalSkiaCanvas.drawLine(
             x0 = p1.x,
             y0 = p1.y,
@@ -166,6 +175,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+        JbrSkiaCommandRecorder.drawRect(left, top, right, bottom, paint)
         internalSkiaCanvas.drawRect(
             left = left,
             top = top,
@@ -184,6 +194,7 @@ internal class SkiaBackedCanvas(
         radiusY: Float,
         paint: Paint
     ) {
+        JbrSkiaCommandRecorder.drawRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
         internalSkiaCanvas.drawRRect(
             left = left,
             top = top,
@@ -195,6 +206,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun drawOval(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+        JbrSkiaCommandRecorder.drawOval(left, top, right, bottom, paint)
         internalSkiaCanvas.drawOval(
             left = left,
             top = top,
@@ -205,6 +217,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun drawCircle(center: Offset, radius: Float, paint: Paint) {
+        JbrSkiaCommandRecorder.drawCircle(center, radius, paint)
         internalSkiaCanvas.drawCircle(
             x = center.x,
             y = center.y,

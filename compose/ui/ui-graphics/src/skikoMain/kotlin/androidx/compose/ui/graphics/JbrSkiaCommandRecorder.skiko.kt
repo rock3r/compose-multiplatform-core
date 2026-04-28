@@ -1,0 +1,238 @@
+/*
+ * Copyright 2026 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package androidx.compose.ui.graphics
+
+import androidx.compose.ui.geometry.Offset
+import kotlin.math.roundToInt
+
+object JbrSkiaCommandRecorder {
+    private val active = ThreadLocal<Recorder?>()
+
+    fun record(block: () -> Unit): IntArray {
+        val previous = active.get()
+        val recorder = Recorder()
+        active.set(recorder)
+        try {
+            block()
+            return recorder.toCommandArray()
+        } finally {
+            active.set(previous)
+        }
+    }
+
+    internal fun save() {
+        active.get()?.save()
+    }
+
+    internal fun restore() {
+        active.get()?.restore()
+    }
+
+    internal fun saveLayer() {
+        active.get()?.saveLayer()
+    }
+
+    internal fun translate(dx: Float, dy: Float) {
+        active.get()?.translate(dx, dy)
+    }
+
+    internal fun scale(sx: Float, sy: Float) {
+        active.get()?.scale(sx, sy)
+    }
+
+    internal fun unsupportedTransform() {
+        active.get()?.unsupportedTransform()
+    }
+
+    internal fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
+        active.get()?.drawLine(p1, p2, paint)
+    }
+
+    internal fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+        active.get()?.drawRect(left, top, right, bottom, paint)
+    }
+
+    internal fun drawRoundRect(
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        radiusX: Float,
+        radiusY: Float,
+        paint: Paint,
+    ) {
+        active.get()?.drawRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
+    }
+
+    internal fun drawOval(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+        active.get()?.drawOval(left, top, right, bottom, paint)
+    }
+
+    internal fun drawCircle(center: Offset, radius: Float, paint: Paint) {
+        active.get()?.drawCircle(center, radius, paint)
+    }
+
+    private class Recorder {
+        private val commands = ArrayList<Int>(1024)
+        private val stack = ArrayDeque<State>()
+        private var state = State()
+
+        fun toCommandArray(): IntArray = commands.toIntArray()
+
+        fun save() {
+            stack.addLast(state)
+        }
+
+        fun restore() {
+            state = stack.removeLastOrNull() ?: State()
+        }
+
+        fun saveLayer() {
+            save()
+            state = state.copy(supported = false)
+        }
+
+        fun translate(dx: Float, dy: Float) {
+            state = state.copy(
+                translateX = state.translateX + dx * state.scaleX,
+                translateY = state.translateY + dy * state.scaleY,
+            )
+        }
+
+        fun scale(sx: Float, sy: Float) {
+            state = state.copy(scaleX = state.scaleX * sx, scaleY = state.scaleY * sy)
+        }
+
+        fun unsupportedTransform() {
+            state = state.copy(supported = false)
+        }
+
+        fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
+            if (!paint.isSupportedSolidColor) return
+            commands.addAll(
+                listOf(
+                    COMMAND_STROKE_LINE,
+                    paint.commandColor(),
+                    state.x(p1.x),
+                    state.y(p1.y),
+                    state.x(p2.x),
+                    state.y(p2.y),
+                    state.stroke(paint.strokeWidth),
+                )
+            )
+        }
+
+        fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            if (!paint.isSupportedSolidColor) return
+            val x = state.x(left)
+            val y = state.y(top)
+            val width = state.width(right - left)
+            val height = state.height(bottom - top)
+            when (paint.style) {
+                PaintingStyle.Fill -> commands.addAll(listOf(COMMAND_FILL_RECT, paint.commandColor(), x, y, width, height, 0))
+                PaintingStyle.Stroke -> {
+                    val stroke = state.stroke(paint.strokeWidth)
+                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x, y, x + width, y, stroke))
+                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y, x + width, y + height, stroke))
+                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x + width, y + height, x, y + height, stroke))
+                    commands.addAll(listOf(COMMAND_STROKE_LINE, paint.commandColor(), x, y + height, x, y, stroke))
+                }
+                else -> Unit
+            }
+        }
+
+        fun drawRoundRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            radiusX: Float,
+            radiusY: Float,
+            paint: Paint,
+        ) {
+            if (!paint.isSupportedSolidColor || paint.style != PaintingStyle.Fill) return
+            commands.addAll(
+                listOf(
+                    COMMAND_FILL_RECT,
+                    paint.commandColor(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                    ((radiusX + radiusY) / 2f * state.averageScale).roundToInt().coerceAtLeast(0),
+                )
+            )
+        }
+
+        fun drawOval(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            if (!paint.isSupportedSolidColor) return
+            val op = when (paint.style) {
+                PaintingStyle.Fill -> COMMAND_FILL_OVAL
+                PaintingStyle.Stroke -> COMMAND_STROKE_OVAL
+                else -> return
+            }
+            commands.addAll(
+                listOf(
+                    op,
+                    paint.commandColor(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            )
+            if (paint.style == PaintingStyle.Stroke) {
+                commands.add(state.stroke(paint.strokeWidth))
+            }
+        }
+
+        fun drawCircle(center: Offset, radius: Float, paint: Paint) {
+            drawOval(center.x - radius, center.y - radius, center.x + radius, center.y + radius, paint)
+        }
+
+        private val Paint.isSupportedSolidColor: Boolean
+            get() = state.supported &&
+                blendMode == BlendMode.SrcOver &&
+                shader == null &&
+                colorFilter == null &&
+                pathEffect == null
+
+        private fun Paint.commandColor(): Int =
+            color.copy(alpha = color.alpha * alpha).toArgb()
+    }
+
+    private data class State(
+        val translateX: Float = 0f,
+        val translateY: Float = 0f,
+        val scaleX: Float = 1f,
+        val scaleY: Float = 1f,
+        val supported: Boolean = true,
+    ) {
+        val averageScale: Float get() = (kotlin.math.abs(scaleX) + kotlin.math.abs(scaleY)) / 2f
+
+        fun x(value: Float): Int = (translateX + value * scaleX).roundToInt()
+        fun y(value: Float): Int = (translateY + value * scaleY).roundToInt()
+        fun width(value: Float): Int = (value * scaleX).roundToInt().coerceAtLeast(0)
+        fun height(value: Float): Int = (value * scaleY).roundToInt().coerceAtLeast(0)
+        fun stroke(value: Float): Int = (value * averageScale).roundToInt().coerceAtLeast(1)
+    }
+
+    private const val COMMAND_FILL_RECT = 2
+    private const val COMMAND_STROKE_LINE = 3
+    private const val COMMAND_FILL_OVAL = 4
+    private const val COMMAND_STROKE_OVAL = 5
+}

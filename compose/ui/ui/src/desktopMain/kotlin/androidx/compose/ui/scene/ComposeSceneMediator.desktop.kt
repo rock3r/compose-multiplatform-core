@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asComposeCanvas
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
 import androidx.compose.ui.input.key.internal
@@ -98,11 +99,13 @@ import javax.swing.JComponent
 import javax.swing.SwingUtilities
 import kotlin.coroutines.CoroutineContext
 import org.jetbrains.skia.Canvas
+import org.jetbrains.skia.PictureRecorder
 import org.jetbrains.skiko.ClipRectangle
 import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.GraphicsApi
 import org.jetbrains.skiko.SkikoRenderDelegate
 import org.jetbrains.skiko.hostOs
+import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
 /**
@@ -132,7 +135,7 @@ internal class ComposeSceneMediator(
 
     skiaLayerComponentFactory: (ComposeSceneMediator) -> SkiaLayerComponent,
     composeSceneFactory: (ComposeSceneMediator) -> ComposeScene,
-) : SkikoRenderDelegate {
+) : SkikoRenderDelegate, JbrSkiaCommandRenderDelegate {
     private var isDisposed = false
     private var isComponentAttached = false
     private val invisibleComponent = InvisibleComponent()
@@ -699,10 +702,47 @@ internal class ComposeSceneMediator(
         }
     }
 
-    private inline fun Canvas.withSceneOffset(block: Canvas.() -> Unit) {
+    override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
+        return try {
+            val recorder = PictureRecorder()
+            try {
+                val canvas = recorder.beginRecording(0f, 0f, width.toFloat(), height.toFloat())
+                JbrSkiaCommandRecorder.record {
+                    interopContainer.postponingExecutingScheduledUpdates {
+                        canvas.withSceneOffset {
+                            scene.render(asComposeCanvas(), nanoTime)
+                        }
+                    }
+                }
+            } finally {
+                recorder.finishRecordingAsPicture().close()
+                recorder.close()
+            }
+        } catch (e: Throwable) {
+            exceptionHandler?.onException(e) ?: throw e
+            null
+        }
+    }
+
+    private inline fun org.jetbrains.skia.Canvas.withSceneOffset(block: org.jetbrains.skia.Canvas.() -> Unit) {
         // Offset of scene relative to [container]
         val sceneBoundsOffset = sceneBoundsInPx?.topLeft ?: Offset.Zero
         // Offset of canvas relative to [container]
+        val contentOffset = with(contentComponent) {
+            val scale = density.density
+            Offset(x * scale, y * scale)
+        }
+        val sceneOffset = sceneBoundsOffset - contentOffset
+        save()
+        translate(sceneOffset.x, sceneOffset.y)
+        block()
+        restore()
+    }
+
+    private inline fun androidx.compose.ui.graphics.Canvas.withSceneOffset(
+        block: androidx.compose.ui.graphics.Canvas.() -> Unit
+    ) {
+        val sceneBoundsOffset = sceneBoundsInPx?.topLeft ?: Offset.Zero
         val contentOffset = with(contentComponent) {
             val scale = density.density
             Offset(x * scale, y * scale)
