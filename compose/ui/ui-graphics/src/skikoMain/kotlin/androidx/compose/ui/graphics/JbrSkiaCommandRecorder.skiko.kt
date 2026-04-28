@@ -114,7 +114,7 @@ object JbrSkiaCommandRecorder {
             if (java.lang.Boolean.getBoolean(STRICT_PROPERTY) && unsupportedCount > 0) {
                 null
             } else {
-                commands.toIntArray()
+                commandStream()
             }
 
         fun logFrame() {
@@ -124,7 +124,7 @@ object JbrSkiaCommandRecorder {
             }
             val suffix = if (reasons.isEmpty()) "" else " $reasons"
             System.err.println(
-                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.size} unsupported=$unsupported$suffix"
+                "CMP_JBR_COMMAND_RECORDER_FRAME commands=${COMMAND_STREAM_HEADER_SIZE + commands.size} unsupported=$unsupported$suffix"
             )
         }
 
@@ -337,6 +337,15 @@ object JbrSkiaCommandRecorder {
             unsupportedReasons[reason] = unsupportedReasons.getOrElse(reason) { 0 } + 1
         }
 
+        private fun commandStream(): IntArray =
+            IntArray(COMMAND_STREAM_HEADER_SIZE + commands.size).also { stream ->
+                stream[0] = COMMAND_STREAM_MAGIC
+                stream[1] = COMMAND_STREAM_ABI_ID
+                stream[2] = COMMAND_STREAM_FLAGS_NONE
+                stream[3] = commands.size
+                commands.forEachIndexed { index, command -> stream[COMMAND_STREAM_HEADER_SIZE + index] = command }
+            }
+
         private val unsupportedCount: Int
             get() = unsupportedReasons.values.sum()
 
@@ -368,4 +377,8 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE = 7
     private const val COMMAND_RESTORE = 8
     private const val COMMAND_CLIP_RECT = 9
+    private const val COMMAND_STREAM_MAGIC = 1246972723
+    private const val COMMAND_STREAM_ABI_ID = 3
+    private const val COMMAND_STREAM_HEADER_SIZE = 4
+    private const val COMMAND_STREAM_FLAGS_NONE = 0
 }
