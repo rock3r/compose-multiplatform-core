@@ -146,7 +146,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
-        JbrSkiaCommandRecorder.clipRect()
+        JbrSkiaCommandRecorder.clipRect(left, top, right, bottom, clipOp)
         val antiAlias = true
         internalSkiaCanvas.clipRect(
             left = left,

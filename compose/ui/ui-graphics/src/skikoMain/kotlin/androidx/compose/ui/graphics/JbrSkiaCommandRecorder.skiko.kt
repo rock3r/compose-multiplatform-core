@@ -68,8 +68,8 @@ object JbrSkiaCommandRecorder {
         active.get()?.unsupportedDraw(reason)
     }
 
-    internal fun clipRect() {
-        active.get()?.clipRect()
+    internal fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
+        active.get()?.clipRect(left, top, right, bottom, clipOp)
     }
 
     internal fun clipPath() {
@@ -129,10 +129,12 @@ object JbrSkiaCommandRecorder {
         }
 
         fun save() {
+            commands.add(COMMAND_SAVE)
             stack.addLast(state)
         }
 
         fun restore() {
+            commands.add(COMMAND_RESTORE)
             state = stack.removeLastOrNull() ?: State()
         }
 
@@ -162,9 +164,21 @@ object JbrSkiaCommandRecorder {
             countUnsupported(reason)
         }
 
-        fun clipRect() {
-            countUnsupported("clipRect")
-            state = state.copy(supported = false)
+        fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
+            if (clipOp != ClipOp.Intersect) {
+                countUnsupported("clipRect_${clipOp.toReasonToken()}")
+                state = state.copy(supported = false)
+                return
+            }
+            commands.addAll(
+                listOf(
+                    COMMAND_CLIP_RECT,
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            )
         }
 
         fun clipPath() {
@@ -351,4 +365,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_OVAL = 4
     private const val COMMAND_STROKE_OVAL = 5
     private const val COMMAND_CLEAR_RECT = 6
+    private const val COMMAND_SAVE = 7
+    private const val COMMAND_RESTORE = 8
+    private const val COMMAND_CLIP_RECT = 9
 }
