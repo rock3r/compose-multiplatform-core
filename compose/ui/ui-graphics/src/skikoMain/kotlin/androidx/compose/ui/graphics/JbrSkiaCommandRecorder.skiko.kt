@@ -610,7 +610,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_TEXT_UTF16 = 17
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 16
+    private const val COMMAND_STREAM_ABI_ID = 17
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
