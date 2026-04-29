@@ -631,7 +631,7 @@ class DesktopParagraphTest {
     }
 
     @Test
-    fun paint_withFillDrawStyle_recordsJbrSkiaSimpleText() {
+    fun paint_withFillDrawStyle_recordsJbrSkiaTextImageByDefault() {
         val paragraph = simpleParagraph(
             text = "Hi",
             style = TextStyle(fontSize = 20.sp),
@@ -647,6 +647,29 @@ class DesktopParagraphTest {
             )
         }
 
+        assertThat(commands!!.toList()).contains(16)
+        assertThat(commands.toList()).doesNotContain(17)
+    }
+
+    @Test
+    fun paint_withFillDrawStyle_recordsJbrSkiaSimpleTextWhenNativeTextIsEnabled() {
+        val paragraph = simpleParagraph(
+            text = "Hi",
+            style = TextStyle(fontSize = 20.sp),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
+        }
+
         assertThat(commands!!.toList()).contains(17)
         assertThat(commands.toList()).doesNotContain(16)
     }
@@ -660,12 +683,14 @@ class DesktopParagraphTest {
             width = 200f,
         )
 
-        val commands = JbrSkiaCommandRecorder.record {
-            paragraph.paint(
-                canvas = Canvas(ImageBitmap(200, 100)),
-                color = Color.Black,
-                drawStyle = Fill,
-            )
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
         }
 
         assertThat(commands!!.toList()).contains(17)
@@ -806,6 +831,21 @@ class DesktopParagraphTest {
             constraints = Constraints(maxWidth = width.ceilToInt()),
             maxLines = maxLines,
         )
+    }
+
+    private fun <T> withNativeJbrSkiaText(block: () -> T): T {
+        val key = "compose.jbr.skia.command.nativeText"
+        val previous = System.getProperty(key)
+        System.setProperty(key, "true")
+        try {
+            return block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty(key)
+            } else {
+                System.setProperty(key, previous)
+            }
+        }
     }
 }
 

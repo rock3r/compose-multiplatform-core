@@ -66,6 +66,10 @@ internal class SkiaParagraph(
     private val overflow: TextOverflow,
     val constraints: Constraints
 ) : Paragraph {
+    private companion object {
+        private const val NativeJbrSkiaTextProperty = "compose.jbr.skia.command.nativeText"
+    }
+
     private val layouter = paragraphIntrinsics.layouter().apply {
         setParagraphStyle(maxLines, ellipsis)
     }
@@ -609,13 +613,7 @@ internal class SkiaParagraph(
                 width = width
             )
         }
-        val recordedSimpleText =
-            hasNoJbrSkiaTextEffects(shadow, textDecoration) && recordJbrSkiaSimpleText(color)
-        val recordedParagraphText =
-            !recordedSimpleText &&
-                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaParagraphText(color, textDecoration)
-        if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
+        if (!recordJbrSkiaText(color, shadow, textDecoration)) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -642,18 +640,7 @@ internal class SkiaParagraph(
                 width = width
             )
         }
-        val recordedSimpleText =
-            blendMode == BlendMode.SrcOver &&
-                drawStyle.isJbrSkiaFillStyle() &&
-                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaSimpleText(color)
-        val recordedParagraphText =
-            !recordedSimpleText &&
-                blendMode == BlendMode.SrcOver &&
-                drawStyle.isJbrSkiaFillStyle() &&
-                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaParagraphText(color, textDecoration)
-        if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
+        if (!recordJbrSkiaText(color, shadow, textDecoration, drawStyle, blendMode)) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -686,23 +673,37 @@ internal class SkiaParagraph(
             )
         }
         val solidColor = (brush as? SolidColor)?.value?.let { it.copy(alpha = it.alpha * alpha) }
-        val recordedSimpleText =
-            solidColor != null &&
-                blendMode == BlendMode.SrcOver &&
-                drawStyle.isJbrSkiaFillStyle() &&
-                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaSimpleText(solidColor)
-        val recordedParagraphText =
-            !recordedSimpleText &&
-                solidColor != null &&
-                blendMode == BlendMode.SrcOver &&
-                drawStyle.isJbrSkiaFillStyle() &&
-                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaParagraphText(solidColor, textDecoration)
-        if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
+        if (!recordJbrSkiaText(solidColor, shadow, textDecoration, drawStyle, blendMode)) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
+    }
+
+    private fun recordJbrSkiaText(
+        color: Color?,
+        shadow: Shadow?,
+        textDecoration: TextDecoration?,
+        drawStyle: DrawStyle? = Fill,
+        blendMode: BlendMode = BlendMode.SrcOver,
+    ): Boolean {
+        if (!java.lang.Boolean.getBoolean(NativeJbrSkiaTextProperty)) {
+            return recordJbrSkiaTextImage()
+        }
+
+        val recordedSimpleText =
+            color != null &&
+                blendMode == BlendMode.SrcOver &&
+                drawStyle.isJbrSkiaFillStyle() &&
+                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaSimpleText(color)
+        val recordedParagraphText =
+            color != null &&
+                !recordedSimpleText &&
+                blendMode == BlendMode.SrcOver &&
+                drawStyle.isJbrSkiaFillStyle() &&
+                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaParagraphText(color, textDecoration)
+        return recordedSimpleText || recordedParagraphText || recordJbrSkiaTextImage()
     }
 
     private fun hasNoJbrSkiaTextEffects(shadow: Shadow?, textDecoration: TextDecoration?): Boolean =
