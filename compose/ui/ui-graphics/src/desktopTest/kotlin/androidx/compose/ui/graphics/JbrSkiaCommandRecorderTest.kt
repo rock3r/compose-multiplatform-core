@@ -19,6 +19,7 @@ package androidx.compose.ui.graphics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -269,6 +270,29 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsOpaqueShaderInStrictMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        shader = RadialGradientShader(
+                            center = Offset(6f, 7f),
+                            radius = 4f,
+                            colors = listOf(Color.Red, Color.Blue),
+                        )
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesSaveLayerRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(
@@ -438,5 +462,20 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    private fun withStrictCommandRecording(block: () -> Unit) {
+        val key = "compose.jbr.skia.command.strict"
+        val previous = System.getProperty(key)
+        System.setProperty(key, "true")
+        try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty(key)
+            } else {
+                System.setProperty(key, previous)
+            }
+        }
     }
 }
