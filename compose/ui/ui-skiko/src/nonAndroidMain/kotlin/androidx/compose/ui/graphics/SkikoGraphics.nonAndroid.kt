@@ -105,16 +105,27 @@ internal object SkikoGraphics : PlatformGraphics {
         tileMode: TileMode,
     ): androidx.compose.ui.graphics.Shader {
         validateColorStops(colors, colorStops)
-        return SkShader.makeLinearGradient(
-            from.x,
-            from.y,
-            to.x,
-            to.y,
-            colors.toSkiaGradient(
-                colorStops = colorStops,
-                tileMode = tileMode,
+        return Shader(
+            SkikoShader(
+                skiaShader = SkShader.makeLinearGradient(
+                    from.x,
+                    from.y,
+                    to.x,
+                    to.y,
+                    colors.toSkiaGradient(
+                        colorStops = colorStops,
+                        tileMode = tileMode,
+                    ),
+                ),
+                jbrSkiaLinearGradient = JbrSkiaLinearGradientShader(
+                    from = from,
+                    to = to,
+                    colors = colors,
+                    colorStops = colorStops,
+                    tileMode = tileMode,
+                ),
             ),
-        ).asComposeShader()
+        )
     }
 
     override fun createRadialGradientShader(

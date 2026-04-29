@@ -25,6 +25,19 @@ actual class Shader @InternalComposeUiApi constructor(
     @property:InternalComposeUiApi val platformShader: PlatformShader,
 )
 
+@InternalComposeUiApi
+data class JbrSkiaLinearGradientShader(
+    val from: Offset,
+    val to: Offset,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+    val tileMode: TileMode,
+)
+
+@OptIn(InternalComposeUiApi::class)
+internal val Shader.jbrSkiaLinearGradient: JbrSkiaLinearGradientShader?
+    get() = platformShader.jbrSkiaLinearGradient
+
 @OptIn(InternalComposeUiApi::class)
 internal actual class TransformShader {
     private var _shader: Shader? = null
