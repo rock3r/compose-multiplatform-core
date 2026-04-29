@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.isUnspecified
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.roundToInt
 import org.jetbrains.skia.FontMetrics
 import org.jetbrains.skia.IRange
 import org.jetbrains.skia.PathBuilder
@@ -755,8 +756,21 @@ internal class SkiaParagraph(
             fontSlant = fontStyle.slant.ordinal.coerceIn(0, 2),
             textAlign = layouter.textStyle.textAlign.jbrSkiaParagraphAlign(),
             textDirection = paragraphIntrinsics.textDirection.jbrSkiaParagraphDirection(),
+            lineHeightMultiplier1000 = jbrSkiaParagraphLineHeightMultiplier1000(fontSize),
             antiAlias = true,
         )
+    }
+
+    private fun jbrSkiaParagraphLineHeightMultiplier1000(fontSize: Float): Int {
+        val lineHeight = layouter.textStyle.lineHeight
+        if (lineHeight.isUnspecified || fontSize <= 0f) return 0
+        val lineHeightPx = when {
+            lineHeight.isEm -> fontSize * lineHeight.value
+            lineHeight.isSp -> with(layouter.density) { lineHeight.toPx() }
+            else -> return 0
+        }
+        if (!lineHeightPx.isFinite() || lineHeightPx <= 0f) return 0
+        return ((lineHeightPx / fontSize) * 1000f).roundToInt().coerceIn(1, 100000)
     }
 
     private fun TextAlign.jbrSkiaParagraphAlign(): Int = when (this) {
