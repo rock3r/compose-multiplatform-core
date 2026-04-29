@@ -610,7 +610,9 @@ internal class SkiaParagraph(
         }
         val recordedSimpleText =
             hasNoJbrSkiaTextEffects(shadow, textDecoration) && recordJbrSkiaSimpleText(color)
-        if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
+        val recordedParagraphText =
+            !recordedSimpleText && hasNoJbrSkiaTextEffects(shadow, textDecoration) && recordJbrSkiaParagraphText(color)
+        if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -642,7 +644,13 @@ internal class SkiaParagraph(
                 drawStyle.isJbrSkiaFillStyle() &&
                 hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaSimpleText(color)
-        if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
+        val recordedParagraphText =
+            !recordedSimpleText &&
+                blendMode == BlendMode.SrcOver &&
+                drawStyle.isJbrSkiaFillStyle() &&
+                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaParagraphText(color)
+        if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -681,7 +689,14 @@ internal class SkiaParagraph(
                 drawStyle.isJbrSkiaFillStyle() &&
                 hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaSimpleText(solidColor)
-        if (!recordedSimpleText && !recordJbrSkiaTextImage()) {
+        val recordedParagraphText =
+            !recordedSimpleText &&
+                solidColor != null &&
+                blendMode == BlendMode.SrcOver &&
+                drawStyle.isJbrSkiaFillStyle() &&
+                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaParagraphText(solidColor)
+        if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
         paragraph.paint(canvas.skiaCanvas, 0.0f, 0.0f)
@@ -711,6 +726,27 @@ internal class SkiaParagraph(
             text = text,
             x = 0f,
             baseline = firstBaseline,
+            fontSize = fontSize,
+            color = color.toArgb(),
+            antiAlias = true,
+        )
+    }
+
+    private fun recordJbrSkiaParagraphText(color: Color): Boolean {
+        if (!color.isSpecified || text.isEmpty() || text.length > 4096) {
+            return false
+        }
+        if (maxLines != 1 && lineCount != 1) return false
+        if (text.any { it == '\n' || it == '\r' }) return false
+        val fontSize = jbrSkiaSimpleTextFontSize()
+        if (!fontSize.isFinite() || fontSize <= 0f || !width.isFinite() || width <= 0f) {
+            return false
+        }
+        return JbrSkiaCommandRecorder.drawParagraphUtf16(
+            text = text,
+            x = 0f,
+            y = 0f,
+            width = width,
             fontSize = fontSize,
             color = color.toArgb(),
             antiAlias = true,
