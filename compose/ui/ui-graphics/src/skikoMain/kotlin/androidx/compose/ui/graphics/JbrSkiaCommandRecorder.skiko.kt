@@ -1080,7 +1080,7 @@ object JbrSkiaCommandRecorder {
                 return null
             }
             val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
-            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
+            if (!stops.areValidGradientStops(gradient.colors.size)) {
                 countUnsupported("linearGradientStops")
                 return null
             }
@@ -1117,7 +1117,7 @@ object JbrSkiaCommandRecorder {
                 return null
             }
             val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
-            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
+            if (!stops.areValidGradientStops(gradient.colors.size)) {
                 countUnsupported("radialGradientStops")
                 return null
             }
@@ -1153,7 +1153,7 @@ object JbrSkiaCommandRecorder {
                 return null
             }
             val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
-            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
+            if (!stops.areValidGradientStops(gradient.colors.size)) {
                 countUnsupported("sweepGradientStops")
                 return null
             }
@@ -1176,6 +1176,18 @@ object JbrSkiaCommandRecorder {
 
         private fun evenlyDistributedStops(count: Int): List<Float> =
             List(count) { index -> index.toFloat() / (count - 1).toFloat() }
+
+        private fun List<Float>.areValidGradientStops(colorCount: Int): Boolean {
+            if (size != colorCount) return false
+            var previous = -1f
+            for (stop in this) {
+                if (!stop.isFinite() || stop < 0f || stop > 1f || stop <= previous) {
+                    return false
+                }
+                previous = stop
+            }
+            return true
+        }
 
         private fun List<Int>.toIntArray(): IntArray =
             IntArray(size) { this[it] }

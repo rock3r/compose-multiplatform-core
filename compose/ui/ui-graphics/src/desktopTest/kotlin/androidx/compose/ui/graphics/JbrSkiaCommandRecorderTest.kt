@@ -575,6 +575,68 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsInvalidGradientPayloadsInStrictMode() {
+        withStrictCommandRecording {
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 1f,
+                        top = 2f,
+                        right = 11f,
+                        bottom = 12f,
+                        paint = Paint().apply {
+                            shader = LinearGradientShader(
+                                from = Offset(1f, 2f),
+                                to = Offset(11f, 12f),
+                                colors = listOf(Color.Red, Color.Blue),
+                                colorStops = listOf(0.75f, 0.25f),
+                                tileMode = TileMode.Clamp,
+                            )
+                        },
+                    )
+                }
+            )
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 1f,
+                        top = 2f,
+                        right = 11f,
+                        bottom = 12f,
+                        paint = Paint().apply {
+                            shader = RadialGradientShader(
+                                center = Offset(6f, 7f),
+                                radius = 5f,
+                                colors = List(17) { Color.Red },
+                                colorStops = List(17) { it / 16f },
+                                tileMode = TileMode.Clamp,
+                            )
+                        },
+                    )
+                }
+            )
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawPath(
+                        Path().apply {
+                            moveTo(1f, 2f)
+                            lineTo(11f, 12f)
+                            close()
+                        },
+                        Paint().apply {
+                            shader = SweepGradientShader(
+                                center = Offset(6f, 7f),
+                                colors = listOf(Color.Red, Color.Blue),
+                                colorStops = listOf(0.5f, 0.5f),
+                            )
+                        },
+                    )
+                }
+            )
+        }
+    }
+
+    @Test
     fun writesSaveLayerRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(
