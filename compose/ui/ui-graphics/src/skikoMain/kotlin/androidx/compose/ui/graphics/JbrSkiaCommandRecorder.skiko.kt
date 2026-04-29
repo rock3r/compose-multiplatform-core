@@ -372,6 +372,10 @@ object JbrSkiaCommandRecorder {
                 addClearRect(left, top, right, bottom)
                 return
             }
+            if (paint.shader?.jbrSkiaLinearGradient != null) {
+                addLinearGradientRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
@@ -855,32 +859,7 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addLinearGradientRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
-            val gradient = paint.shader?.jbrSkiaLinearGradient ?: return
-            if (!paint.isSupportedLinearGradient || paint.style != PaintingStyle.Fill) {
-                countUnsupported("linearGradientPaint")
-                return
-            }
-            if (gradient.colors.size !in 2..16) {
-                countUnsupported("linearGradientColorCount")
-                return
-            }
-            val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
-            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
-                countUnsupported("linearGradientStops")
-                return
-            }
-            if (!gradient.from.x.isFinite() || !gradient.from.y.isFinite() ||
-                !gradient.to.x.isFinite() || !gradient.to.y.isFinite()
-            ) {
-                countUnsupported("linearGradientPoints")
-                return
-            }
-            val colorStopPairs = gradient.colors.flatMapIndexed { index, color ->
-                listOf(
-                    color.copy(alpha = color.alpha * paint.alpha).toArgb(),
-                    stops[index].fixed1000(),
-                )
-            }
+            val gradientPayload = paint.linearGradientPayload() ?: return
             commands.addCommand(
                 COMMAND_FILL_RECT_LINEAR_GRADIENT,
                 paint.recordFlags(),
@@ -888,14 +867,72 @@ object JbrSkiaCommandRecorder {
                 top.fixed1000(),
                 right.fixed1000(),
                 bottom.fixed1000(),
+                *gradientPayload,
+            )
+        }
+
+        private fun addLinearGradientRoundRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            radiusX: Float,
+            radiusY: Float,
+            paint: Paint,
+        ) {
+            val gradientPayload = paint.linearGradientPayload() ?: return
+            if (radiusX < 0f || radiusY < 0f) {
+                countUnsupported("linearGradientRoundRectRadius")
+                return
+            }
+            commands.addCommand(
+                COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                radiusX.fixed1000().coerceAtLeast(0),
+                radiusY.fixed1000().coerceAtLeast(0),
+                *gradientPayload,
+            )
+        }
+
+        private fun Paint.linearGradientPayload(): IntArray? {
+            val gradient = shader?.jbrSkiaLinearGradient ?: return null
+            if (!isSupportedLinearGradient || style != PaintingStyle.Fill) {
+                countUnsupported("linearGradientPaint")
+                return null
+            }
+            if (gradient.colors.size !in 2..16) {
+                countUnsupported("linearGradientColorCount")
+                return null
+            }
+            val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
+            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
+                countUnsupported("linearGradientStops")
+                return null
+            }
+            if (!gradient.from.x.isFinite() || !gradient.from.y.isFinite() ||
+                !gradient.to.x.isFinite() || !gradient.to.y.isFinite()
+            ) {
+                countUnsupported("linearGradientPoints")
+                return null
+            }
+            val colorStopPairs = gradient.colors.flatMapIndexed { index, color ->
+                listOf(
+                    color.copy(alpha = color.alpha * alpha).toArgb(),
+                    stops[index].fixed1000(),
+                )
+            }
+            return listOf(
                 gradient.from.x.fixed1000(),
                 gradient.from.y.fixed1000(),
                 gradient.to.x.fixed1000(),
                 gradient.to.y.fixed1000(),
                 gradient.tileMode.commandValue(),
                 gradient.colors.size,
-                *colorStopPairs.toIntArray(),
-            )
+            ).plus(colorStopPairs).toIntArray()
         }
 
         private fun evenlyDistributedStops(count: Int): List<Float> =
@@ -975,8 +1012,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_ARC = 22
     private const val COMMAND_DRAW_ROUND_RECT = 23
     private const val COMMAND_FILL_RECT_LINEAR_GRADIENT = 24
+    private const val COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT = 25
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 31
+    private const val COMMAND_STREAM_ABI_ID = 32
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
