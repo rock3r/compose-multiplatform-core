@@ -24,12 +24,21 @@ import org.jetbrains.skia.Shader as SkShader
 
 actual class Shader internal constructor(
     internal val internalSkiaShader: SkShader,
+    internal val jbrSkiaLinearGradient: JbrSkiaLinearGradientShader? = null,
 )
 
 /**
  * Convert the [org.jetbrains.skia.Shader] instance into a Compose-compatible Shader
  */
 fun SkShader.asComposeShader(): Shader = Shader(internalSkiaShader = this)
+
+internal data class JbrSkiaLinearGradientShader(
+    val from: Offset,
+    val to: Offset,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+    val tileMode: TileMode,
+)
 
 /**
  * Provides access to the underlying [org.jetbrains.skia.Shader] instance.
@@ -74,16 +83,25 @@ internal actual fun ActualLinearGradientShader(
     tileMode: TileMode
 ): Shader {
     validateColorStops(colors, colorStops)
-    return SkShader.makeLinearGradient(
-        from.x,
-        from.y,
-        to.x,
-        to.y,
-        colors.toSkiaGradient(
+    return Shader(
+        internalSkiaShader = SkShader.makeLinearGradient(
+            from.x,
+            from.y,
+            to.x,
+            to.y,
+            colors.toSkiaGradient(
+                colorStops = colorStops,
+                tileMode = tileMode
+            )
+        ),
+        jbrSkiaLinearGradient = JbrSkiaLinearGradientShader(
+            from = from,
+            to = to,
+            colors = colors,
             colorStops = colorStops,
-            tileMode = tileMode
-        )
-    ).asComposeShader()
+            tileMode = tileMode,
+        ),
+    )
 }
 
 internal actual fun ActualRadialGradientShader(
