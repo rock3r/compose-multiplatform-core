@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
 
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
-    private const val MAX_DEFINED_IMAGE_KEYS = 256
+    private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private val active = ThreadLocal<Recorder?>()
     private val definedImageKeys = ConcurrentHashMap.newKeySet<Long>()
 
