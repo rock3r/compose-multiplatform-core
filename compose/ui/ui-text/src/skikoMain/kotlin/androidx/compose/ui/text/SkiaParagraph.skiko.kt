@@ -757,9 +757,14 @@ internal class SkiaParagraph(
             textAlign = layouter.textStyle.textAlign.jbrSkiaParagraphAlign(),
             textDirection = paragraphIntrinsics.textDirection.jbrSkiaParagraphDirection(),
             lineHeightMultiplier1000 = jbrSkiaParagraphLineHeightMultiplier1000(fontSize),
+            maxLines = maxLines.jbrSkiaParagraphMaxLines(),
+            ellipsisMode = if (ellipsis.isNotEmpty()) 1 else 0,
             antiAlias = true,
         )
     }
+
+    private fun Int.jbrSkiaParagraphMaxLines(): Int =
+        if (this == Int.MAX_VALUE) 0 else coerceIn(1, 4096)
 
     private fun jbrSkiaParagraphLineHeightMultiplier1000(fontSize: Float): Int {
         val lineHeight = layouter.textStyle.lineHeight
