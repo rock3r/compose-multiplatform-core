@@ -753,8 +753,24 @@ internal class SkiaParagraph(
             fontWeight = fontStyle.weight.coerceIn(1, 1000),
             fontWidth = fontStyle.width.coerceIn(1, 9),
             fontSlant = fontStyle.slant.ordinal.coerceIn(0, 2),
+            textAlign = layouter.textStyle.textAlign.jbrSkiaParagraphAlign(),
+            textDirection = paragraphIntrinsics.textDirection.jbrSkiaParagraphDirection(),
             antiAlias = true,
         )
+    }
+
+    private fun TextAlign.jbrSkiaParagraphAlign(): Int = when (this) {
+        TextAlign.Left -> 0
+        TextAlign.Right -> 1
+        TextAlign.Center -> 2
+        TextAlign.Justify -> 3
+        TextAlign.End -> 5
+        else -> 4
+    }
+
+    private fun ResolvedTextDirection.jbrSkiaParagraphDirection(): Int = when (this) {
+        ResolvedTextDirection.Rtl -> 0
+        ResolvedTextDirection.Ltr -> 1
     }
 
     private fun jbrSkiaSimpleTextFontSize(): Float {
