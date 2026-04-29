@@ -18,14 +18,15 @@ package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 import kotlin.math.roundToInt
 
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private val active = ThreadLocal<Recorder?>()
-    private val definedImageKeys = ConcurrentHashMap.newKeySet<Long>()
+    private val imageCacheLock = Any()
+    private val definedImageKeys = LinkedHashMap<Long, Unit>(MAX_DEFINED_IMAGE_KEYS, 0.75f, true)
 
     fun record(block: () -> Unit): IntArray? {
         val previous = active.get()
@@ -77,7 +78,9 @@ object JbrSkiaCommandRecorder {
     }
 
     internal fun clearImageCacheForTesting() {
-        definedImageKeys.clear()
+        synchronized(imageCacheLock) {
+            definedImageKeys.clear()
+        }
     }
 
     fun drawTextUtf16(
@@ -211,6 +214,7 @@ object JbrSkiaCommandRecorder {
         private var textCommandCount = 0
         private var paragraphTextCommandCount = 0
         private var imageCacheClearCount = 0
+        private var imageCacheEvictCount = 0
         private var state = State()
 
         fun toCommandArray(): IntArray? =
@@ -230,7 +234,7 @@ object JbrSkiaCommandRecorder {
                 "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported" +
                     " textCommands=$textCommandCount paragraphTextCommands=$paragraphTextCommandCount" +
                     " imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
-                    " imageCacheClears=$imageCacheClearCount$suffix"
+                    " imageCacheClears=$imageCacheClearCount imageCacheEvicts=$imageCacheEvictCount$suffix"
             )
         }
 
@@ -616,12 +620,31 @@ object JbrSkiaCommandRecorder {
             val pixels = IntArray(image.width * image.height)
             image.readPixels(pixels)
             val cacheKey = pixels.imageCacheKey(image.width, image.height)
-            if (!definedImageKeys.contains(cacheKey) && definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
-                definedImageKeys.clear()
-                imageCacheClearCount++
-                commands.addCommand(COMMAND_CLEAR_IMAGE_CACHE)
+            var evictedKey: Long? = null
+            val shouldDefine = synchronized(imageCacheLock) {
+                if (definedImageKeys.containsKey(cacheKey)) {
+                    definedImageKeys[cacheKey] = Unit
+                    false
+                } else {
+                    if (definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
+                        val eldest = definedImageKeys.keys.first()
+                        definedImageKeys.remove(eldest)
+                        evictedKey = eldest
+                    }
+                    definedImageKeys[cacheKey] = Unit
+                    true
+                }
             }
-            if (definedImageKeys.add(cacheKey)) {
+            evictedKey?.let {
+                imageCacheEvictCount++
+                commands.addCommand(
+                    COMMAND_EVICT_IMAGE_CACHE_KEY,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
                 imageDefineCount++
                 commands.addCommand(
                     COMMAND_DEFINE_IMAGE_ARGB,
@@ -1271,8 +1294,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_SWEEP_GRADIENT = 30
     private const val COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT = 31
     private const val COMMAND_FILL_PATH_SWEEP_GRADIENT = 32
+    private const val COMMAND_EVICT_IMAGE_CACHE_KEY = 33
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 41
+    private const val COMMAND_STREAM_ABI_ID = 42
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
