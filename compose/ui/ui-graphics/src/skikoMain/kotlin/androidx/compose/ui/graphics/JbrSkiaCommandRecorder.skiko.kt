@@ -494,6 +494,10 @@ object JbrSkiaCommandRecorder {
                 addLinearGradientPath(path, paint)
                 return
             }
+            if (paint.shader?.jbrSkiaRadialGradient != null) {
+                addRadialGradientPath(path, paint)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
@@ -534,6 +538,26 @@ object JbrSkiaCommandRecorder {
             }
             commands.addCommand(
                 COMMAND_FILL_PATH_LINEAR_GRADIENT,
+                paint.recordFlags(),
+                path.fillType.commandValue(),
+                pathData.size,
+                *pathData,
+                *gradientPayload,
+            )
+        }
+
+        private fun addRadialGradientPath(path: Path, paint: Paint) {
+            val gradientPayload = paint.radialGradientPayload() ?: return
+            if (paint.style != PaintingStyle.Fill) {
+                countUnsupported("radialGradientPathPaint")
+                return
+            }
+            val pathData = path.commandData() ?: run {
+                countUnsupported("radialGradientPath")
+                return
+            }
+            commands.addCommand(
+                COMMAND_FILL_PATH_RADIAL_GRADIENT,
                 paint.recordFlags(),
                 path.fillType.commandValue(),
                 pathData.size,
@@ -1124,8 +1148,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_RADIAL_GRADIENT = 26
     private const val COMMAND_FILL_ROUND_RECT_RADIAL_GRADIENT = 27
     private const val COMMAND_FILL_PATH_LINEAR_GRADIENT = 28
+    private const val COMMAND_FILL_PATH_RADIAL_GRADIENT = 29
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 35
+    private const val COMMAND_STREAM_ABI_ID = 36
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
