@@ -25,6 +25,7 @@ import org.jetbrains.skia.Shader as SkShader
 actual class Shader internal constructor(
     internal val internalSkiaShader: SkShader,
     internal val jbrSkiaLinearGradient: JbrSkiaLinearGradientShader? = null,
+    internal val jbrSkiaRadialGradient: JbrSkiaRadialGradientShader? = null,
 )
 
 /**
@@ -35,6 +36,14 @@ fun SkShader.asComposeShader(): Shader = Shader(internalSkiaShader = this)
 internal data class JbrSkiaLinearGradientShader(
     val from: Offset,
     val to: Offset,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+    val tileMode: TileMode,
+)
+
+internal data class JbrSkiaRadialGradientShader(
+    val center: Offset,
+    val radius: Float,
     val colors: List<Color>,
     val colorStops: List<Float>?,
     val tileMode: TileMode,
@@ -112,15 +121,24 @@ internal actual fun ActualRadialGradientShader(
     tileMode: TileMode
 ): Shader {
     validateColorStops(colors, colorStops)
-    return SkShader.makeRadialGradient(
-        center.x,
-        center.y,
-        radius,
-        colors.toSkiaGradient(
+    return Shader(
+        internalSkiaShader = SkShader.makeRadialGradient(
+            center.x,
+            center.y,
+            radius,
+            colors.toSkiaGradient(
+                colorStops = colorStops,
+                tileMode = tileMode
+            )
+        ),
+        jbrSkiaRadialGradient = JbrSkiaRadialGradientShader(
+            center = center,
+            radius = radius,
+            colors = colors,
             colorStops = colorStops,
-            tileMode = tileMode
-        )
-    ).asComposeShader()
+            tileMode = tileMode,
+        ),
+    )
 }
 
 internal actual fun ActualSweepGradientShader(
