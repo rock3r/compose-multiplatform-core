@@ -238,7 +238,7 @@ internal class SkiaBackedCanvas(
         useCenter: Boolean,
         paint: Paint
     ) {
-        JbrSkiaCommandRecorder.unsupportedDraw("arc")
+        JbrSkiaCommandRecorder.drawArc(left, top, right, bottom, startAngle, sweepAngle, useCenter, paint)
         internalSkiaCanvas.drawArc(
             left = left,
             top = top,
