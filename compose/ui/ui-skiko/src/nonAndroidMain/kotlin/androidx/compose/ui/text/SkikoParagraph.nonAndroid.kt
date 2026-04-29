@@ -729,6 +729,8 @@ internal class SkikoParagraph(
             ellipsisMode = if (ellipsis.isNotEmpty()) 1 else 0,
             decorationMask = textDecoration?.mask ?: 0,
             letterSpacing1000 = jbrSkiaParagraphLetterSpacing1000(fontSize),
+            backgroundSpecified = if (layouter.textStyle.background.isSpecified) 1 else 0,
+            backgroundArgb = layouter.textStyle.background.toArgb(),
             antiAlias = true,
         )
     }
