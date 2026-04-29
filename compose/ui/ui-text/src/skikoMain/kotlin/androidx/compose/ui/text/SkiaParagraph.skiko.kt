@@ -612,7 +612,9 @@ internal class SkiaParagraph(
         val recordedSimpleText =
             hasNoJbrSkiaTextEffects(shadow, textDecoration) && recordJbrSkiaSimpleText(color)
         val recordedParagraphText =
-            !recordedSimpleText && hasNoJbrSkiaTextEffects(shadow, textDecoration) && recordJbrSkiaParagraphText(color)
+            !recordedSimpleText &&
+                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaParagraphText(color, textDecoration)
         if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
@@ -649,8 +651,8 @@ internal class SkiaParagraph(
             !recordedSimpleText &&
                 blendMode == BlendMode.SrcOver &&
                 drawStyle.isJbrSkiaFillStyle() &&
-                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaParagraphText(color)
+                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaParagraphText(color, textDecoration)
         if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
@@ -695,8 +697,8 @@ internal class SkiaParagraph(
                 solidColor != null &&
                 blendMode == BlendMode.SrcOver &&
                 drawStyle.isJbrSkiaFillStyle() &&
-                hasNoJbrSkiaTextEffects(shadow, textDecoration) &&
-                recordJbrSkiaParagraphText(solidColor)
+                hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
+                recordJbrSkiaParagraphText(solidColor, textDecoration)
         if (!recordedSimpleText && !recordedParagraphText && !recordJbrSkiaTextImage()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("text")
         }
@@ -706,6 +708,13 @@ internal class SkiaParagraph(
     private fun hasNoJbrSkiaTextEffects(shadow: Shadow?, textDecoration: TextDecoration?): Boolean =
         (shadow == null || shadow == Shadow.None) &&
             (textDecoration == null || textDecoration == TextDecoration.None)
+
+    private fun hasSupportedJbrSkiaParagraphTextEffects(
+        shadow: Shadow?,
+        textDecoration: TextDecoration?,
+    ): Boolean =
+        (shadow == null || shadow == Shadow.None) &&
+            (textDecoration?.mask ?: 0) in 0..3
 
     private fun DrawStyle?.isJbrSkiaFillStyle(): Boolean =
         this == null || this == Fill
@@ -733,7 +742,7 @@ internal class SkiaParagraph(
         )
     }
 
-    private fun recordJbrSkiaParagraphText(color: Color): Boolean {
+    private fun recordJbrSkiaParagraphText(color: Color, textDecoration: TextDecoration?): Boolean {
         if (!color.isSpecified || text.isEmpty() || text.length > 4096) {
             return false
         }
@@ -759,6 +768,7 @@ internal class SkiaParagraph(
             lineHeightMultiplier1000 = jbrSkiaParagraphLineHeightMultiplier1000(fontSize),
             maxLines = maxLines.jbrSkiaParagraphMaxLines(),
             ellipsisMode = if (ellipsis.isNotEmpty()) 1 else 0,
+            decorationMask = textDecoration?.mask ?: 0,
             antiAlias = true,
         )
     }
