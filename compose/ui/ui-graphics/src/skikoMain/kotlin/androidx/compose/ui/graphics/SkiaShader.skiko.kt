@@ -26,6 +26,7 @@ actual class Shader internal constructor(
     internal val internalSkiaShader: SkShader,
     internal val jbrSkiaLinearGradient: JbrSkiaLinearGradientShader? = null,
     internal val jbrSkiaRadialGradient: JbrSkiaRadialGradientShader? = null,
+    internal val jbrSkiaSweepGradient: JbrSkiaSweepGradientShader? = null,
 )
 
 /**
@@ -47,6 +48,12 @@ internal data class JbrSkiaRadialGradientShader(
     val colors: List<Color>,
     val colorStops: List<Float>?,
     val tileMode: TileMode,
+)
+
+internal data class JbrSkiaSweepGradientShader(
+    val center: Offset,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
 )
 
 /**
@@ -147,11 +154,18 @@ internal actual fun ActualSweepGradientShader(
     colorStops: List<Float>?
 ): Shader {
     validateColorStops(colors, colorStops)
-    return SkShader.makeSweepGradient(
-        center.x,
-        center.y,
-        colors.toSkiaGradient(colorStops = colorStops)
-    ).asComposeShader()
+    return Shader(
+        internalSkiaShader = SkShader.makeSweepGradient(
+            center.x,
+            center.y,
+            colors.toSkiaGradient(colorStops = colorStops)
+        ),
+        jbrSkiaSweepGradient = JbrSkiaSweepGradientShader(
+            center = center,
+            colors = colors,
+            colorStops = colorStops,
+        ),
+    )
 }
 
 internal actual fun ActualImageShader(
