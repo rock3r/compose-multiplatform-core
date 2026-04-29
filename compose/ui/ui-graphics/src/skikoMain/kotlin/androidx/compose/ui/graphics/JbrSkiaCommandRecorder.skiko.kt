@@ -103,6 +103,8 @@ object JbrSkiaCommandRecorder {
         textAlign: Int,
         textDirection: Int,
         lineHeightMultiplier1000: Int,
+        maxLines: Int,
+        ellipsisMode: Int,
         antiAlias: Boolean,
     ): Boolean =
         active.get()?.drawParagraphUtf16(
@@ -118,6 +120,8 @@ object JbrSkiaCommandRecorder {
             textAlign,
             textDirection,
             lineHeightMultiplier1000,
+            maxLines,
+            ellipsisMode,
             antiAlias,
         )
             ?: false
@@ -460,6 +464,8 @@ object JbrSkiaCommandRecorder {
             textAlign: Int,
             textDirection: Int,
             lineHeightMultiplier1000: Int,
+            maxLines: Int,
+            ellipsisMode: Int,
             antiAlias: Boolean,
         ): Boolean {
             if (text.isEmpty() || text.length > 4096 ||
@@ -471,7 +477,9 @@ object JbrSkiaCommandRecorder {
                 fontSlant !in 0..2 ||
                 textAlign !in 0..5 ||
                 textDirection !in 0..1 ||
-                lineHeightMultiplier1000 !in 0..100000
+                lineHeightMultiplier1000 !in 0..100000 ||
+                maxLines !in 0..4096 ||
+                ellipsisMode !in 0..1
             ) {
                 return false
             }
@@ -490,6 +498,8 @@ object JbrSkiaCommandRecorder {
                 textAlign,
                 textDirection,
                 lineHeightMultiplier1000,
+                maxLines,
+                ellipsisMode,
                 text.length,
                 *IntArray(text.length) { text[it].code },
             )
@@ -694,7 +704,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 21
+    private const val COMMAND_STREAM_ABI_ID = 22
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
