@@ -90,6 +90,17 @@ object JbrSkiaCommandRecorder {
     ): Boolean =
         active.get()?.drawTextUtf16(text, x, baseline, fontSize, color, antiAlias) ?: false
 
+    fun drawParagraphUtf16(
+        text: String,
+        x: Float,
+        y: Float,
+        width: Float,
+        fontSize: Float,
+        color: Int,
+        antiAlias: Boolean,
+    ): Boolean =
+        active.get()?.drawParagraphUtf16(text, x, y, width, fontSize, color, antiAlias) ?: false
+
     internal fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
         active.get()?.clipRect(left, top, right, bottom, clipOp)
     }
@@ -148,6 +159,7 @@ object JbrSkiaCommandRecorder {
         private var imageDefineCount = 0
         private var imageRefCount = 0
         private var textCommandCount = 0
+        private var paragraphTextCommandCount = 0
         private var imageCacheClearCount = 0
         private var state = State()
 
@@ -166,7 +178,8 @@ object JbrSkiaCommandRecorder {
             val suffix = if (reasons.isEmpty()) "" else " $reasons"
             System.err.println(
                 "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported" +
-                    " textCommands=$textCommandCount imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
+                    " textCommands=$textCommandCount paragraphTextCommands=$paragraphTextCommandCount" +
+                    " imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
                     " imageCacheClears=$imageCacheClearCount$suffix"
             )
         }
@@ -413,6 +426,37 @@ object JbrSkiaCommandRecorder {
             return true
         }
 
+        fun drawParagraphUtf16(
+            text: String,
+            x: Float,
+            y: Float,
+            width: Float,
+            fontSize: Float,
+            color: Int,
+            antiAlias: Boolean,
+        ): Boolean {
+            if (text.isEmpty() || text.length > 4096 ||
+                !x.isFinite() || !y.isFinite() ||
+                !width.isFinite() || width <= 0f ||
+                !fontSize.isFinite() || fontSize <= 0f
+            ) {
+                return false
+            }
+            paragraphTextCommandCount++
+            commands.addCommand(
+                COMMAND_DRAW_PARAGRAPH_UTF16,
+                if (antiAlias) COMMAND_RECORD_FLAG_ANTIALIAS else COMMAND_RECORD_FLAGS_NONE,
+                x.fixed1000(),
+                y.fixed1000(),
+                width.fixed1000(),
+                fontSize.fixed1000(),
+                color,
+                text.length,
+                *IntArray(text.length) { text[it].code },
+            )
+            return true
+        }
+
         fun drawTextUtf16(
             text: String,
             x: Float,
@@ -609,8 +653,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF = 16
     private const val COMMAND_DRAW_TEXT_UTF16 = 17
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
+    private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 17
+    private const val COMMAND_STREAM_ABI_ID = 18
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
