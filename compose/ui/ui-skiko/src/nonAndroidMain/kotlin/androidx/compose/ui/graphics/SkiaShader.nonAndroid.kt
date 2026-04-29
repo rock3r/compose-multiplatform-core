@@ -27,6 +27,7 @@ import org.jetbrains.skia.Shader as SkShader
 internal class SkikoShader(
     val skiaShader: SkShader,
     override val jbrSkiaLinearGradient: JbrSkiaLinearGradientShader? = null,
+    override val jbrSkiaRadialGradient: JbrSkiaRadialGradientShader? = null,
 ) : PlatformShader
 
 /** Convert the [org.jetbrains.skia.Shader] instance into a Compose-compatible Shader */

@@ -34,9 +34,22 @@ data class JbrSkiaLinearGradientShader(
     val tileMode: TileMode,
 )
 
+@InternalComposeUiApi
+data class JbrSkiaRadialGradientShader(
+    val center: Offset,
+    val radius: Float,
+    val colors: List<Color>,
+    val colorStops: List<Float>?,
+    val tileMode: TileMode,
+)
+
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaLinearGradient: JbrSkiaLinearGradientShader?
     get() = platformShader.jbrSkiaLinearGradient
+
+@OptIn(InternalComposeUiApi::class)
+internal val Shader.jbrSkiaRadialGradient: JbrSkiaRadialGradientShader?
+    get() = platformShader.jbrSkiaRadialGradient
 
 @OptIn(InternalComposeUiApi::class)
 internal actual class TransformShader {

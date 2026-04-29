@@ -339,6 +339,10 @@ object JbrSkiaCommandRecorder {
                 addLinearGradientRect(left, top, right, bottom, paint)
                 return
             }
+            if (paint.shader?.jbrSkiaRadialGradient != null) {
+                addRadialGradientRect(left, top, right, bottom, paint)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -711,7 +715,7 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("blendMode_${blendMode.toReasonToken()}")
                     supported = false
                 }
-                if (shader?.jbrSkiaLinearGradient == null) {
+                if (shader?.jbrSkiaLinearGradient == null && shader?.jbrSkiaRadialGradient == null) {
                     countUnsupported("shader")
                     supported = false
                 }
@@ -871,6 +875,19 @@ object JbrSkiaCommandRecorder {
             )
         }
 
+        private fun addRadialGradientRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            val gradientPayload = paint.radialGradientPayload() ?: return
+            commands.addCommand(
+                COMMAND_FILL_RECT_RADIAL_GRADIENT,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                *gradientPayload,
+            )
+        }
+
         private fun addLinearGradientRoundRect(
             left: Float,
             top: Float,
@@ -930,6 +947,42 @@ object JbrSkiaCommandRecorder {
                 gradient.from.y.fixed1000(),
                 gradient.to.x.fixed1000(),
                 gradient.to.y.fixed1000(),
+                gradient.tileMode.commandValue(),
+                gradient.colors.size,
+            ).plus(colorStopPairs).toIntArray()
+        }
+
+        private fun Paint.radialGradientPayload(): IntArray? {
+            val gradient = shader?.jbrSkiaRadialGradient ?: return null
+            if (!isSupportedLinearGradient || style != PaintingStyle.Fill) {
+                countUnsupported("radialGradientPaint")
+                return null
+            }
+            if (gradient.colors.size !in 2..16) {
+                countUnsupported("radialGradientColorCount")
+                return null
+            }
+            val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
+            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
+                countUnsupported("radialGradientStops")
+                return null
+            }
+            if (!gradient.center.x.isFinite() || !gradient.center.y.isFinite() ||
+                !gradient.radius.isFinite() || gradient.radius <= 0f
+            ) {
+                countUnsupported("radialGradientGeometry")
+                return null
+            }
+            val colorStopPairs = gradient.colors.flatMapIndexed { index, color ->
+                listOf(
+                    color.copy(alpha = color.alpha * alpha).toArgb(),
+                    stops[index].fixed1000(),
+                )
+            }
+            return listOf(
+                gradient.center.x.fixed1000(),
+                gradient.center.y.fixed1000(),
+                gradient.radius.fixed1000(),
                 gradient.tileMode.commandValue(),
                 gradient.colors.size,
             ).plus(colorStopPairs).toIntArray()
@@ -1013,8 +1066,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_ROUND_RECT = 23
     private const val COMMAND_FILL_RECT_LINEAR_GRADIENT = 24
     private const val COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT = 25
+    private const val COMMAND_FILL_RECT_RADIAL_GRADIENT = 26
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 32
+    private const val COMMAND_STREAM_ABI_ID = 33
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
