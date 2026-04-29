@@ -107,6 +107,8 @@ object JbrSkiaCommandRecorder {
         ellipsisMode: Int,
         decorationMask: Int,
         letterSpacing1000: Int,
+        backgroundSpecified: Int,
+        backgroundArgb: Int,
         antiAlias: Boolean,
     ): Boolean =
         active.get()?.drawParagraphUtf16(
@@ -126,6 +128,8 @@ object JbrSkiaCommandRecorder {
             ellipsisMode,
             decorationMask,
             letterSpacing1000,
+            backgroundSpecified,
+            backgroundArgb,
             antiAlias,
         )
             ?: false
@@ -472,6 +476,8 @@ object JbrSkiaCommandRecorder {
             ellipsisMode: Int,
             decorationMask: Int,
             letterSpacing1000: Int,
+            backgroundSpecified: Int,
+            backgroundArgb: Int,
             antiAlias: Boolean,
         ): Boolean {
             if (text.isEmpty() || text.length > 4096 ||
@@ -487,7 +493,8 @@ object JbrSkiaCommandRecorder {
                 maxLines !in 0..4096 ||
                 ellipsisMode !in 0..1 ||
                 decorationMask !in 0..3 ||
-                letterSpacing1000 !in -100000..100000
+                letterSpacing1000 !in -100000..100000 ||
+                backgroundSpecified !in 0..1
             ) {
                 return false
             }
@@ -510,6 +517,8 @@ object JbrSkiaCommandRecorder {
                 ellipsisMode,
                 decorationMask,
                 letterSpacing1000,
+                backgroundSpecified,
+                backgroundArgb,
                 text.length,
                 *IntArray(text.length) { text[it].code },
             )
@@ -714,7 +723,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 24
+    private const val COMMAND_STREAM_ABI_ID = 25
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
