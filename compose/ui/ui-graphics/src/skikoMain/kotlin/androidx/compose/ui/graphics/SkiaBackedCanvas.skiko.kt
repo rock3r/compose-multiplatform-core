@@ -253,7 +253,7 @@ internal class SkiaBackedCanvas(
 
     @OptIn(InternalComposeUiApi::class)
     override fun drawPath(path: Path, paint: Paint) {
-        JbrSkiaCommandRecorder.unsupportedDraw("path")
+        JbrSkiaCommandRecorder.drawPath(path, paint)
         internalSkiaCanvas.drawPath(
             path = path.materializeSkiaPath(),
             paint = paint.asSkiaPaintWithAppliedAlphaMultiplier(),
