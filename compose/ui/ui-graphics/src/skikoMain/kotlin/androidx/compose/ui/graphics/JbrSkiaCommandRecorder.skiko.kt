@@ -343,6 +343,10 @@ object JbrSkiaCommandRecorder {
                 addRadialGradientRect(left, top, right, bottom, paint)
                 return
             }
+            if (paint.shader?.jbrSkiaSweepGradient != null) {
+                addSweepGradientRect(left, top, right, bottom, paint)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -767,7 +771,10 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("blendMode_${blendMode.toReasonToken()}")
                     supported = false
                 }
-                if (shader?.jbrSkiaLinearGradient == null && shader?.jbrSkiaRadialGradient == null) {
+                if (shader?.jbrSkiaLinearGradient == null &&
+                    shader?.jbrSkiaRadialGradient == null &&
+                    shader?.jbrSkiaSweepGradient == null
+                ) {
                     countUnsupported("shader")
                     supported = false
                 }
@@ -940,6 +947,19 @@ object JbrSkiaCommandRecorder {
             )
         }
 
+        private fun addSweepGradientRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            val gradientPayload = paint.sweepGradientPayload() ?: return
+            commands.addCommand(
+                COMMAND_FILL_RECT_SWEEP_GRADIENT,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                *gradientPayload,
+            )
+        }
+
         private fun addRadialGradientRoundRect(
             left: Float,
             top: Float,
@@ -1067,6 +1087,38 @@ object JbrSkiaCommandRecorder {
             ).plus(colorStopPairs).toIntArray()
         }
 
+        private fun Paint.sweepGradientPayload(): IntArray? {
+            val gradient = shader?.jbrSkiaSweepGradient ?: return null
+            if (!isSupportedLinearGradient || style != PaintingStyle.Fill) {
+                countUnsupported("sweepGradientPaint")
+                return null
+            }
+            if (gradient.colors.size !in 2..16) {
+                countUnsupported("sweepGradientColorCount")
+                return null
+            }
+            val stops = gradient.colorStops ?: evenlyDistributedStops(gradient.colors.size)
+            if (stops.size != gradient.colors.size || stops.any { !it.isFinite() || it < 0f || it > 1f }) {
+                countUnsupported("sweepGradientStops")
+                return null
+            }
+            if (!gradient.center.x.isFinite() || !gradient.center.y.isFinite()) {
+                countUnsupported("sweepGradientGeometry")
+                return null
+            }
+            val colorStopPairs = gradient.colors.flatMapIndexed { index, color ->
+                listOf(
+                    color.copy(alpha = color.alpha * alpha).toArgb(),
+                    stops[index].fixed1000(),
+                )
+            }
+            return listOf(
+                gradient.center.x.fixed1000(),
+                gradient.center.y.fixed1000(),
+                gradient.colors.size,
+            ).plus(colorStopPairs).toIntArray()
+        }
+
         private fun evenlyDistributedStops(count: Int): List<Float> =
             List(count) { index -> index.toFloat() / (count - 1).toFloat() }
 
@@ -1149,8 +1201,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_ROUND_RECT_RADIAL_GRADIENT = 27
     private const val COMMAND_FILL_PATH_LINEAR_GRADIENT = 28
     private const val COMMAND_FILL_PATH_RADIAL_GRADIENT = 29
+    private const val COMMAND_FILL_RECT_SWEEP_GRADIENT = 30
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 36
+    private const val COMMAND_STREAM_ABI_ID = 37
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

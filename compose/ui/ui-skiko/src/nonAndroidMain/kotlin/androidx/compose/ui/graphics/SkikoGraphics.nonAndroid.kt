@@ -164,11 +164,20 @@ internal object SkikoGraphics : PlatformGraphics {
         colorStops: List<Float>?,
     ): androidx.compose.ui.graphics.Shader {
         validateColorStops(colors, colorStops)
-        return SkShader.makeSweepGradient(
-            center.x,
-            center.y,
-            colors.toSkiaGradient(colorStops = colorStops),
-        ).asComposeShader()
+        return Shader(
+            SkikoShader(
+                skiaShader = SkShader.makeSweepGradient(
+                    center.x,
+                    center.y,
+                    colors.toSkiaGradient(colorStops = colorStops),
+                ),
+                jbrSkiaSweepGradient = JbrSkiaSweepGradientShader(
+                    center = center,
+                    colors = colors,
+                    colorStops = colorStops,
+                ),
+            ),
+        )
     }
 
     override fun createImageShader(
