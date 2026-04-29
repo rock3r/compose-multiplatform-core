@@ -772,6 +772,62 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsNonFiniteGradientGeometryInStrictMode() {
+        withStrictCommandRecording {
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 1f,
+                        top = 2f,
+                        right = 11f,
+                        bottom = 12f,
+                        paint = Paint().apply {
+                            shader = linearGradientWithMetadata(
+                                from = Offset(Float.NaN, 2f),
+                                to = Offset(11f, 12f),
+                            )
+                        },
+                    )
+                }
+            )
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawRoundRect(
+                        left = 1f,
+                        top = 2f,
+                        right = 11f,
+                        bottom = 12f,
+                        radiusX = 3f,
+                        radiusY = 4f,
+                        paint = Paint().apply {
+                            shader = radialGradientWithMetadata(
+                                center = Offset(6f, 7f),
+                                radius = Float.POSITIVE_INFINITY,
+                            )
+                        },
+                    )
+                }
+            )
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawPath(
+                        Path().apply {
+                            moveTo(1f, 2f)
+                            lineTo(11f, 12f)
+                            close()
+                        },
+                        Paint().apply {
+                            shader = sweepGradientWithMetadata(
+                                center = Offset(6f, Float.NEGATIVE_INFINITY),
+                            )
+                        },
+                    )
+                }
+            )
+        }
+    }
+
+    @Test
     fun writesSaveLayerRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(
@@ -962,6 +1018,56 @@ class JbrSkiaCommandRecorderTest {
             commands,
         )
     }
+
+    private fun linearGradientWithMetadata(from: Offset, to: Offset): Shader =
+        Shader(
+            internalSkiaShader = LinearGradientShader(
+                from = Offset(1f, 2f),
+                to = Offset(11f, 12f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ).skiaShader,
+            jbrSkiaLinearGradient = JbrSkiaLinearGradientShader(
+                from = from,
+                to = to,
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+        )
+
+    private fun radialGradientWithMetadata(center: Offset, radius: Float): Shader =
+        Shader(
+            internalSkiaShader = RadialGradientShader(
+                center = Offset(6f, 7f),
+                radius = 8f,
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ).skiaShader,
+            jbrSkiaRadialGradient = JbrSkiaRadialGradientShader(
+                center = center,
+                radius = radius,
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+        )
+
+    private fun sweepGradientWithMetadata(center: Offset): Shader =
+        Shader(
+            internalSkiaShader = SweepGradientShader(
+                center = Offset(6f, 7f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+            ).skiaShader,
+            jbrSkiaSweepGradient = JbrSkiaSweepGradientShader(
+                center = center,
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+            ),
+        )
 
     private fun withStrictCommandRecording(block: () -> Unit) {
         val key = "compose.jbr.skia.command.strict"
