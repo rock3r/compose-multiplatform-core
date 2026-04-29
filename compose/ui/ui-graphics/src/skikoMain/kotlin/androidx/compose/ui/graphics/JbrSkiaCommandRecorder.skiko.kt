@@ -170,6 +170,10 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawCircle(center, radius, paint)
     }
 
+    internal fun drawPath(path: Path, paint: Paint) {
+        active.get()?.drawPath(path, paint)
+    }
+
     fun drawImageRect(
         image: ImageBitmap,
         srcLeft: Float,
@@ -410,6 +414,35 @@ object JbrSkiaCommandRecorder {
 
         fun drawCircle(center: Offset, radius: Float, paint: Paint) {
             drawOval(center.x - radius, center.y - radius, center.x + radius, center.y + radius, paint)
+        }
+
+        fun drawPath(path: Path, paint: Paint) {
+            if (!paint.isSupportedSolidColor) return
+            val style = when (paint.style) {
+                PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
+                PaintingStyle.Stroke -> COMMAND_PAINT_STYLE_STROKE
+                else -> {
+                    countUnsupported("paintStyle")
+                    return
+                }
+            }
+            val pathData = path.commandData() ?: run {
+                countUnsupported("path")
+                return
+            }
+            commands.addCommand(
+                COMMAND_DRAW_PATH,
+                paint.recordFlags(),
+                style,
+                paint.commandColor(),
+                if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
+                path.fillType.commandValue(),
+                pathData.size,
+                *pathData,
+            )
         }
 
         fun drawImageRect(
@@ -793,14 +826,17 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_CLIP_PATH = 20
+    private const val COMMAND_DRAW_PATH = 21
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 26
+    private const val COMMAND_STREAM_ABI_ID = 27
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
     private const val COMMAND_PAINT_FORMAT_SOLID_ARGB = 1
     private const val COMMAND_RECORD_FLAGS_NONE = 0
     private const val COMMAND_RECORD_FLAG_ANTIALIAS = 1
+    private const val COMMAND_PAINT_STYLE_FILL = 0
+    private const val COMMAND_PAINT_STYLE_STROKE = 1
     private const val MAX_PATH_DATA_INTS = 4096
     private const val PATH_FILL_TYPE_NON_ZERO = 0
     private const val PATH_FILL_TYPE_EVEN_ODD = 1
