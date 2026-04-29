@@ -606,6 +606,43 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsCompositeShaderInStrictMode() {
+        val shader = CompositeShader(
+            dst = LinearGradientShader(
+                from = Offset(1f, 2f),
+                to = Offset(11f, 12f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+            src = RadialGradientShader(
+                center = Offset(6f, 7f),
+                radius = 8f,
+                colors = listOf(Color.Green, Color.White),
+                colorStops = listOf(0.2f, 0.8f),
+                tileMode = TileMode.Clamp,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun rejectsInvalidGradientPayloadsInStrictMode() {
         withStrictCommandRecording {
             assertNull(
