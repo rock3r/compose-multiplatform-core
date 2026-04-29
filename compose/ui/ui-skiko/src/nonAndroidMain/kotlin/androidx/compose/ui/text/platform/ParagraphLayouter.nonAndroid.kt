@@ -70,7 +70,7 @@ internal class ParagraphLayouter(
     style: TextStyle,
     annotations: List<AnnotatedString.Range<out AnnotatedString.Annotation>>,
     placeholders: List<AnnotatedString.Range<Placeholder>>,
-    density: Density,
+    val density: Density,
     fontFamilyResolver: FontFamily.Resolver,
     private val onFontStale: () -> Unit,
     onFontResolved: ((State<Any>) -> Unit)? = null,

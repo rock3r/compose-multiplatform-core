@@ -102,6 +102,7 @@ object JbrSkiaCommandRecorder {
         fontSlant: Int,
         textAlign: Int,
         textDirection: Int,
+        lineHeightMultiplier1000: Int,
         antiAlias: Boolean,
     ): Boolean =
         active.get()?.drawParagraphUtf16(
@@ -116,6 +117,7 @@ object JbrSkiaCommandRecorder {
             fontSlant,
             textAlign,
             textDirection,
+            lineHeightMultiplier1000,
             antiAlias,
         )
             ?: false
@@ -457,6 +459,7 @@ object JbrSkiaCommandRecorder {
             fontSlant: Int,
             textAlign: Int,
             textDirection: Int,
+            lineHeightMultiplier1000: Int,
             antiAlias: Boolean,
         ): Boolean {
             if (text.isEmpty() || text.length > 4096 ||
@@ -467,7 +470,8 @@ object JbrSkiaCommandRecorder {
                 fontWidth !in 1..9 ||
                 fontSlant !in 0..2 ||
                 textAlign !in 0..5 ||
-                textDirection !in 0..1
+                textDirection !in 0..1 ||
+                lineHeightMultiplier1000 !in 0..100000
             ) {
                 return false
             }
@@ -485,6 +489,7 @@ object JbrSkiaCommandRecorder {
                 fontSlant,
                 textAlign,
                 textDirection,
+                lineHeightMultiplier1000,
                 text.length,
                 *IntArray(text.length) { text[it].code },
             )
@@ -689,7 +694,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 20
+    private const val COMMAND_STREAM_ABI_ID = 21
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
