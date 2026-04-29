@@ -369,23 +369,29 @@ object JbrSkiaCommandRecorder {
                 return
             }
             if (!paint.isSupportedSolidColor) return
-            if (paint.style == PaintingStyle.Stroke) {
-                drawRect(left, top, right, bottom, paint)
-                return
-            }
-            if (paint.style != PaintingStyle.Fill) {
-                countUnsupported("roundRectStyle")
-                return
+            val style = when (paint.style) {
+                PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
+                PaintingStyle.Stroke -> COMMAND_PAINT_STYLE_STROKE
+                else -> {
+                    countUnsupported("roundRectStyle")
+                    return
+                }
             }
             commands.addCommand(
-                COMMAND_FILL_RECT,
+                COMMAND_DRAW_ROUND_RECT,
                 paint.recordFlags(),
+                style,
                 paint.commandColor(),
-                left.roundToInt(),
-                top.roundToInt(),
-                (right - left).roundToInt().coerceAtLeast(0),
-                (bottom - top).roundToInt().coerceAtLeast(0),
-                ((radiusX + radiusY) / 2f).roundToInt().coerceAtLeast(0),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                radiusX.fixed1000().coerceAtLeast(0),
+                radiusY.fixed1000().coerceAtLeast(0),
+                if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
             )
         }
 
@@ -879,8 +885,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CLIP_PATH = 20
     private const val COMMAND_DRAW_PATH = 21
     private const val COMMAND_DRAW_ARC = 22
+    private const val COMMAND_DRAW_ROUND_RECT = 23
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 28
+    private const val COMMAND_STREAM_ABI_ID = 29
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
