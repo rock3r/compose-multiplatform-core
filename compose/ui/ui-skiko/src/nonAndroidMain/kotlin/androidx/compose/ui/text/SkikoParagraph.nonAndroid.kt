@@ -728,6 +728,7 @@ internal class SkikoParagraph(
             maxLines = maxLines.jbrSkiaParagraphMaxLines(),
             ellipsisMode = if (ellipsis.isNotEmpty()) 1 else 0,
             decorationMask = textDecoration?.mask ?: 0,
+            letterSpacing1000 = jbrSkiaParagraphLetterSpacing1000(fontSize),
             antiAlias = true,
         )
     }
@@ -745,6 +746,18 @@ internal class SkikoParagraph(
         }
         if (!lineHeightPx.isFinite() || lineHeightPx <= 0f) return 0
         return ((lineHeightPx / fontSize) * 1000f).roundToInt().coerceIn(1, 100000)
+    }
+
+    private fun jbrSkiaParagraphLetterSpacing1000(fontSize: Float): Int {
+        val letterSpacing = layouter.textStyle.letterSpacing
+        if (letterSpacing.isUnspecified || fontSize <= 0f) return 0
+        val letterSpacingPx = when {
+            letterSpacing.isEm -> fontSize * letterSpacing.value
+            letterSpacing.isSp -> with(layouter.density) { letterSpacing.toPx() }
+            else -> return 0
+        }
+        if (!letterSpacingPx.isFinite()) return 0
+        return (letterSpacingPx * 1000f).roundToInt().coerceIn(-100000, 100000)
     }
 
     private fun TextAlign.jbrSkiaParagraphAlign(): Int = when (this) {
