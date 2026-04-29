@@ -1272,7 +1272,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT = 31
     private const val COMMAND_FILL_PATH_SWEEP_GRADIENT = 32
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 39
+    private const val COMMAND_STREAM_ABI_ID = 40
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
