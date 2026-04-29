@@ -160,7 +160,7 @@ internal class SkiaBackedCanvas : Canvas {
     }
 
     override fun clipPath(path: Path, clipOp: ClipOp) {
-        JbrSkiaCommandRecorder.clipPath()
+        JbrSkiaCommandRecorder.clipPath(path, clipOp)
         val antiAlias = true
         internalSkiaCanvas.clipPath(path.materializeSkiaPath(), clipOp.toSkia(), antiAlias)
     }

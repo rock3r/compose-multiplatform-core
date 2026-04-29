@@ -138,8 +138,8 @@ object JbrSkiaCommandRecorder {
         active.get()?.clipRect(left, top, right, bottom, clipOp)
     }
 
-    internal fun clipPath() {
-        active.get()?.clipPath()
+    internal fun clipPath(path: Path, clipOp: ClipOp) {
+        active.get()?.clipPath(path, clipOp)
     }
 
     internal fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
@@ -280,9 +280,20 @@ object JbrSkiaCommandRecorder {
             )
         }
 
-        fun clipPath() {
-            countUnsupported("clipPath")
-            state = state.copy(supported = false)
+        fun clipPath(path: Path, clipOp: ClipOp) {
+            val pathData = path.commandData() ?: run {
+                countUnsupported("clipPath")
+                state = state.copy(supported = false)
+                return
+            }
+            commands.addCommand(
+                COMMAND_CLIP_PATH,
+                COMMAND_RECORD_FLAG_ANTIALIAS,
+                clipOp.commandValue(),
+                path.fillType.commandValue(),
+                pathData.size,
+                *pathData,
+            )
         }
 
         fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
@@ -609,6 +620,65 @@ object JbrSkiaCommandRecorder {
         private fun Float.fixed1000(): Int =
             (this * 1000f).roundToInt()
 
+        private fun Path.commandData(): IntArray? {
+            val data = ArrayList<Int>(64)
+            val points = FloatArray(8)
+            val iterator = iterator(PathIterator.ConicEvaluation.AsQuadratics)
+            while (iterator.hasNext()) {
+                when (iterator.next(points)) {
+                    PathSegment.Type.Move -> {
+                        if (!points[0].isFinite() || !points[1].isFinite()) return null
+                        data.add(PATH_VERB_MOVE)
+                        data.add(points[0].fixed1000())
+                        data.add(points[1].fixed1000())
+                    }
+                    PathSegment.Type.Line -> {
+                        if (!points[2].isFinite() || !points[3].isFinite()) return null
+                        data.add(PATH_VERB_LINE)
+                        data.add(points[2].fixed1000())
+                        data.add(points[3].fixed1000())
+                    }
+                    PathSegment.Type.Quadratic -> {
+                        if (!points[2].isFinite() || !points[3].isFinite() || !points[4].isFinite() || !points[5].isFinite()) {
+                            return null
+                        }
+                        data.add(PATH_VERB_QUAD)
+                        data.add(points[2].fixed1000())
+                        data.add(points[3].fixed1000())
+                        data.add(points[4].fixed1000())
+                        data.add(points[5].fixed1000())
+                    }
+                    PathSegment.Type.Cubic -> {
+                        if (!points[2].isFinite() || !points[3].isFinite() ||
+                            !points[4].isFinite() || !points[5].isFinite() ||
+                            !points[6].isFinite() || !points[7].isFinite()
+                        ) {
+                            return null
+                        }
+                        data.add(PATH_VERB_CUBIC)
+                        data.add(points[2].fixed1000())
+                        data.add(points[3].fixed1000())
+                        data.add(points[4].fixed1000())
+                        data.add(points[5].fixed1000())
+                        data.add(points[6].fixed1000())
+                        data.add(points[7].fixed1000())
+                    }
+                    PathSegment.Type.Close -> data.add(PATH_VERB_CLOSE)
+                    PathSegment.Type.Conic,
+                    PathSegment.Type.Done -> return null
+                }
+                if (data.size > MAX_PATH_DATA_INTS) return null
+            }
+            return if (data.isEmpty()) null else data.toIntArray()
+        }
+
+        private fun PathFillType.commandValue(): Int =
+            when (this) {
+                PathFillType.NonZero -> PATH_FILL_TYPE_NON_ZERO
+                PathFillType.EvenOdd -> PATH_FILL_TYPE_EVEN_ODD
+                else -> PATH_FILL_TYPE_NON_ZERO
+            }
+
         private fun Long.highInt(): Int = (this ushr 32).toInt()
 
         private fun Long.lowInt(): Int = this.toInt()
@@ -722,12 +792,21 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_TEXT_UTF16 = 17
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
+    private const val COMMAND_CLIP_PATH = 20
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 25
+    private const val COMMAND_STREAM_ABI_ID = 26
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
     private const val COMMAND_PAINT_FORMAT_SOLID_ARGB = 1
     private const val COMMAND_RECORD_FLAGS_NONE = 0
     private const val COMMAND_RECORD_FLAG_ANTIALIAS = 1
+    private const val MAX_PATH_DATA_INTS = 4096
+    private const val PATH_FILL_TYPE_NON_ZERO = 0
+    private const val PATH_FILL_TYPE_EVEN_ODD = 1
+    private const val PATH_VERB_MOVE = 0
+    private const val PATH_VERB_LINE = 1
+    private const val PATH_VERB_QUAD = 2
+    private const val PATH_VERB_CUBIC = 3
+    private const val PATH_VERB_CLOSE = 4
 }
