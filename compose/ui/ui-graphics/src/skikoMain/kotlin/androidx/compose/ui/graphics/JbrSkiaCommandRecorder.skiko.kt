@@ -97,9 +97,13 @@ object JbrSkiaCommandRecorder {
         width: Float,
         fontSize: Float,
         color: Int,
+        fontWeight: Int,
+        fontWidth: Int,
+        fontSlant: Int,
         antiAlias: Boolean,
     ): Boolean =
-        active.get()?.drawParagraphUtf16(text, x, y, width, fontSize, color, antiAlias) ?: false
+        active.get()?.drawParagraphUtf16(text, x, y, width, fontSize, color, fontWeight, fontWidth, fontSlant, antiAlias)
+            ?: false
 
     internal fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
         active.get()?.clipRect(left, top, right, bottom, clipOp)
@@ -433,12 +437,18 @@ object JbrSkiaCommandRecorder {
             width: Float,
             fontSize: Float,
             color: Int,
+            fontWeight: Int,
+            fontWidth: Int,
+            fontSlant: Int,
             antiAlias: Boolean,
         ): Boolean {
             if (text.isEmpty() || text.length > 4096 ||
                 !x.isFinite() || !y.isFinite() ||
                 !width.isFinite() || width <= 0f ||
-                !fontSize.isFinite() || fontSize <= 0f
+                !fontSize.isFinite() || fontSize <= 0f ||
+                fontWeight !in 1..1000 ||
+                fontWidth !in 1..9 ||
+                fontSlant !in 0..2
             ) {
                 return false
             }
@@ -451,6 +461,9 @@ object JbrSkiaCommandRecorder {
                 width.fixed1000(),
                 fontSize.fixed1000(),
                 color,
+                fontWeight,
+                fontWidth,
+                fontSlant,
                 text.length,
                 *IntArray(text.length) { text[it].code },
             )
@@ -655,7 +668,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CLEAR_IMAGE_CACHE = 18
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 18
+    private const val COMMAND_STREAM_ABI_ID = 19
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
