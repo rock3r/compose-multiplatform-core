@@ -388,6 +388,10 @@ object JbrSkiaCommandRecorder {
                 addRadialGradientRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
                 return
             }
+            if (paint.shader?.jbrSkiaSweepGradient != null) {
+                addSweepGradientRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
@@ -960,6 +964,33 @@ object JbrSkiaCommandRecorder {
             )
         }
 
+        private fun addSweepGradientRoundRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            radiusX: Float,
+            radiusY: Float,
+            paint: Paint,
+        ) {
+            val gradientPayload = paint.sweepGradientPayload() ?: return
+            if (radiusX < 0f || radiusY < 0f) {
+                countUnsupported("sweepGradientRoundRectRadius")
+                return
+            }
+            commands.addCommand(
+                COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                radiusX.fixed1000().coerceAtLeast(0),
+                radiusY.fixed1000().coerceAtLeast(0),
+                *gradientPayload,
+            )
+        }
+
         private fun addRadialGradientRoundRect(
             left: Float,
             top: Float,
@@ -1202,8 +1233,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_PATH_LINEAR_GRADIENT = 28
     private const val COMMAND_FILL_PATH_RADIAL_GRADIENT = 29
     private const val COMMAND_FILL_RECT_SWEEP_GRADIENT = 30
+    private const val COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT = 31
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 37
+    private const val COMMAND_STREAM_ABI_ID = 38
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
