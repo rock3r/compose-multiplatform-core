@@ -170,6 +170,19 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawCircle(center, radius, paint)
     }
 
+    internal fun drawArc(
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        startAngle: Float,
+        sweepAngle: Float,
+        useCenter: Boolean,
+        paint: Paint,
+    ) {
+        active.get()?.drawArc(left, top, right, bottom, startAngle, sweepAngle, useCenter, paint)
+    }
+
     internal fun drawPath(path: Path, paint: Paint) {
         active.get()?.drawPath(path, paint)
     }
@@ -414,6 +427,44 @@ object JbrSkiaCommandRecorder {
 
         fun drawCircle(center: Offset, radius: Float, paint: Paint) {
             drawOval(center.x - radius, center.y - radius, center.x + radius, center.y + radius, paint)
+        }
+
+        fun drawArc(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            startAngle: Float,
+            sweepAngle: Float,
+            useCenter: Boolean,
+            paint: Paint,
+        ) {
+            if (!paint.isSupportedSolidColor) return
+            val style = when (paint.style) {
+                PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
+                PaintingStyle.Stroke -> COMMAND_PAINT_STYLE_STROKE
+                else -> {
+                    countUnsupported("paintStyle")
+                    return
+                }
+            }
+            commands.addCommand(
+                COMMAND_DRAW_ARC,
+                paint.recordFlags(),
+                style,
+                paint.commandColor(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                startAngle.fixed1000(),
+                sweepAngle.fixed1000(),
+                if (useCenter) 1 else 0,
+                if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
+            )
         }
 
         fun drawPath(path: Path, paint: Paint) {
@@ -827,8 +878,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_PARAGRAPH_UTF16 = 19
     private const val COMMAND_CLIP_PATH = 20
     private const val COMMAND_DRAW_PATH = 21
+    private const val COMMAND_DRAW_ARC = 22
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 27
+    private const val COMMAND_STREAM_ABI_ID = 28
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
