@@ -19,6 +19,7 @@ package androidx.compose.ui.graphics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -771,11 +772,8 @@ class JbrSkiaCommandRecorderTest {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
 
         val commands = JbrSkiaCommandRecorder.record {
-            repeat(257) { index ->
-                val image = ImageBitmap(1, 1)
-                Canvas(image).drawRect(0f, 0f, 1f, 1f, Paint().apply {
-                    color = Color(index or 0xff000000.toInt())
-                })
+            repeat(1025) { index ->
+                val image = onePixelImage(index)
                 JbrSkiaCommandRecorder.drawImageRect(
                     image = image,
                     srcLeft = 0f,
@@ -792,6 +790,26 @@ class JbrSkiaCommandRecorderTest {
         }!!
 
         assertTrue(commands.toList().windowed(3).any { it == listOf(18, 12, 0) })
+    }
+
+    @Test
+    fun reusesStableImageCacheEntriesAcrossFrames() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val images = List(260) { onePixelImage(it) }
+
+        val firstFrame = JbrSkiaCommandRecorder.record {
+            images.forEach { drawOnePixelImage(it) }
+        }!!
+        val secondFrame = JbrSkiaCommandRecorder.record {
+            images.forEach { drawOnePixelImage(it) }
+        }!!
+
+        assertEquals(260, firstFrame.countCommand(15))
+        assertEquals(260, firstFrame.countCommand(16))
+        assertEquals(0, firstFrame.countCommand(18))
+        assertEquals(0, secondFrame.countCommand(15))
+        assertEquals(260, secondFrame.countCommand(16))
+        assertEquals(0, secondFrame.countCommand(18))
     }
 
     @Test
@@ -888,5 +906,38 @@ class JbrSkiaCommandRecorderTest {
                 System.setProperty(key, previous)
             }
         }
+    }
+
+    private fun onePixelImage(index: Int): ImageBitmap {
+        val image = ImageBitmap(1, 1)
+        Canvas(image).drawRect(0f, 0f, 1f, 1f, Paint().apply {
+            color = Color(index or 0xff000000.toInt())
+        })
+        return image
+    }
+
+    private fun drawOnePixelImage(image: ImageBitmap) {
+        JbrSkiaCommandRecorder.drawImageRect(
+            image = image,
+            srcLeft = 0f,
+            srcTop = 0f,
+            srcRight = 1f,
+            srcBottom = 1f,
+            dstLeft = 0f,
+            dstTop = 0f,
+            dstRight = 1f,
+            dstBottom = 1f,
+            paint = Paint(),
+        )
+    }
+
+    private fun IntArray.countCommand(op: Int): Int {
+        var count = 0
+        var offset = 6
+        while (offset < size) {
+            if (this[offset] == op) count++
+            offset += this[offset + 1] / Int.SIZE_BYTES
+        }
+        return count
     }
 }
