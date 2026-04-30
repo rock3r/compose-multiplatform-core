@@ -156,6 +156,7 @@ object JbrSkiaCommandRecorder {
         rotationZ: Float,
         translationX: Float,
         translationY: Float,
+        clipRect: Rect?,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -171,6 +172,7 @@ object JbrSkiaCommandRecorder {
             rotationZ = rotationZ,
             translationX = translationX,
             translationY = translationY,
+            clipRect = clipRect,
         ) ?: false
 
     fun markUnsupportedDraw(reason: String) {
@@ -440,6 +442,7 @@ object JbrSkiaCommandRecorder {
             rotationZ: Float,
             translationX: Float,
             translationY: Float,
+            clipRect: Rect?,
         ): Boolean {
             val childCommands = recording.commands ?: return false
             if (recording.unsupportedCount > 0 ||
@@ -468,6 +471,9 @@ object JbrSkiaCommandRecorder {
                 height.roundToInt().coerceAtLeast(0),
                 (alpha * 1000f).roundToInt().coerceIn(0, 1000),
             )
+            if (clipRect != null) {
+                this.clipRect(clipRect.left, clipRect.top, clipRect.right, clipRect.bottom, ClipOp.Intersect)
+            }
             commands.appendRecords(childCommands, COMMAND_STREAM_HEADER_SIZE, childCommands.size)
             imageDefineCount += recording.imageDefineCount
             imageRefCount += recording.imageRefCount

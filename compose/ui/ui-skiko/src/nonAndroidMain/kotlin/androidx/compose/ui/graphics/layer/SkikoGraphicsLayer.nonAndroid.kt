@@ -18,6 +18,7 @@ package androidx.compose.ui.graphics.layer
 
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isUnspecified
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Canvas
@@ -391,6 +392,7 @@ internal class SkikoGraphicsLayer(
             rotationZ = rotationZ,
             translationX = translationX,
             translationY = translationY,
+            clipRect = jbrSkiaCommandClipRect(),
         )
     }
 
@@ -406,10 +408,17 @@ internal class SkikoGraphicsLayer(
             rotationX == 0f &&
             rotationY == 0f &&
             shadowElevation == 0f &&
-            !cachedClip &&
+            (!cachedClip || cachedOutline is Outline.Rectangle) &&
             blendMode == BlendMode.SrcOver &&
             colorFilter == null &&
             renderEffect == null
+
+    private fun jbrSkiaCommandClipRect(): Rect? =
+        if (cachedClip) {
+            (cachedOutline as? Outline.Rectangle)?.rect
+        } else {
+            null
+        }
 
     private fun resolvedPivotOffset(): Offset =
         if (pivotOffset.isUnspecified) {
