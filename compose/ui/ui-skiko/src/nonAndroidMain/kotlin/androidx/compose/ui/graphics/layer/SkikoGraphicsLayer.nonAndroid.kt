@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.asSkiaColorFilter
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.draw
+import androidx.compose.ui.graphics.jbrSkiaImageFilterDescriptorOrNull
 import androidx.compose.ui.graphics.materializeSkiaPath
 import androidx.compose.ui.graphics.platform.PlatformGraphicsLayer
 import androidx.compose.ui.graphics.skiaCanvas
@@ -401,6 +402,7 @@ internal class SkikoGraphicsLayer(
                 JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode)
             },
             colorFilter = JbrSkiaCommandRecorder.descriptorColorFilterOrNull(colorFilter),
+            imageFilter = renderEffect?.jbrSkiaImageFilterDescriptorOrNull(),
         )
     }
 
@@ -422,7 +424,7 @@ internal class SkikoGraphicsLayer(
                 JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) != null) &&
             (colorFilter == null ||
                 JbrSkiaCommandRecorder.descriptorColorFilterOrNull(colorFilter) != null) &&
-            renderEffect == null
+            (renderEffect == null || renderEffect.jbrSkiaImageFilterDescriptorOrNull() != null)
 
     private fun jbrSkiaCommandClipRect(): Rect? =
         if (cachedClip) {

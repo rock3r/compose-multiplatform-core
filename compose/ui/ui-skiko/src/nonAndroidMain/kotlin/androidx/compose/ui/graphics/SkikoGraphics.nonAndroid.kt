@@ -208,24 +208,36 @@ internal object SkikoGraphics : PlatformGraphics {
         radiusX: Float,
         radiusY: Float,
         edgeTreatment: TileMode,
-    ): PlatformRenderEffect =
-        SkikoRenderEffect(
-            if (renderEffect == null) {
-                ImageFilter.makeBlur(
-                    BlurEffect.convertRadiusToSigma(radiusX),
-                    BlurEffect.convertRadiusToSigma(radiusY),
-                    edgeTreatment.toSkiaTileMode(),
-                )
-            } else {
-                ImageFilter.makeBlur(
-                    BlurEffect.convertRadiusToSigma(radiusX),
-                    BlurEffect.convertRadiusToSigma(radiusY),
-                    edgeTreatment.toSkiaTileMode(),
-                    renderEffect.skiaImageFilter,
-                    null,
-                )
+    ): PlatformRenderEffect {
+        val sigmaX = BlurEffect.convertRadiusToSigma(radiusX)
+        val sigmaY = BlurEffect.convertRadiusToSigma(radiusY)
+        val imageFilter = if (renderEffect == null) {
+            ImageFilter.makeBlur(sigmaX, sigmaY, edgeTreatment.toSkiaTileMode())
+        } else {
+            ImageFilter.makeBlur(
+                sigmaX,
+                sigmaY,
+                edgeTreatment.toSkiaTileMode(),
+                renderEffect.skiaImageFilter,
+                null,
+            )
+        }
+        val descriptor = if (renderEffect != null || !sigmaX.isFinite() || !sigmaY.isFinite() ||
+            sigmaX < 0f || sigmaY < 0f
+        ) {
+            null
+        } else {
+            val tileMode = when (edgeTreatment) {
+                TileMode.Clamp -> 0
+                TileMode.Repeated -> 1
+                TileMode.Mirror -> 2
+                TileMode.Decal -> 3
+                else -> null
             }
-        )
+            tileMode?.let { JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(sigmaX, sigmaY, it) }
+        }
+        return SkikoRenderEffect(imageFilter, descriptor)
+    }
 
     override fun createOffsetRenderEffect(
         renderEffect: RenderEffect?,

@@ -100,7 +100,23 @@ actual class BlurEffect actual constructor(
             "edgeTreatment=$edgeTreatment)"
     }
 
-    companion object
+    companion object {
+
+        // Constant used to convert blur radius into a corresponding sigma value
+        // for the gaussian blur algorithm used within SkImageFilter.
+        // This constant approximates the scaling done in the software path's
+        // "high quality" mode, in SkBlurMask::Blur() (1 / sqrt(3)).
+        @InternalComposeUiApi // Never supposed to be used public. Will be hidden in future versions
+        val BlurSigmaScale = 0.57735f
+
+        @InternalComposeUiApi // Never supposed to be used public. Will be hidden in future versions
+        fun convertRadiusToSigma(radius: Float) =
+            if (radius > 0) {
+                BlurSigmaScale * radius + 0.5f
+            } else {
+                0.0f
+            }
+    }
 }
 
 @Immutable

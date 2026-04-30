@@ -26,7 +26,12 @@ import org.jetbrains.skia.ImageFilter
 
 internal class SkikoRenderEffect(
     val imageFilter: ImageFilter,
+    val jbrSkiaImageFilterDescriptor: JbrSkiaCommandRecorder.ImageFilterDescriptor? = null,
 ) : PlatformRenderEffect
+
+@OptIn(InternalComposeUiApi::class)
+internal fun RenderEffect.jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? =
+    (platformRenderEffect as? SkikoRenderEffect)?.jbrSkiaImageFilterDescriptor
 
 /** Convert the [org.jetbrains.skia.ImageFilter] instance into a Compose-compatible [RenderEffect] */
 fun ImageFilter.asComposeRenderEffect(): RenderEffect =
