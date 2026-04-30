@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
@@ -279,6 +280,7 @@ internal class SkikoGraphicsLayer(
     }
 
     override fun draw(canvas: Canvas) {
+        JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
         renderNode?.drawInto(canvas.skiaCanvas)
     }
 
