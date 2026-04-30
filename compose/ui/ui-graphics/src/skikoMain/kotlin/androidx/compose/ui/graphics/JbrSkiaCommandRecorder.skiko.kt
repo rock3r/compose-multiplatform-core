@@ -159,7 +159,7 @@ object JbrSkiaCommandRecorder {
         clipRect: Rect?,
         clipPath: Path?,
         blendMode: Int?,
-        colorFilter: BlendModeColorFilter? = null,
+        colorFilter: ColorFilter? = null,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -210,6 +210,11 @@ object JbrSkiaCommandRecorder {
 
     internal fun lightingColorFilterOrNull(colorFilter: ColorFilter?): LightingColorFilter? =
         colorFilter as? LightingColorFilter
+
+    internal fun descriptorColorFilterOrNull(colorFilter: ColorFilter?): ColorFilter? =
+        tintSrcInColorFilterOrNull(colorFilter)
+            ?: colorMatrixColorFilterOrNull(colorFilter)
+            ?: lightingColorFilterOrNull(colorFilter)
 
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
@@ -427,6 +432,15 @@ object JbrSkiaCommandRecorder {
                 saveLayerWithTintSrcInColorFilter(bounds, paint, it)
                 return
             }
+            paint.colorMatrixColorFilter?.let {
+                if (saveLayerWithColorFilterHandle(bounds, paint, it)) {
+                    return
+                }
+            }
+            paint.lightingColorFilter?.let {
+                saveLayerWithColorFilterHandle(bounds, paint, it)
+                return
+            }
             paint.commandBlendMode?.let {
                 saveLayerWithBlendMode(bounds, paint, it)
                 return
@@ -469,6 +483,22 @@ object JbrSkiaCommandRecorder {
             )
         }
 
+        private fun saveLayerWithColorFilterHandle(bounds: Rect, paint: Paint, colorFilter: ColorFilter): Boolean {
+            val handle = defineDescriptorColorFilterIfNeeded(colorFilter) ?: return false
+            commands.addCommand(
+                COMMAND_SAVE_LAYER_COLOR_FILTER_REF,
+                COMMAND_RECORD_FLAGS_NONE,
+                state.x(bounds.left),
+                state.y(bounds.top),
+                state.width(bounds.width),
+                state.height(bounds.height),
+                paint.layerAlpha1000(),
+                handle.highInt(),
+                handle.lowInt(),
+            )
+            return true
+        }
+
         fun translate(dx: Float, dy: Float) {
             commands.addCommand(COMMAND_TRANSLATE, COMMAND_RECORD_FLAGS_NONE, dx.fixed1000(), dy.fixed1000())
         }
@@ -509,7 +539,7 @@ object JbrSkiaCommandRecorder {
             clipRect: Rect?,
             clipPath: Path?,
             blendMode: Int?,
-            colorFilter: BlendModeColorFilter?,
+            colorFilter: ColorFilter?,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -539,7 +569,9 @@ object JbrSkiaCommandRecorder {
             rotate(rotationZ)
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
-            if (colorFilter != null && blendMode != null) {
+            val tintColorFilter = tintSrcInColorFilterOrNull(colorFilter)
+            val descriptorColorFilter = if (blendMode == null) descriptorColorFilterOrNull(colorFilter) else null
+            if (tintColorFilter != null && blendMode != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -549,10 +581,10 @@ object JbrSkiaCommandRecorder {
                     height.roundToInt().coerceAtLeast(0),
                     (alpha * 1000f).roundToInt().coerceIn(0, 1000),
                     blendMode,
-                    colorFilter.color.toArgb(),
+                    tintColorFilter.color.toArgb(),
                     COMMAND_BLEND_MODE_SRC_IN,
                 )
-            } else if (colorFilter != null) {
+            } else if (tintColorFilter != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_COLOR_FILTER,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -561,8 +593,24 @@ object JbrSkiaCommandRecorder {
                     width.roundToInt().coerceAtLeast(0),
                     height.roundToInt().coerceAtLeast(0),
                     (alpha * 1000f).roundToInt().coerceIn(0, 1000),
-                    colorFilter.color.toArgb(),
+                    tintColorFilter.color.toArgb(),
                     COMMAND_BLEND_MODE_SRC_IN,
+                )
+            } else if (descriptorColorFilter != null) {
+                val handle = defineDescriptorColorFilterIfNeeded(descriptorColorFilter) ?: run {
+                    countUnsupported("graphicsLayer:colorFilter")
+                    return false
+                }
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER_COLOR_FILTER_REF,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    handle.highInt(),
+                    handle.lowInt(),
                 )
             } else if (blendMode != null) {
                 commands.addCommand(
@@ -956,6 +1004,27 @@ object JbrSkiaCommandRecorder {
                 )
             }
         }
+
+        private fun defineDescriptorColorFilterIfNeeded(colorFilter: ColorFilter): Long? =
+            when (colorFilter) {
+                is BlendModeColorFilter -> {
+                    val tint = colorFilter.takeIf { it.blendMode == BlendMode.SrcIn } ?: return null
+                    tint.handleKey().also { defineTintColorFilterIfNeeded(it, tint) }
+                }
+                is ColorMatrixColorFilter -> {
+                    val matrix = colorFilter.skiaColorMatrixValues()
+                    if (matrix.any { !java.lang.Float.isFinite(it) }) {
+                        countUnsupported("colorMatrixNonfinite")
+                        null
+                    } else {
+                        matrix.colorMatrixHandleKey().also { defineColorMatrixFilterIfNeeded(it, matrix) }
+                    }
+                }
+                is LightingColorFilter -> {
+                    colorFilter.lightingHandleKey().also { defineLightingFilterIfNeeded(it, colorFilter) }
+                }
+                else -> null
+            }
 
         private fun addColorMatrixFilterHandleFillRect(
             left: Float,
@@ -1584,7 +1653,7 @@ object JbrSkiaCommandRecorder {
             get() =
                 (blendMode == BlendMode.SrcOver || commandBlendMode != null) &&
                     shader == null &&
-                    (colorFilter == null || (blendMode == BlendMode.SrcOver && tintSrcInColorFilter != null)) &&
+                    (colorFilter == null || (blendMode == BlendMode.SrcOver && descriptorColorFilterOrNull(colorFilter) != null)) &&
                     pathEffect == null
 
         private val Paint.commandBlendMode: Int?
@@ -2404,6 +2473,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DEFINE_EFFECT_DESCRIPTOR = 49
     private const val COMMAND_SAVE_LAYER_BLEND_MODE = 50
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER = 51
+    private const val COMMAND_SAVE_LAYER_COLOR_FILTER_REF = 52
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -2426,7 +2496,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 77
+    private const val COMMAND_STREAM_ABI_ID = 78
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
