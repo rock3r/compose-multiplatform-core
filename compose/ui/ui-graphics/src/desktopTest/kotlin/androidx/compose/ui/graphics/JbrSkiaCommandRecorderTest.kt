@@ -848,6 +848,24 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsSaveLayerWithUnsupportedBlendMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.saveLayer(
+                    bounds = Rect(1f, 2f, 11f, 12f),
+                    paint = Paint().apply {
+                        color = Color.White.copy(alpha = 0.6f)
+                        blendMode = BlendMode.Plus
+                    },
+                )
+                JbrSkiaCommandRecorder.restore()
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesImageArgbRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(2, 2)
