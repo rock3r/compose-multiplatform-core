@@ -419,6 +419,7 @@ actual class GraphicsLayer internal constructor(
             translationY = translationY,
             clipRect = jbrSkiaCommandClipRect(),
             clipPath = jbrSkiaCommandClipPath(),
+            blendMode = if (blendMode == BlendMode.SrcOver) null else JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode),
         )
     }
 
@@ -440,7 +441,9 @@ actual class GraphicsLayer internal constructor(
         if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded && outline !is Outline.Generic) {
             return "graphicsLayer:clipOutline:${outline::class.simpleName ?: "unknown"}"
         }
-        if (blendMode != BlendMode.SrcOver) return "graphicsLayer:blendMode"
+        if (blendMode != BlendMode.SrcOver && JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) == null) {
+            return "graphicsLayer:blendMode"
+        }
         if (colorFilter != null) return "graphicsLayer:colorFilter"
         if (renderEffect != null) return "graphicsLayer:renderEffect"
         return null

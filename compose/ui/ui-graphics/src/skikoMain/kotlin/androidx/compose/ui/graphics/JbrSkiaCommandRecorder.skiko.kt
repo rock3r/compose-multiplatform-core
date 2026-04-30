@@ -158,6 +158,7 @@ object JbrSkiaCommandRecorder {
         translationY: Float,
         clipRect: Rect?,
         clipPath: Path?,
+        blendMode: Int?,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -175,7 +176,29 @@ object JbrSkiaCommandRecorder {
             translationY = translationY,
             clipRect = clipRect,
             clipPath = clipPath,
+            blendMode = blendMode,
         ) ?: false
+
+    internal fun commandBlendModeOrNull(blendMode: BlendMode): Int? =
+        when (blendMode) {
+            BlendMode.Plus -> COMMAND_BLEND_MODE_PLUS
+            BlendMode.Multiply -> COMMAND_BLEND_MODE_MULTIPLY
+            BlendMode.Screen -> COMMAND_BLEND_MODE_SCREEN
+            BlendMode.Overlay -> COMMAND_BLEND_MODE_OVERLAY
+            BlendMode.Darken -> COMMAND_BLEND_MODE_DARKEN
+            BlendMode.Lighten -> COMMAND_BLEND_MODE_LIGHTEN
+            BlendMode.Difference -> COMMAND_BLEND_MODE_DIFFERENCE
+            BlendMode.Exclusion -> COMMAND_BLEND_MODE_EXCLUSION
+            BlendMode.ColorDodge -> COMMAND_BLEND_MODE_COLOR_DODGE
+            BlendMode.ColorBurn -> COMMAND_BLEND_MODE_COLOR_BURN
+            BlendMode.Hardlight -> COMMAND_BLEND_MODE_HARDLIGHT
+            BlendMode.Softlight -> COMMAND_BLEND_MODE_SOFTLIGHT
+            BlendMode.Hue -> COMMAND_BLEND_MODE_HUE
+            BlendMode.Saturation -> COMMAND_BLEND_MODE_SATURATION
+            BlendMode.Color -> COMMAND_BLEND_MODE_COLOR
+            BlendMode.Luminosity -> COMMAND_BLEND_MODE_LUMINOSITY
+            else -> null
+        }
 
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
@@ -393,6 +416,10 @@ object JbrSkiaCommandRecorder {
                 saveLayerWithTintSrcInColorFilter(bounds, paint, it)
                 return
             }
+            paint.commandBlendMode?.let {
+                saveLayerWithBlendMode(bounds, paint, it)
+                return
+            }
             commands.addCommand(
                 COMMAND_SAVE_LAYER,
                 COMMAND_RECORD_FLAGS_NONE,
@@ -415,6 +442,19 @@ object JbrSkiaCommandRecorder {
                 paint.layerAlpha1000(),
                 colorFilter.color.toArgb(),
                 COMMAND_BLEND_MODE_SRC_IN,
+            )
+        }
+
+        fun saveLayerWithBlendMode(bounds: Rect, paint: Paint, blendMode: Int) {
+            commands.addCommand(
+                COMMAND_SAVE_LAYER_BLEND_MODE,
+                COMMAND_RECORD_FLAGS_NONE,
+                state.x(bounds.left),
+                state.y(bounds.top),
+                state.width(bounds.width),
+                state.height(bounds.height),
+                paint.layerAlpha1000(),
+                blendMode,
             )
         }
 
@@ -457,6 +497,7 @@ object JbrSkiaCommandRecorder {
             translationY: Float,
             clipRect: Rect?,
             clipPath: Path?,
+            blendMode: Int?,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -486,15 +527,28 @@ object JbrSkiaCommandRecorder {
             rotate(rotationZ)
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
-            commands.addCommand(
-                COMMAND_SAVE_LAYER,
-                COMMAND_RECORD_FLAGS_NONE,
-                0,
-                0,
-                width.roundToInt().coerceAtLeast(0),
-                height.roundToInt().coerceAtLeast(0),
-                (alpha * 1000f).roundToInt().coerceIn(0, 1000),
-            )
+            if (blendMode != null) {
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER_BLEND_MODE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    blendMode,
+                )
+            } else {
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                )
+            }
             if (clipRect != null) {
                 clipRect(clipRect.left, clipRect.top, clipRect.right, clipRect.bottom, ClipOp.Intersect)
             }
@@ -1323,10 +1377,13 @@ object JbrSkiaCommandRecorder {
 
         private val Paint.isSupportedLayerPaint: Boolean
             get() =
-                blendMode == BlendMode.SrcOver &&
+                (blendMode == BlendMode.SrcOver || commandBlendMode != null) &&
                     shader == null &&
-                    (colorFilter == null || tintSrcInColorFilter != null) &&
+                    (colorFilter == null || (blendMode == BlendMode.SrcOver && tintSrcInColorFilter != null)) &&
                     pathEffect == null
+
+        private val Paint.commandBlendMode: Int?
+            get() = commandBlendModeOrNull(blendMode)
 
         private val Paint.isSupportedImagePaint: Boolean
             get() =
@@ -2116,6 +2173,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_COLOR_FILTER_REF = 47
     private const val COMMAND_EVICT_COLOR_FILTER_HANDLE = 48
     private const val COMMAND_DEFINE_EFFECT_DESCRIPTOR = 49
+    private const val COMMAND_SAVE_LAYER_BLEND_MODE = 50
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
@@ -2136,7 +2194,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 73
+    private const val COMMAND_STREAM_ABI_ID = 74
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
