@@ -423,9 +423,18 @@ object JbrSkiaCommandRecorder {
                 addImageShaderRect(left, top, right, bottom, paint)
                 return
             }
-            if (paint.blendMode == BlendMode.Plus && paint.shader == null && paint.style == PaintingStyle.Fill) {
-                addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_PLUS)
-                return
+            if (paint.shader == null && paint.style == PaintingStyle.Fill) {
+                when (paint.blendMode) {
+                    BlendMode.Plus -> {
+                        addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_PLUS)
+                        return
+                    }
+                    BlendMode.Multiply -> {
+                        addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_MULTIPLY)
+                        return
+                    }
+                    else -> Unit
+                }
             }
             val tintColorFilter = paint.tintSrcInColorFilter
             if (tintColorFilter != null && paint.shader == null && paint.style == PaintingStyle.Fill) {
@@ -1844,8 +1853,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
+    private const val COMMAND_BLEND_MODE_MULTIPLY = 3
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 58
+    private const val COMMAND_STREAM_ABI_ID = 59
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
