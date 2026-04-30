@@ -449,6 +449,10 @@ object JbrSkiaCommandRecorder {
                         addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_LIGHTEN)
                         return
                     }
+                    BlendMode.Difference -> {
+                        addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_DIFFERENCE)
+                        return
+                    }
                     else -> Unit
                 }
             }
@@ -1874,8 +1878,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_OVERLAY = 5
     private const val COMMAND_BLEND_MODE_DARKEN = 6
     private const val COMMAND_BLEND_MODE_LIGHTEN = 7
+    private const val COMMAND_BLEND_MODE_DIFFERENCE = 8
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 63
+    private const val COMMAND_STREAM_ABI_ID = 64
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
