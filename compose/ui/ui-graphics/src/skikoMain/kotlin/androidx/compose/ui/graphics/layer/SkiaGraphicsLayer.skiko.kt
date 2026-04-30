@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.SkiaBackedCanvas
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.compose.ui.graphics.asSkiaColorFilter
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.toSize
 import org.jetbrains.skia.Paint as SkPaint
+import org.jetbrains.skia.PictureRecorder
 import org.jetbrains.skia.Point
 import org.jetbrains.skia.Rect as SkRect
 import org.jetbrains.skiko.node.RenderNode
@@ -335,7 +337,7 @@ actual class GraphicsLayer internal constructor(
         }
         jbrSkiaCommandRecording = if (JbrSkiaCommandRecorder.isRecording()) {
             JbrSkiaCommandRecorder.recordNested {
-                recordWithTracking(recordBlock)
+                recordCommandsWithTracking(recordBlock)
             }
         } else {
             null
@@ -347,14 +349,33 @@ actual class GraphicsLayer internal constructor(
 
     private fun recordWithTracking(block: (SkiaBackedCanvas) -> Unit) {
         val renderNode = renderNode ?: return
-        val recordingCanvas = renderNode.beginRecording()
         try {
+            val recordingCanvas = renderNode.beginRecording()
             val composeCanvas = recordingCanvas.asComposeCanvas() as SkiaBackedCanvas
             childDependenciesTracker.withTracking(
                 onDependencyRemoved = { it.onRemovedFromParentLayer() },
             ) { block(composeCanvas) }
         } finally {
             renderNode.endRecording()
+        }
+    }
+
+    private fun recordCommandsWithTracking(block: (SkiaBackedCanvas) -> Unit) {
+        val recorder = PictureRecorder()
+        val recordingCanvas = recorder.beginRecording(
+            0f,
+            0f,
+            size.width.toFloat(),
+            size.height.toFloat(),
+        )
+        try {
+            val composeCanvas = recordingCanvas.asComposeCanvas() as SkiaBackedCanvas
+            childDependenciesTracker.withTracking(
+                onDependencyRemoved = { it.onRemovedFromParentLayer() },
+            ) { block(composeCanvas) }
+        } finally {
+            recorder.finishRecordingAsPicture().close()
+            recorder.close()
         }
     }
 
@@ -366,10 +387,10 @@ actual class GraphicsLayer internal constructor(
 
     internal actual fun draw(canvas: Canvas, parentLayer: GraphicsLayer?) {
         if (isReleased) return
-        if (!replayJbrSkiaCommandLayer()) {
-            JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
-        }
         configureOutlineAndClip()
+        if (!replayJbrSkiaCommandLayer()) {
+            JbrSkiaCommandRecorder.markUnsupportedDraw(jbrSkiaCommandLayerUnsupportedReason() ?: "graphicsLayer")
+        }
         parentLayer?.addSubLayer(this)
         renderNode?.drawInto(canvas.skiaCanvas)
     }
@@ -377,7 +398,10 @@ actual class GraphicsLayer internal constructor(
     private fun replayJbrSkiaCommandLayer(): Boolean {
         if (!JbrSkiaCommandRecorder.isRecording()) return true
         if (!isSupportedJbrSkiaCommandLayer()) return false
-        val recording = jbrSkiaCommandRecording ?: return false
+        val recording = jbrSkiaCommandRecording ?: run {
+            JbrSkiaCommandRecorder.unsupportedDraw("graphicsLayer:recording")
+            return false
+        }
         val pivot = resolvedPivotOffset()
         return JbrSkiaCommandRecorder.replayRecordedLayer(
             recording = recording,
@@ -394,25 +418,33 @@ actual class GraphicsLayer internal constructor(
             translationX = translationX,
             translationY = translationY,
             clipRect = jbrSkiaCommandClipRect(),
+            clipPath = jbrSkiaCommandClipPath(),
         )
     }
 
     private fun isSupportedJbrSkiaCommandLayer(): Boolean =
-        size.width >= 0 &&
-            size.height >= 0 &&
-            alpha in 0f..1f &&
-            scaleX.isFinite() &&
-            scaleY.isFinite() &&
-            rotationZ.isFinite() &&
-            translationX.isFinite() &&
-            translationY.isFinite() &&
-            rotationX == 0f &&
-            rotationY == 0f &&
-            shadowElevation == 0f &&
-            (!clip || outline is Outline.Rectangle) &&
-            blendMode == BlendMode.SrcOver &&
-            colorFilter == null &&
-            renderEffect == null
+        jbrSkiaCommandLayerUnsupportedReason() == null
+
+    private fun jbrSkiaCommandLayerUnsupportedReason(): String? {
+        if (size.width < 0) return "graphicsLayer:sizeWidth"
+        if (size.height < 0) return "graphicsLayer:sizeHeight"
+        if (alpha !in 0f..1f) return "graphicsLayer:alpha"
+        if (!scaleX.isFinite()) return "graphicsLayer:scaleX"
+        if (!scaleY.isFinite()) return "graphicsLayer:scaleY"
+        if (!rotationZ.isFinite()) return "graphicsLayer:rotationZ"
+        if (!translationX.isFinite()) return "graphicsLayer:translationX"
+        if (!translationY.isFinite()) return "graphicsLayer:translationY"
+        if (rotationX != 0f) return "graphicsLayer:rotationX"
+        if (rotationY != 0f) return "graphicsLayer:rotationY"
+        if (shadowElevation != 0f) return "graphicsLayer:shadowElevation"
+        if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded) {
+            return "graphicsLayer:clipOutline:${outline::class.simpleName ?: "unknown"}"
+        }
+        if (blendMode != BlendMode.SrcOver) return "graphicsLayer:blendMode"
+        if (colorFilter != null) return "graphicsLayer:colorFilter"
+        if (renderEffect != null) return "graphicsLayer:renderEffect"
+        return null
+    }
 
     private fun resolvedPivotOffset(): Offset =
         if (pivotOffset.isUnspecified) {
@@ -424,6 +456,15 @@ actual class GraphicsLayer internal constructor(
     private fun jbrSkiaCommandClipRect(): Rect? =
         if (clip) {
             (outline as? Outline.Rectangle)?.rect
+        } else {
+            null
+        }
+
+    private fun jbrSkiaCommandClipPath(): Path? =
+        if (clip) {
+            (outline as? Outline.Rounded)?.let { rounded ->
+                Path().apply { addOutline(rounded) }
+            }
         } else {
             null
         }
