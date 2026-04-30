@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -906,6 +907,32 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun rejectsImageWithUnsupportedPaint() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(7)
+        var recordedImage = true
+
+        JbrSkiaCommandRecorder.record {
+            recordedImage = JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 0f,
+                dstTop = 0f,
+                dstRight = 1f,
+                dstBottom = 1f,
+                paint = Paint().apply {
+                    colorFilter = ColorFilter.tint(Color.Cyan)
+                },
+            )
+        }
+
+        assertFalse(recordedImage)
     }
 
     @Test
