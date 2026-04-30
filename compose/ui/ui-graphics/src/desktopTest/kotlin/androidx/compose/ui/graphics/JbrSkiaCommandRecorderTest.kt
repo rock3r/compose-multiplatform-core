@@ -211,6 +211,52 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingReplaysLayerBlendMode() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 22f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 0f,
+                    translationY = 0f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = JbrSkiaCommandRecorder.commandBlendModeOrNull(BlendMode.Plus),
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        val saveLayerBlendIndex = records.indexOfFirst { it[0] == 50 }
+        val drawRectIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
+        assertTrue(saveLayerBlendIndex >= 0)
+        assertTrue(drawRectIndex > saveLayerBlendIndex)
+        assertEquals(1, records[saveLayerBlendIndex][8])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesFillRectPlusBlendModeRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
