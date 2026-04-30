@@ -205,6 +205,9 @@ object JbrSkiaCommandRecorder {
     internal fun tintSrcInColorFilterOrNull(colorFilter: ColorFilter?): BlendModeColorFilter? =
         (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
+    internal fun colorMatrixColorFilterOrNull(colorFilter: ColorFilter?): ColorMatrixColorFilter? =
+        colorFilter as? ColorMatrixColorFilter
+
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
     }
@@ -782,6 +785,11 @@ object JbrSkiaCommandRecorder {
                 }
                 return
             }
+            val colorMatrixFilter = paint.colorMatrixColorFilter
+            if (colorMatrixFilter != null && paint.shader == null && paint.style == PaintingStyle.Fill) {
+                addColorMatrixFilterHandleFillRect(left, top, right, bottom, paint, colorMatrixFilter)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -937,6 +945,84 @@ object JbrSkiaCommandRecorder {
                     2,
                     colorFilter.color.toArgb(),
                     COMMAND_BLEND_MODE_SRC_IN,
+                )
+            }
+        }
+
+        private fun addColorMatrixFilterHandleFillRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            colorFilter: ColorMatrixColorFilter,
+        ) {
+            if (!state.supported) {
+                countUnsupported("unsupportedScope")
+                return
+            }
+            if (paint.blendMode != BlendMode.SrcOver) {
+                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
+                return
+            }
+            if (paint.pathEffect != null) {
+                countUnsupported("pathEffect")
+                return
+            }
+            val matrix = colorFilter.skiaColorMatrixValues()
+            if (matrix.any { !java.lang.Float.isFinite(it) }) {
+                countUnsupported("colorMatrixNonfinite")
+                return
+            }
+            val handle = matrix.colorMatrixHandleKey()
+            defineColorMatrixFilterIfNeeded(handle, matrix)
+            commands.addCommand(
+                COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                paint.recordFlags(),
+                paint.commandColor(),
+                handle.highInt(),
+                handle.lowInt(),
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
+            )
+        }
+
+        private fun defineColorMatrixFilterIfNeeded(handle: Long, matrix: FloatArray) {
+            var evictedHandle: Long? = null
+            val shouldDefine = synchronized(colorFilterHandleLock) {
+                if (definedColorFilterHandles.containsKey(handle)) {
+                    definedColorFilterHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
+                        val eldest = definedColorFilterHandles.keys.first()
+                        definedColorFilterHandles.remove(eldest)
+                        evictedHandle = eldest
+                    }
+                    definedColorFilterHandles[handle] = Unit
+                    true
+                }
+            }
+            evictedHandle?.let {
+                commands.addCommand(
+                    COMMAND_EVICT_COLOR_FILTER_HANDLE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                commands.addCommand(
+                    COMMAND_DEFINE_EFFECT_DESCRIPTOR,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER,
+                    COMMAND_EFFECT_DESCRIPTOR_VERSION_1,
+                    20,
+                    *IntArray(20) { index -> matrix[index].toRawBits() },
                 )
             }
         }
@@ -1402,6 +1488,9 @@ object JbrSkiaCommandRecorder {
             get() =
                 (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
+        private val Paint.colorMatrixColorFilter: ColorMatrixColorFilter?
+            get() = colorMatrixColorFilterOrNull(colorFilter)
+
         private val Paint.dashPathEffect: JbrSkiaDashPathEffect?
             get() =
                 (pathEffect as? SkiaBackedPathEffect)?.jbrSkiaDashPathEffect
@@ -1571,6 +1660,26 @@ object JbrSkiaCommandRecorder {
 
         private fun BlendModeColorFilter.handleKey(): Long =
             (color.toArgb().toLong() shl 32) xor (COMMAND_BLEND_MODE_SRC_IN.toLong() and 0xffffffffL)
+
+        private fun ColorMatrixColorFilter.skiaColorMatrixValues(): FloatArray {
+            val values = copyColorMatrix().values.copyOf()
+            values[4] *= 1f / 255f
+            values[9] *= 1f / 255f
+            values[14] *= 1f / 255f
+            values[19] *= 1f / 255f
+            return values
+        }
+
+        private fun FloatArray.colorMatrixHandleKey(): Long {
+            var hash = -3750763034362895579L
+            fun mix(value: Int) {
+                hash = hash xor value.toLong()
+                hash *= 1099511628211L
+            }
+            mix(COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER)
+            forEach { mix(it.toRawBits()) }
+            return hash
+        }
 
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
             var hash = -3750763034362895579L
@@ -2207,6 +2316,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_LAYER_BLEND_MODE = 50
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER = 51
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
+    private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -2226,7 +2336,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 75
+    private const val COMMAND_STREAM_ABI_ID = 76
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
