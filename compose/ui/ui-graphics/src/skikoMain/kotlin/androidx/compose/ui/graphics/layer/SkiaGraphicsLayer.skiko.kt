@@ -420,6 +420,7 @@ actual class GraphicsLayer internal constructor(
             clipRect = jbrSkiaCommandClipRect(),
             clipPath = jbrSkiaCommandClipPath(),
             blendMode = if (blendMode == BlendMode.SrcOver) null else JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode),
+            colorFilter = JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter),
         )
     }
 
@@ -444,7 +445,10 @@ actual class GraphicsLayer internal constructor(
         if (blendMode != BlendMode.SrcOver && JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) == null) {
             return "graphicsLayer:blendMode"
         }
-        if (colorFilter != null) return "graphicsLayer:colorFilter"
+        if (colorFilter != null && blendMode != BlendMode.SrcOver) return "graphicsLayer:colorFilterBlendMode"
+        if (colorFilter != null && JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter) == null) {
+            return "graphicsLayer:colorFilter"
+        }
         if (renderEffect != null) return "graphicsLayer:renderEffect"
         return null
     }
