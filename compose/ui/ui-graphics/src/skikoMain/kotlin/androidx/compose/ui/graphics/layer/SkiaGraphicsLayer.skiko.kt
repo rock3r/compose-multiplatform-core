@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.JbrSkiaCommandRecording
 import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -69,6 +70,7 @@ actual class GraphicsLayer internal constructor(
 
     private var parentLayerUsages = 0
     private val childDependenciesTracker = ChildLayerDependenciesTracker()
+    private var jbrSkiaCommandRecording: JbrSkiaCommandRecording? = null
 
     actual var compositingStrategy: CompositingStrategy = CompositingStrategy.Auto
         set(value) {
@@ -316,7 +318,7 @@ actual class GraphicsLayer internal constructor(
         block: DrawScope.() -> Unit
     ) {
         this.size = size
-        recordWithTracking { canvas ->
+        val recordBlock = { canvas: SkiaBackedCanvas ->
             canvas.alphaMultiplier = if (compositingStrategy == CompositingStrategy.ModulateAlpha) {
                 this@GraphicsLayer.alpha
             } else {
@@ -330,6 +332,16 @@ actual class GraphicsLayer internal constructor(
                 graphicsLayer = this,
                 block = block
             )
+        }
+        jbrSkiaCommandRecording = if (JbrSkiaCommandRecorder.isRecording()) {
+            JbrSkiaCommandRecorder.recordNested {
+                recordWithTracking(recordBlock)
+            }
+        } else {
+            null
+        }
+        if (jbrSkiaCommandRecording == null) {
+            recordWithTracking(recordBlock)
         }
     }
 
@@ -354,13 +366,59 @@ actual class GraphicsLayer internal constructor(
 
     internal actual fun draw(canvas: Canvas, parentLayer: GraphicsLayer?) {
         if (isReleased) return
-        if (requiresCommandFallback()) {
+        if (!replayJbrSkiaCommandLayer()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
         }
         configureOutlineAndClip()
         parentLayer?.addSubLayer(this)
         renderNode?.drawInto(canvas.skiaCanvas)
     }
+
+    private fun replayJbrSkiaCommandLayer(): Boolean {
+        if (!JbrSkiaCommandRecorder.isRecording()) return true
+        if (!isSupportedJbrSkiaCommandLayer()) return false
+        val recording = jbrSkiaCommandRecording ?: return false
+        val pivot = resolvedPivotOffset()
+        return JbrSkiaCommandRecorder.replayRecordedLayer(
+            recording = recording,
+            left = topLeft.x.toFloat(),
+            top = topLeft.y.toFloat(),
+            width = size.width.toFloat(),
+            height = size.height.toFloat(),
+            pivotX = pivot.x,
+            pivotY = pivot.y,
+            alpha = if (compositingStrategy == CompositingStrategy.ModulateAlpha) 1f else alpha,
+            scaleX = scaleX,
+            scaleY = scaleY,
+            rotationZ = rotationZ,
+            translationX = translationX,
+            translationY = translationY,
+        )
+    }
+
+    private fun isSupportedJbrSkiaCommandLayer(): Boolean =
+        size.width >= 0 &&
+            size.height >= 0 &&
+            alpha in 0f..1f &&
+            scaleX.isFinite() &&
+            scaleY.isFinite() &&
+            rotationZ.isFinite() &&
+            translationX.isFinite() &&
+            translationY.isFinite() &&
+            rotationX == 0f &&
+            rotationY == 0f &&
+            shadowElevation == 0f &&
+            !clip &&
+            blendMode == BlendMode.SrcOver &&
+            colorFilter == null &&
+            renderEffect == null
+
+    private fun resolvedPivotOffset(): Offset =
+        if (pivotOffset.isUnspecified) {
+            Offset(size.width / 2f, size.height / 2f)
+        } else {
+            pivotOffset
+        }
 
     private fun onAddedToParentLayer() {
         parentLayerUsages++

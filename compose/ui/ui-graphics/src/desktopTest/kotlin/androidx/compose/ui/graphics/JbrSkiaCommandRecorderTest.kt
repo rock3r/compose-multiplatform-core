@@ -95,6 +95,65 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingReplaysAtLayerDrawSite() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 22f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+            JbrSkiaCommandRecorder.drawRect(
+                left = 50f,
+                top = 60f,
+                right = 70f,
+                bottom = 80f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                },
+            )
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = -4f,
+                    translationX = 5f,
+                    translationY = 6f,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(2, records[0][0])
+        assertEquals(Color.Blue.toArgb(), records[0][3])
+        assertEquals(7, records[1][0])
+        assertEquals(10, records[2][0])
+        assertEquals(105000, records[2][3])
+        assertEquals(206000, records[2][4])
+        assertEquals(13, records[7][0])
+        assertEquals(500, records[7][7])
+        assertEquals(2, records[8][0])
+        assertEquals(Color.Red.toArgb(), records[8][3])
+        assertEquals(8, records[9][0])
+        assertEquals(8, records[10][0])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesFillRectPlusBlendModeRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
@@ -2045,6 +2104,17 @@ class JbrSkiaCommandRecorderTest {
             offset += this[offset + 1] / Int.SIZE_BYTES
         }
         return count
+    }
+
+    private fun IntArray.commandRecords(): List<IntArray> {
+        val records = mutableListOf<IntArray>()
+        var offset = 6
+        while (offset < size) {
+            val recordLength = this[offset + 1] / Int.SIZE_BYTES
+            records += copyOfRange(offset, offset + recordLength)
+            offset += recordLength
+        }
+        return records
     }
 
     private fun IntArray.containsSubsequence(vararg values: Int): Boolean =

@@ -92,6 +92,20 @@ object JbrSkiaCommandRecorder {
         }
     }
 
+    internal fun isRecording(): Boolean = active.get() != null
+
+    internal fun recordNested(block: () -> Unit): JbrSkiaCommandRecording {
+        val previous = active.get()
+        val recorder = Recorder()
+        active.set(recorder)
+        try {
+            block()
+            return recorder.toRecording(recorder.toCommandArray())
+        } finally {
+            active.set(previous)
+        }
+    }
+
     internal fun save() {
         active.get()?.save()
     }
@@ -123,6 +137,37 @@ object JbrSkiaCommandRecorder {
     internal fun unsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
     }
+
+    internal fun replayRecordedLayer(
+        recording: JbrSkiaCommandRecording,
+        left: Float,
+        top: Float,
+        width: Float,
+        height: Float,
+        pivotX: Float,
+        pivotY: Float,
+        alpha: Float,
+        scaleX: Float,
+        scaleY: Float,
+        rotationZ: Float,
+        translationX: Float,
+        translationY: Float,
+    ): Boolean =
+        active.get()?.replayRecordedLayer(
+            recording = recording,
+            left = left,
+            top = top,
+            width = width,
+            height = height,
+            pivotX = pivotX,
+            pivotY = pivotY,
+            alpha = alpha,
+            scaleX = scaleX,
+            scaleY = scaleY,
+            rotationZ = rotationZ,
+            translationX = translationX,
+            translationY = translationY,
+        ) ?: false
 
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
@@ -375,6 +420,60 @@ object JbrSkiaCommandRecorder {
 
         fun unsupportedDraw(reason: String) {
             countUnsupported(reason)
+        }
+
+        fun replayRecordedLayer(
+            recording: JbrSkiaCommandRecording,
+            left: Float,
+            top: Float,
+            width: Float,
+            height: Float,
+            pivotX: Float,
+            pivotY: Float,
+            alpha: Float,
+            scaleX: Float,
+            scaleY: Float,
+            rotationZ: Float,
+            translationX: Float,
+            translationY: Float,
+        ): Boolean {
+            val childCommands = recording.commands ?: return false
+            if (recording.unsupportedCount > 0 ||
+                childCommands.size < COMMAND_STREAM_HEADER_SIZE ||
+                childCommands[0] != COMMAND_STREAM_MAGIC ||
+                childCommands[1] != COMMAND_STREAM_ABI_ID ||
+                childCommands[2] != COMMAND_STREAM_FLAGS_NONE ||
+                childCommands[3] != childCommands.size - COMMAND_STREAM_HEADER_SIZE ||
+                childCommands[4] != COMMAND_COORDINATE_SPACE_SWING_USER ||
+                childCommands[5] != COMMAND_PAINT_FORMAT_SOLID_ARGB
+            ) {
+                return false
+            }
+            save()
+            translate(left + translationX, top + translationY)
+            translate(pivotX, pivotY)
+            rotate(rotationZ)
+            scale(scaleX, scaleY)
+            translate(-pivotX, -pivotY)
+            commands.addCommand(
+                COMMAND_SAVE_LAYER,
+                COMMAND_RECORD_FLAGS_NONE,
+                0,
+                0,
+                width.roundToInt().coerceAtLeast(0),
+                height.roundToInt().coerceAtLeast(0),
+                (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+            )
+            commands.appendRecords(childCommands, COMMAND_STREAM_HEADER_SIZE, childCommands.size)
+            imageDefineCount += recording.imageDefineCount
+            imageRefCount += recording.imageRefCount
+            textCommandCount += recording.textCommandCount
+            paragraphTextCommandCount += recording.paragraphTextCommandCount
+            imageCacheClearCount += recording.imageCacheClearCount
+            imageCacheEvictCount += recording.imageCacheEvictCount
+            restore()
+            restore()
+            return true
         }
 
         fun clipRect(left: Float, top: Float, right: Float, bottom: Float, clipOp: ClipOp) {
@@ -1894,6 +1993,12 @@ object JbrSkiaCommandRecorder {
             payload.add((args.size + 3) * Int.SIZE_BYTES)
             payload.add(recordFlags)
             args.forEach(payload::add)
+        }
+
+        fun appendRecords(records: IntArray, startIndex: Int, endIndex: Int) {
+            for (index in startIndex until endIndex) {
+                payload.add(records[index])
+            }
         }
 
         fun toIntArray(): IntArray =
