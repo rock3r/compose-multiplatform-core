@@ -448,12 +448,6 @@ actual class GraphicsLayer internal constructor(
         if (colorFilter != null && JbrSkiaCommandRecorder.descriptorColorFilterOrNull(colorFilter) == null) {
             return "graphicsLayer:colorFilter"
         }
-        if (colorFilter != null &&
-            JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter) == null &&
-            blendMode != BlendMode.SrcOver
-        ) {
-            return "graphicsLayer:colorFilterBlendMode"
-        }
         if (renderEffect != null) return "graphicsLayer:renderEffect"
         return null
     }

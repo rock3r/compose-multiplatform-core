@@ -570,7 +570,7 @@ object JbrSkiaCommandRecorder {
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
             val tintColorFilter = tintSrcInColorFilterOrNull(colorFilter)
-            val descriptorColorFilter = if (blendMode == null) descriptorColorFilterOrNull(colorFilter) else null
+            val descriptorColorFilter = descriptorColorFilterOrNull(colorFilter)
             if (tintColorFilter != null && blendMode != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
@@ -583,6 +583,23 @@ object JbrSkiaCommandRecorder {
                     blendMode,
                     tintColorFilter.color.toArgb(),
                     COMMAND_BLEND_MODE_SRC_IN,
+                )
+            } else if (descriptorColorFilter != null && blendMode != null) {
+                val handle = defineDescriptorColorFilterIfNeeded(descriptorColorFilter) ?: run {
+                    countUnsupported("graphicsLayer:colorFilter")
+                    return false
+                }
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    blendMode,
+                    handle.highInt(),
+                    handle.lowInt(),
                 )
             } else if (tintColorFilter != null) {
                 commands.addCommand(
@@ -1662,7 +1679,7 @@ object JbrSkiaCommandRecorder {
             get() =
                 (blendMode == BlendMode.SrcOver || commandBlendMode != null) &&
                     shader == null &&
-                    (colorFilter == null || (blendMode == BlendMode.SrcOver && descriptorColorFilterOrNull(colorFilter) != null)) &&
+                    (colorFilter == null || descriptorColorFilterOrNull(colorFilter) != null) &&
                     pathEffect == null
 
         private val Paint.commandBlendMode: Int?
@@ -2484,6 +2501,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER = 51
     private const val COMMAND_SAVE_LAYER_COLOR_FILTER_REF = 52
     private const val COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF = 53
+    private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF = 54
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -2506,7 +2524,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 79
+    private const val COMMAND_STREAM_ABI_ID = 80
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
