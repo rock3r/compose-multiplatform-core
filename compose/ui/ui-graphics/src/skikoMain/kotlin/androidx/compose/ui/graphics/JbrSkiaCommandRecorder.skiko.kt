@@ -362,6 +362,11 @@ object JbrSkiaCommandRecorder {
                 addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_PLUS)
                 return
             }
+            val tintColorFilter = paint.tintSrcInColorFilter
+            if (tintColorFilter != null && paint.shader == null && paint.style == PaintingStyle.Fill) {
+                addTintColorFilterFillRect(left, top, right, bottom, paint, tintColorFilter)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -407,6 +412,39 @@ object JbrSkiaCommandRecorder {
                 paint.recordFlags(),
                 paint.commandColor(),
                 blendMode,
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
+            )
+        }
+
+        private fun addTintColorFilterFillRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            colorFilter: BlendModeColorFilter,
+        ) {
+            if (!state.supported) {
+                countUnsupported("unsupportedScope")
+                return
+            }
+            if (paint.blendMode != BlendMode.SrcOver) {
+                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
+                return
+            }
+            if (paint.pathEffect != null) {
+                countUnsupported("pathEffect")
+                return
+            }
+            commands.addCommand(
+                COMMAND_FILL_RECT_COLOR_FILTER,
+                paint.recordFlags(),
+                paint.commandColor(),
+                colorFilter.color.toArgb(),
+                COMMAND_BLEND_MODE_SRC_IN,
                 state.x(left),
                 state.y(top),
                 state.width(right - left),
@@ -842,6 +880,10 @@ object JbrSkiaCommandRecorder {
                 }
                 return supported
             }
+
+        private val Paint.tintSrcInColorFilter: BlendModeColorFilter?
+            get() =
+                (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
         private val Paint.isSupportedLayerPaint: Boolean
             get() =
@@ -1612,9 +1654,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_RECT_SWEEP_GRADIENT = 39
     private const val COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT = 40
     private const val COMMAND_FILL_RECT_BLEND_MODE = 41
+    private const val COMMAND_FILL_RECT_COLOR_FILTER = 42
     private const val COMMAND_BLEND_MODE_PLUS = 1
+    private const val COMMAND_BLEND_MODE_SRC_IN = 2
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 51
+    private const val COMMAND_STREAM_ABI_ID = 52
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
