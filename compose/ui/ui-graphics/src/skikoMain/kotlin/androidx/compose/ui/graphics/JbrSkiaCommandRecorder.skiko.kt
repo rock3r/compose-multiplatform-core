@@ -321,6 +321,11 @@ object JbrSkiaCommandRecorder {
         }
 
         fun drawLine(p1: Offset, p2: Offset, paint: Paint) {
+            val dashPathEffect = paint.dashPathEffect
+            if (dashPathEffect != null) {
+                addDashedLine(p1, p2, paint, dashPathEffect)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             commands.addCommand(
                 COMMAND_STROKE_LINE,
@@ -334,6 +339,41 @@ object JbrSkiaCommandRecorder {
                 paint.strokeCap.commandValue(),
                 paint.strokeJoin.commandValue(),
                 paint.strokeMiter1000(),
+            )
+        }
+
+        private fun addDashedLine(
+            p1: Offset,
+            p2: Offset,
+            paint: Paint,
+            dashPathEffect: JbrSkiaDashPathEffect,
+        ) {
+            if (!paint.isSupportedDashedSolidColor) return
+            val intervals = dashPathEffect.intervals
+            if (
+                intervals.size !in 2..16 ||
+                intervals.any { !it.isFinite() || it <= 0f } ||
+                !dashPathEffect.phase.isFinite() ||
+                dashPathEffect.phase < 0f
+            ) {
+                countUnsupported("pathEffect")
+                return
+            }
+            commands.addCommand(
+                COMMAND_STROKE_LINE_DASH_PATH_EFFECT,
+                paint.recordFlags(),
+                paint.commandColor(),
+                state.x(p1.x),
+                state.y(p1.y),
+                state.x(p2.x),
+                state.y(p2.y),
+                state.stroke(paint.strokeWidth),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
+                dashPathEffect.phase.fixed1000(),
+                intervals.size,
+                *IntArray(intervals.size) { intervals[it].fixed1000() },
             )
         }
 
@@ -881,9 +921,35 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
+        private val Paint.isSupportedDashedSolidColor: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                return supported
+            }
+
         private val Paint.tintSrcInColorFilter: BlendModeColorFilter?
             get() =
                 (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
+
+        private val Paint.dashPathEffect: JbrSkiaDashPathEffect?
+            get() =
+                (pathEffect as? SkiaBackedPathEffect)?.jbrSkiaDashPathEffect
 
         private val Paint.isSupportedLayerPaint: Boolean
             get() =
@@ -1655,10 +1721,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT = 40
     private const val COMMAND_FILL_RECT_BLEND_MODE = 41
     private const val COMMAND_FILL_RECT_COLOR_FILTER = 42
+    private const val COMMAND_STROKE_LINE_DASH_PATH_EFFECT = 43
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 52
+    private const val COMMAND_STREAM_ABI_ID = 53
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

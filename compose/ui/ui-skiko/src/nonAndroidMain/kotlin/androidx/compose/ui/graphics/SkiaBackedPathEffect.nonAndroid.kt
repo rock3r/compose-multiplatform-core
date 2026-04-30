@@ -23,7 +23,13 @@ import org.jetbrains.skia.PathEffect as SkPathEffect
 
 internal class SkiaBackedPathEffect(
     internal val internalSkiaPathEffect: SkPathEffect,
+    internal val jbrSkiaDashPathEffect: JbrSkiaDashPathEffect? = null,
 ) : PathEffect
+
+internal class JbrSkiaDashPathEffect(
+    val intervals: FloatArray,
+    val phase: Float,
+)
 
 /**
  * Convert the [org.jetbrains.skia.PathEffect] instance into a Compose-compatible PathEffect

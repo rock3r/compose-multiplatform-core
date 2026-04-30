@@ -275,7 +275,10 @@ internal object SkikoGraphics : PlatformGraphics {
         intervals: FloatArray,
         phase: Float,
     ): PathEffect =
-        SkPathEffect.makeDash(intervals, phase).asComposePathEffect()
+        SkiaBackedPathEffect(
+            SkPathEffect.makeDash(intervals, phase),
+            JbrSkiaDashPathEffect(intervals.copyOf(), phase),
+        )
 
     override fun createChainPathEffect(
         outer: PathEffect,
