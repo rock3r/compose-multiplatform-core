@@ -758,8 +758,9 @@ object JbrSkiaCommandRecorder {
             }
             val cacheKey = defineImageIfNeeded(image) ?: return false
             imageRefCount++
+            val colorFilter = paint.tintSrcInColorFilter
             commands.addCommand(
-                COMMAND_DRAW_IMAGE_REF,
+                if (colorFilter == null) COMMAND_DRAW_IMAGE_REF else COMMAND_DRAW_IMAGE_REF_COLOR_FILTER,
                 paint.recordFlags(),
                 srcLeft.fixed1000(),
                 srcTop.fixed1000(),
@@ -775,6 +776,11 @@ object JbrSkiaCommandRecorder {
                 image.height,
                 paint.imageAlpha1000(),
                 paint.filterQuality.value,
+                *if (colorFilter == null) {
+                    IntArray(0)
+                } else {
+                    intArrayOf(colorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
+                },
             )
             return true
         }
@@ -981,7 +987,7 @@ object JbrSkiaCommandRecorder {
                 state.supported &&
                     blendMode == BlendMode.SrcOver &&
                     shader == null &&
-                    colorFilter == null &&
+                    (colorFilter == null || tintSrcInColorFilter != null) &&
                     pathEffect == null
 
         private val Paint.isSupportedImageShaderPaint: Boolean
@@ -1741,10 +1747,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_COLOR_FILTER = 42
     private const val COMMAND_STROKE_LINE_DASH_PATH_EFFECT = 43
     private const val COMMAND_SAVE_LAYER_COLOR_FILTER = 44
+    private const val COMMAND_DRAW_IMAGE_REF_COLOR_FILTER = 45
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 54
+    private const val COMMAND_STREAM_ABI_ID = 55
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
