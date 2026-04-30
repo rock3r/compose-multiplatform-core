@@ -25,9 +25,12 @@ object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
+    private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
     private val active = ThreadLocal<Recorder?>()
     private val imageCacheLock = Any()
     private val definedImageKeys = LinkedHashMap<Long, Unit>(MAX_DEFINED_IMAGE_KEYS, 0.75f, true)
+    private val colorFilterHandleLock = Any()
+    private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
 
     fun record(block: () -> Unit): IntArray? {
         val previous = active.get()
@@ -81,6 +84,9 @@ object JbrSkiaCommandRecorder {
     internal fun clearImageCacheForTesting() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
+        }
+        synchronized(colorFilterHandleLock) {
+            definedColorFilterHandles.clear()
         }
     }
 
@@ -535,27 +541,55 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("pathEffect")
                 return
             }
-            val handleHigh = colorFilter.color.toArgb()
-            val handleLow = COMMAND_BLEND_MODE_SRC_IN
-            commands.addCommand(
-                COMMAND_DEFINE_COLOR_FILTER_TINT,
-                COMMAND_RECORD_FLAGS_NONE,
-                handleHigh,
-                handleLow,
-                colorFilter.color.toArgb(),
-                COMMAND_BLEND_MODE_SRC_IN,
-            )
+            val handle = colorFilter.handleKey()
+            defineTintColorFilterIfNeeded(handle, colorFilter)
             commands.addCommand(
                 COMMAND_FILL_RECT_COLOR_FILTER_REF,
                 paint.recordFlags(),
                 paint.commandColor(),
-                handleHigh,
-                handleLow,
+                handle.highInt(),
+                handle.lowInt(),
                 state.x(left),
                 state.y(top),
                 state.width(right - left),
                 state.height(bottom - top),
             )
+        }
+
+        private fun defineTintColorFilterIfNeeded(handle: Long, colorFilter: BlendModeColorFilter) {
+            var evictedHandle: Long? = null
+            val shouldDefine = synchronized(colorFilterHandleLock) {
+                if (definedColorFilterHandles.containsKey(handle)) {
+                    definedColorFilterHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
+                        val eldest = definedColorFilterHandles.keys.first()
+                        definedColorFilterHandles.remove(eldest)
+                        evictedHandle = eldest
+                    }
+                    definedColorFilterHandles[handle] = Unit
+                    true
+                }
+            }
+            evictedHandle?.let {
+                commands.addCommand(
+                    COMMAND_EVICT_COLOR_FILTER_HANDLE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                commands.addCommand(
+                    COMMAND_DEFINE_COLOR_FILTER_TINT,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    colorFilter.color.toArgb(),
+                    COMMAND_BLEND_MODE_SRC_IN,
+                )
+            }
         }
 
         fun drawRoundRect(
@@ -1173,6 +1207,9 @@ object JbrSkiaCommandRecorder {
         private fun Long.highInt(): Int = (this ushr 32).toInt()
 
         private fun Long.lowInt(): Int = this.toInt()
+
+        private fun BlendModeColorFilter.handleKey(): Long =
+            (color.toArgb().toLong() shl 32) xor (COMMAND_BLEND_MODE_SRC_IN.toLong() and 0xffffffffL)
 
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
             var hash = -3750763034362895579L
@@ -1798,10 +1835,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_COLOR_FILTER = 45
     private const val COMMAND_DEFINE_COLOR_FILTER_TINT = 46
     private const val COMMAND_FILL_RECT_COLOR_FILTER_REF = 47
+    private const val COMMAND_EVICT_COLOR_FILTER_HANDLE = 48
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 56
+    private const val COMMAND_STREAM_ABI_ID = 57
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
