@@ -103,7 +103,11 @@ object JbrSkiaCommandRecorder {
         active.set(recorder)
         try {
             block()
-            return recorder.toRecording(recorder.toCommandArray())
+            val recording = recorder.toRecording(recorder.toCommandArray())
+            if (recording.commands == null && recording.unsupportedCount > 0) {
+                recorder.logNestedUnsupported()
+            }
+            return recording
         } finally {
             active.set(previous)
         }
@@ -157,6 +161,7 @@ object JbrSkiaCommandRecorder {
         translationX: Float,
         translationY: Float,
         clipRect: Rect?,
+        clipPath: Path?,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -173,6 +178,7 @@ object JbrSkiaCommandRecorder {
             translationX = translationX,
             translationY = translationY,
             clipRect = clipRect,
+            clipPath = clipPath,
         ) ?: false
 
     fun markUnsupportedDraw(reason: String) {
@@ -354,8 +360,19 @@ object JbrSkiaCommandRecorder {
             System.err.println(
                 "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported" +
                     " textCommands=$textCommandCount paragraphTextCommands=$paragraphTextCommandCount" +
-                    " imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
+                " imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
                     " imageCacheClears=$imageCacheClearCount imageCacheEvicts=$imageCacheEvictCount$suffix"
+            )
+        }
+
+        fun logNestedUnsupported() {
+            val reasons = unsupportedReasons.entries.joinToString(separator = " ") { (reason, count) ->
+                "$reason=$count"
+            }
+            val suffix = if (reasons.isEmpty()) "" else " $reasons"
+            System.err.println(
+                "CMP_JBR_COMMAND_RECORDER_NESTED_UNSUPPORTED commands=${commands.streamSize}" +
+                    " unsupported=$unsupportedCount$suffix"
             )
         }
 
@@ -443,17 +460,28 @@ object JbrSkiaCommandRecorder {
             translationX: Float,
             translationY: Float,
             clipRect: Rect?,
+            clipPath: Path?,
         ): Boolean {
-            val childCommands = recording.commands ?: return false
-            if (recording.unsupportedCount > 0 ||
-                childCommands.size < COMMAND_STREAM_HEADER_SIZE ||
-                childCommands[0] != COMMAND_STREAM_MAGIC ||
+            val childCommands = recording.commands ?: run {
+                countUnsupported("graphicsLayer:childCommands")
+                return false
+            }
+            if (recording.unsupportedCount > 0) {
+                countUnsupported("graphicsLayer:childUnsupported")
+                return false
+            }
+            if (childCommands.size < COMMAND_STREAM_HEADER_SIZE) {
+                countUnsupported("graphicsLayer:childHeaderSize")
+                return false
+            }
+            if (childCommands[0] != COMMAND_STREAM_MAGIC ||
                 childCommands[1] != COMMAND_STREAM_ABI_ID ||
                 childCommands[2] != COMMAND_STREAM_FLAGS_NONE ||
                 childCommands[3] != childCommands.size - COMMAND_STREAM_HEADER_SIZE ||
                 childCommands[4] != COMMAND_COORDINATE_SPACE_SWING_USER ||
                 childCommands[5] != COMMAND_PAINT_FORMAT_SOLID_ARGB
             ) {
+                countUnsupported("graphicsLayer:childHeader")
                 return false
             }
             save()
@@ -473,6 +501,9 @@ object JbrSkiaCommandRecorder {
             )
             if (clipRect != null) {
                 this.clipRect(clipRect.left, clipRect.top, clipRect.right, clipRect.bottom, ClipOp.Intersect)
+            }
+            if (clipPath != null) {
+                this.clipPath(clipPath, ClipOp.Intersect)
             }
             commands.appendRecords(childCommands, COMMAND_STREAM_HEADER_SIZE, childCommands.size)
             imageDefineCount += recording.imageDefineCount
@@ -1425,8 +1456,17 @@ object JbrSkiaCommandRecorder {
                         data.add(points[6].fixed1000())
                         data.add(points[7].fixed1000())
                     }
+                    PathSegment.Type.Conic -> {
+                        if (!points[2].isFinite() || !points[3].isFinite() || !points[4].isFinite() || !points[5].isFinite()) {
+                            return null
+                        }
+                        data.add(PATH_VERB_QUAD)
+                        data.add(points[2].fixed1000())
+                        data.add(points[3].fixed1000())
+                        data.add(points[4].fixed1000())
+                        data.add(points[5].fixed1000())
+                    }
                     PathSegment.Type.Close -> data.add(PATH_VERB_CLOSE)
-                    PathSegment.Type.Conic,
                     PathSegment.Type.Done -> return null
                 }
                 if (data.size > MAX_PATH_DATA_INTS) return null

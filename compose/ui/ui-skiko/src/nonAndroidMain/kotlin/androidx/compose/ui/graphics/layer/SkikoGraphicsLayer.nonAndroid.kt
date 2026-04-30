@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.SkiaCanvasHolder
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asSkiaColorFilter
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -393,6 +394,7 @@ internal class SkikoGraphicsLayer(
             translationX = translationX,
             translationY = translationY,
             clipRect = jbrSkiaCommandClipRect(),
+            clipPath = jbrSkiaCommandClipPath(),
         )
     }
 
@@ -408,7 +410,7 @@ internal class SkikoGraphicsLayer(
             rotationX == 0f &&
             rotationY == 0f &&
             shadowElevation == 0f &&
-            (!cachedClip || cachedOutline is Outline.Rectangle) &&
+            (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded) &&
             blendMode == BlendMode.SrcOver &&
             colorFilter == null &&
             renderEffect == null
@@ -416,6 +418,15 @@ internal class SkikoGraphicsLayer(
     private fun jbrSkiaCommandClipRect(): Rect? =
         if (cachedClip) {
             (cachedOutline as? Outline.Rectangle)?.rect
+        } else {
+            null
+        }
+
+    private fun jbrSkiaCommandClipPath(): Path? =
+        if (cachedClip) {
+            (cachedOutline as? Outline.Rounded)?.let { rounded ->
+                Path().apply { addOutline(rounded) }
+            }
         } else {
             null
         }

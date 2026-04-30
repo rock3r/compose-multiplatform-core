@@ -18,6 +18,7 @@ package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -134,6 +135,7 @@ class JbrSkiaCommandRecorderTest {
                     translationX = 5f,
                     translationY = 6f,
                     clipRect = null,
+                    clipPath = null,
                 )
             )
         }
@@ -151,6 +153,58 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(Color.Red.toArgb(), records[8][3])
         assertEquals(8, records[9][0])
         assertEquals(8, records[10][0])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
+    fun nestedRecordingReplaysLayerClipPath() {
+        val clipPath = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 22f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 0f,
+                    translationY = 0f,
+                    clipRect = null,
+                    clipPath = clipPath,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        val saveLayerIndex = records.indexOfFirst { it[0] == 13 }
+        val clipPathIndex = records.indexOfFirst { it[0] == 20 }
+        val drawRectIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
+        assertTrue(saveLayerIndex >= 0)
+        assertTrue(clipPathIndex > saveLayerIndex)
+        assertTrue(drawRectIndex > clipPathIndex)
         assertEquals(0, recording.unsupportedCount)
     }
 
@@ -767,6 +821,21 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun writesRoundedClipPathRecord() {
+        val path = Path().apply {
+            addOutline(Outline.Rounded(RoundRect(1f, 2f, 21f, 22f, 4f, 4f)))
+        }
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.clipPath(path, ClipOp.Intersect)
+        }
+
+        assertTrue(recording.commands != null)
+        assertEquals(0, recording.unsupportedCount)
+        assertTrue(recording.commandWordCount > 0)
     }
 
     @Test
