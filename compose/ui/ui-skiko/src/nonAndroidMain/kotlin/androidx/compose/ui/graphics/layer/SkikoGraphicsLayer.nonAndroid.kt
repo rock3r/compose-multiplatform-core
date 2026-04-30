@@ -400,6 +400,7 @@ internal class SkikoGraphicsLayer(
             } else {
                 JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode)
             },
+            colorFilter = JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter),
         )
     }
 
@@ -419,7 +420,9 @@ internal class SkikoGraphicsLayer(
                 cachedOutline is Outline.Generic) &&
             (blendMode == BlendMode.SrcOver ||
                 JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) != null) &&
-            colorFilter == null &&
+            (colorFilter == null ||
+                (blendMode == BlendMode.SrcOver &&
+                    JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter) != null)) &&
             renderEffect == null
 
     private fun jbrSkiaCommandClipRect(): Rect? =

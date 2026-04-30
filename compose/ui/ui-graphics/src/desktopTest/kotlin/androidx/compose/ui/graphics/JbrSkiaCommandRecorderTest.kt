@@ -257,6 +257,54 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingReplaysLayerTintColorFilter() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 22f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 0f,
+                    translationY = 0f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = null,
+                    colorFilter = JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(ColorFilter.tint(Color.Cyan)),
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        val saveLayerColorFilterIndex = records.indexOfFirst { it[0] == 44 }
+        val drawRectIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
+        assertTrue(saveLayerColorFilterIndex >= 0)
+        assertTrue(drawRectIndex > saveLayerColorFilterIndex)
+        assertEquals(Color.Cyan.toArgb(), records[saveLayerColorFilterIndex][8])
+        assertEquals(2, records[saveLayerColorFilterIndex][9])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesFillRectPlusBlendModeRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(

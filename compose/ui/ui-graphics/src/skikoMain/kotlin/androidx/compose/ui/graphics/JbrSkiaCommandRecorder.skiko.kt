@@ -163,6 +163,7 @@ object JbrSkiaCommandRecorder {
         clipRect: Rect?,
         clipPath: Path?,
         blendMode: Int?,
+        colorFilter: BlendModeColorFilter? = null,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -181,6 +182,7 @@ object JbrSkiaCommandRecorder {
             clipRect = clipRect,
             clipPath = clipPath,
             blendMode = blendMode,
+            colorFilter = colorFilter,
         ) ?: false
 
     @InternalComposeUiApi
@@ -204,6 +206,10 @@ object JbrSkiaCommandRecorder {
             BlendMode.Luminosity -> COMMAND_BLEND_MODE_LUMINOSITY
             else -> null
         }
+
+    @InternalComposeUiApi
+    fun tintSrcInColorFilterOrNull(colorFilter: ColorFilter?): BlendModeColorFilter? =
+        (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
@@ -503,6 +509,7 @@ object JbrSkiaCommandRecorder {
             clipRect: Rect?,
             clipPath: Path?,
             blendMode: Int?,
+            colorFilter: BlendModeColorFilter?,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -532,7 +539,19 @@ object JbrSkiaCommandRecorder {
             rotate(rotationZ)
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
-            if (blendMode != null) {
+            if (colorFilter != null) {
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER_COLOR_FILTER,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    colorFilter.color.toArgb(),
+                    COMMAND_BLEND_MODE_SRC_IN,
+                )
+            } else if (blendMode != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_BLEND_MODE,
                     COMMAND_RECORD_FLAGS_NONE,
