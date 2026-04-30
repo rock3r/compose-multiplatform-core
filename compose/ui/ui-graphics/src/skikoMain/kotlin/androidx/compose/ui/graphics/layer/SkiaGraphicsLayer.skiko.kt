@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
@@ -353,6 +354,7 @@ actual class GraphicsLayer internal constructor(
 
     internal actual fun draw(canvas: Canvas, parentLayer: GraphicsLayer?) {
         if (isReleased) return
+        JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
         configureOutlineAndClip()
         parentLayer?.addSubLayer(this)
         renderNode?.drawInto(canvas.skiaCanvas)

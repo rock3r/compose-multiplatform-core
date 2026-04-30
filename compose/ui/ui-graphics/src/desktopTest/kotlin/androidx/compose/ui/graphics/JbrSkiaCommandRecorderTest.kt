@@ -1318,6 +1318,17 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsUnsupportedGraphicsLayerDraw() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesImageArgbRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(2, 2)
