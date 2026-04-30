@@ -354,7 +354,9 @@ actual class GraphicsLayer internal constructor(
 
     internal actual fun draw(canvas: Canvas, parentLayer: GraphicsLayer?) {
         if (isReleased) return
-        JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
+        if (requiresCommandFallback()) {
+            JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
+        }
         configureOutlineAndClip()
         parentLayer?.addSubLayer(this)
         renderNode?.drawInto(canvas.skiaCanvas)
@@ -466,4 +468,17 @@ actual class GraphicsLayer internal constructor(
         return alphaNeedsLayer || hasColorFilter || hasBlendMode || hasRenderEffect ||
             offscreenBufferRequested
     }
+
+    private fun requiresCommandFallback(): Boolean =
+        requiresLayer() ||
+            scaleX != 1f ||
+            scaleY != 1f ||
+            translationX != 0f ||
+            translationY != 0f ||
+            rotationX != 0f ||
+            rotationY != 0f ||
+            rotationZ != 0f ||
+            cameraDistance != DefaultCameraDistance ||
+            clip ||
+            shadowElevation > 0f
 }
