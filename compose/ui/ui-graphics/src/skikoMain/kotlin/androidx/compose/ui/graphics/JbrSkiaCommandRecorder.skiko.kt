@@ -160,6 +160,7 @@ object JbrSkiaCommandRecorder {
         clipPath: Path?,
         blendMode: Int?,
         colorFilter: ColorFilter? = null,
+        imageFilter: ImageFilterDescriptor? = null,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -179,6 +180,7 @@ object JbrSkiaCommandRecorder {
             clipPath = clipPath,
             blendMode = blendMode,
             colorFilter = colorFilter,
+            imageFilter = imageFilter,
         ) ?: false
 
     internal fun commandBlendModeOrNull(blendMode: BlendMode): Int? =
@@ -215,6 +217,10 @@ object JbrSkiaCommandRecorder {
         tintSrcInColorFilterOrNull(colorFilter)
             ?: colorMatrixColorFilterOrNull(colorFilter)
             ?: lightingColorFilterOrNull(colorFilter)
+
+    internal sealed class ImageFilterDescriptor {
+        data class Blur(val sigmaX: Float, val sigmaY: Float, val tileMode: Int) : ImageFilterDescriptor()
+    }
 
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
@@ -540,6 +546,7 @@ object JbrSkiaCommandRecorder {
             clipPath: Path?,
             blendMode: Int?,
             colorFilter: ColorFilter?,
+            imageFilter: ImageFilterDescriptor?,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -571,7 +578,27 @@ object JbrSkiaCommandRecorder {
             translate(-pivotX, -pivotY)
             val tintColorFilter = tintSrcInColorFilterOrNull(colorFilter)
             val descriptorColorFilter = descriptorColorFilterOrNull(colorFilter)
-            if (tintColorFilter != null && blendMode != null) {
+            if (imageFilter != null && (tintColorFilter != null || descriptorColorFilter != null || blendMode != null)) {
+                countUnsupported("graphicsLayer:renderEffectPaint")
+                return false
+            }
+            if (imageFilter != null) {
+                val handle = defineImageFilterIfNeeded(imageFilter) ?: run {
+                    countUnsupported("graphicsLayer:renderEffect")
+                    return false
+                }
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER_IMAGE_FILTER_REF,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    handle.highInt(),
+                    handle.lowInt(),
+                )
+            } else if (tintColorFilter != null && blendMode != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -1042,6 +1069,62 @@ object JbrSkiaCommandRecorder {
                 }
                 else -> null
             }
+
+        private fun defineImageFilterIfNeeded(imageFilter: ImageFilterDescriptor): Long? =
+            when (imageFilter) {
+                is ImageFilterDescriptor.Blur -> {
+                    if (!imageFilter.sigmaX.isFinite() || !imageFilter.sigmaY.isFinite()
+                        || imageFilter.sigmaX < 0f || imageFilter.sigmaY < 0f
+                        || imageFilter.tileMode !in 0..3
+                    ) {
+                        null
+                    } else {
+                        val handle = imageFilter.blurHandleKey()
+                        defineBlurImageFilterIfNeeded(handle, imageFilter)
+                        handle
+                    }
+                }
+            }
+
+        private fun defineBlurImageFilterIfNeeded(handle: Long, imageFilter: ImageFilterDescriptor.Blur) {
+            var evictedHandle: Long? = null
+            val shouldDefine = synchronized(colorFilterHandleLock) {
+                if (definedColorFilterHandles.containsKey(handle)) {
+                    definedColorFilterHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
+                        val eldest = definedColorFilterHandles.keys.first()
+                        definedColorFilterHandles.remove(eldest)
+                        evictedHandle = eldest
+                    }
+                    definedColorFilterHandles[handle] = Unit
+                    true
+                }
+            }
+            evictedHandle?.let {
+                commands.addCommand(
+                    COMMAND_EVICT_COLOR_FILTER_HANDLE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                commands.addCommand(
+                    COMMAND_DEFINE_EFFECT_DESCRIPTOR,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    COMMAND_EFFECT_DESCRIPTOR_BLUR_IMAGE_FILTER,
+                    COMMAND_EFFECT_DESCRIPTOR_VERSION_1,
+                    3,
+                    imageFilter.sigmaX.toRawBits(),
+                    imageFilter.sigmaY.toRawBits(),
+                    imageFilter.tileMode,
+                )
+            }
+        }
 
         private fun addColorMatrixFilterHandleFillRect(
             left: Float,
@@ -1865,6 +1948,19 @@ object JbrSkiaCommandRecorder {
             (multiply.toArgb().toLong() shl 32) xor (add.toArgb().toLong() and 0xffffffffL) xor
                 (COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER.toLong() shl 56)
 
+        private fun ImageFilterDescriptor.Blur.blurHandleKey(): Long {
+            var hash = -3750763034362895579L
+            fun mix(value: Int) {
+                hash = hash xor value.toLong()
+                hash *= 1099511628211L
+            }
+            mix(COMMAND_EFFECT_DESCRIPTOR_BLUR_IMAGE_FILTER)
+            mix(sigmaX.toRawBits())
+            mix(sigmaY.toRawBits())
+            mix(tileMode)
+            return hash
+        }
+
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
             var hash = -3750763034362895579L
             fun mix(value: Int) {
@@ -2502,9 +2598,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_LAYER_COLOR_FILTER_REF = 52
     private const val COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF = 53
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF = 54
+    private const val COMMAND_SAVE_LAYER_IMAGE_FILTER_REF = 55
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
+    private const val COMMAND_EFFECT_DESCRIPTOR_BLUR_IMAGE_FILTER = 4
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -2524,7 +2622,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 81
+    private const val COMMAND_STREAM_ABI_ID = 82
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

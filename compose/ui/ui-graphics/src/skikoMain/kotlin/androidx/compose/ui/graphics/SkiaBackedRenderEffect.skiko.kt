@@ -53,6 +53,8 @@ actual sealed class RenderEffect actual constructor() {
     )
     fun asSkiaImageFilter(): ImageFilter = internalSkiaImageFilter
 
+    internal open fun jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? = null
+
     protected abstract fun createImageFilter(): ImageFilter
 
     /**
@@ -118,6 +120,22 @@ actual class BlurEffect actual constructor(
     override fun toString(): String {
         return "BlurEffect(renderEffect=$renderEffect, radiusX=$radiusX, radiusY=$radiusY, " +
             "edgeTreatment=$edgeTreatment)"
+    }
+
+    @OptIn(InternalComposeUiApi::class)
+    internal override fun jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? {
+        if (renderEffect != null) return null
+        val sigmaX = convertRadiusToSigma(radiusX)
+        val sigmaY = convertRadiusToSigma(radiusY)
+        if (!sigmaX.isFinite() || !sigmaY.isFinite() || sigmaX < 0f || sigmaY < 0f) return null
+        val tileMode = when (edgeTreatment) {
+            TileMode.Clamp -> 0
+            TileMode.Repeated -> 1
+            TileMode.Mirror -> 2
+            TileMode.Decal -> 3
+            else -> return null
+        }
+        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(sigmaX, sigmaY, tileMode)
     }
 
     companion object {
