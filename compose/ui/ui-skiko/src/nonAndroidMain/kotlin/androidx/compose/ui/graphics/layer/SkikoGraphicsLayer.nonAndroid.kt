@@ -421,8 +421,7 @@ internal class SkikoGraphicsLayer(
             (blendMode == BlendMode.SrcOver ||
                 JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) != null) &&
             (colorFilter == null ||
-                (blendMode == BlendMode.SrcOver &&
-                    JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter) != null)) &&
+                JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter) != null) &&
             renderEffect == null
 
     private fun jbrSkiaCommandClipRect(): Rect? =
