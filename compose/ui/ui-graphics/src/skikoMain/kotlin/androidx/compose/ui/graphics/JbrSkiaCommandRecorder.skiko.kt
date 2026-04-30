@@ -358,6 +358,10 @@ object JbrSkiaCommandRecorder {
                 addImageShaderRect(left, top, right, bottom, paint)
                 return
             }
+            if (paint.blendMode == BlendMode.Plus && paint.shader == null && paint.style == PaintingStyle.Fill) {
+                addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_PLUS)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -376,6 +380,38 @@ object JbrSkiaCommandRecorder {
                 }
                 else -> countUnsupported("paintStyle")
             }
+        }
+
+        private fun addBlendModeFillRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            blendMode: Int,
+        ) {
+            if (!state.supported) {
+                countUnsupported("unsupportedScope")
+                return
+            }
+            if (paint.colorFilter != null) {
+                countUnsupported("colorFilter")
+                return
+            }
+            if (paint.pathEffect != null) {
+                countUnsupported("pathEffect")
+                return
+            }
+            commands.addCommand(
+                COMMAND_FILL_RECT_BLEND_MODE,
+                paint.recordFlags(),
+                paint.commandColor(),
+                blendMode,
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
+            )
         }
 
         fun drawRoundRect(
@@ -1575,8 +1611,10 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT = 38
     private const val COMMAND_STROKE_RECT_SWEEP_GRADIENT = 39
     private const val COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT = 40
+    private const val COMMAND_FILL_RECT_BLEND_MODE = 41
+    private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 50
+    private const val COMMAND_STREAM_ABI_ID = 51
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
