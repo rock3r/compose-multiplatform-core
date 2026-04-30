@@ -1176,6 +1176,10 @@ object JbrSkiaCommandRecorder {
             radiusY: Float,
             paint: Paint,
         ) {
+            if (paint.style == PaintingStyle.Stroke) {
+                addSweepGradientStrokeRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
+                return
+            }
             val gradientPayload = paint.sweepGradientPayload() ?: return
             if (radiusX < 0f || radiusY < 0f) {
                 countUnsupported("sweepGradientRoundRectRadius")
@@ -1190,6 +1194,41 @@ object JbrSkiaCommandRecorder {
                 bottom.fixed1000(),
                 radiusX.fixed1000().coerceAtLeast(0),
                 radiusY.fixed1000().coerceAtLeast(0),
+                *gradientPayload,
+            )
+        }
+
+        private fun addSweepGradientStrokeRoundRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            radiusX: Float,
+            radiusY: Float,
+            paint: Paint,
+        ) {
+            val gradientPayload = paint.sweepGradientPayload(requiredStyle = PaintingStyle.Stroke) ?: return
+            if (radiusX < 0f || radiusY < 0f) {
+                countUnsupported("sweepGradientStrokeRoundRectRadius")
+                return
+            }
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("sweepGradientStrokeWidth")
+                return
+            }
+            commands.addCommand(
+                COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                radiusX.fixed1000().coerceAtLeast(0),
+                radiusY.fixed1000().coerceAtLeast(0),
+                paint.strokeWidth.fixed1000(),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
                 *gradientPayload,
             )
         }
@@ -1535,8 +1574,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_RECT_RADIAL_GRADIENT = 37
     private const val COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT = 38
     private const val COMMAND_STROKE_RECT_SWEEP_GRADIENT = 39
+    private const val COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT = 40
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 49
+    private const val COMMAND_STREAM_ABI_ID = 50
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
