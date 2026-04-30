@@ -1312,7 +1312,7 @@ class JbrSkiaCommandRecorderTest {
         assertArrayEquals(
             intArrayOf(
                 1246972723, 74, 0, 18, 1, 1,
-                39, 73, 1, 1000, 2000, 11000, 12000, 12000, 0, 1, 0,
+                39, 72, 1, 1000, 2000, 11000, 12000, 12000, 0, 1, 0,
                 6000, 7000, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -1449,7 +1449,7 @@ class JbrSkiaCommandRecorderTest {
         assertArrayEquals(
             intArrayOf(
                 1246972723, 74, 0, 18, 1, 1,
-                27, 73, 1, 1000, 2000, 11000, 12000, 3000, 4000, 6000, 7000, 8000, 1, 2,
+                27, 72, 1, 1000, 2000, 11000, 12000, 3000, 4000, 6000, 7000, 8000, 1, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
             ),
@@ -1974,7 +1974,7 @@ class JbrSkiaCommandRecorderTest {
             )
         }!!
 
-        assertEquals(60, commands[1])
+        assertEquals(74, commands[1])
         assertEquals(1, commands.countCommand(15))
         assertEquals(1, commands.countCommand(34))
         assertTrue(commands.joinToString(), commands.containsSubsequence(34, 56, 1, 2000, 3000, 42000, 33000))
