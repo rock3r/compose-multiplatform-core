@@ -258,6 +258,10 @@ object JbrSkiaCommandRecorder {
                 state = state.copy(supported = false)
                 return
             }
+            paint.tintSrcInColorFilter?.let {
+                saveLayerWithTintSrcInColorFilter(bounds, paint, it)
+                return
+            }
             commands.addCommand(
                 COMMAND_SAVE_LAYER,
                 COMMAND_RECORD_FLAGS_NONE,
@@ -266,6 +270,20 @@ object JbrSkiaCommandRecorder {
                 state.width(bounds.width),
                 state.height(bounds.height),
                 paint.layerAlpha1000(),
+            )
+        }
+
+        fun saveLayerWithTintSrcInColorFilter(bounds: Rect, paint: Paint, colorFilter: BlendModeColorFilter) {
+            commands.addCommand(
+                COMMAND_SAVE_LAYER_COLOR_FILTER,
+                COMMAND_RECORD_FLAGS_NONE,
+                state.x(bounds.left),
+                state.y(bounds.top),
+                state.width(bounds.width),
+                state.height(bounds.height),
+                paint.layerAlpha1000(),
+                colorFilter.color.toArgb(),
+                COMMAND_BLEND_MODE_SRC_IN,
             )
         }
 
@@ -955,7 +973,7 @@ object JbrSkiaCommandRecorder {
             get() =
                 blendMode == BlendMode.SrcOver &&
                     shader == null &&
-                    colorFilter == null &&
+                    (colorFilter == null || tintSrcInColorFilter != null) &&
                     pathEffect == null
 
         private val Paint.isSupportedImagePaint: Boolean
@@ -1722,10 +1740,11 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_BLEND_MODE = 41
     private const val COMMAND_FILL_RECT_COLOR_FILTER = 42
     private const val COMMAND_STROKE_LINE_DASH_PATH_EFFECT = 43
+    private const val COMMAND_SAVE_LAYER_COLOR_FILTER = 44
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 53
+    private const val COMMAND_STREAM_ABI_ID = 54
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
