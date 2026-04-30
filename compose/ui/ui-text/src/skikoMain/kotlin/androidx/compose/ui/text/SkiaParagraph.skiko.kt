@@ -738,6 +738,7 @@ internal class SkiaParagraph(
             x = 0f,
             baseline = firstBaseline,
             fontSize = fontSize,
+            fontFamily = defaultFont.typeface?.familyName,
             color = color.toArgb(),
             antiAlias = true,
         )
@@ -760,6 +761,7 @@ internal class SkiaParagraph(
             y = 0f,
             width = width,
             fontSize = fontSize,
+            fontFamily = defaultFont.typeface?.familyName,
             color = color.toArgb(),
             fontWeight = fontStyle.weight.coerceIn(1, 1000),
             fontWidth = fontStyle.width.coerceIn(1, 9),

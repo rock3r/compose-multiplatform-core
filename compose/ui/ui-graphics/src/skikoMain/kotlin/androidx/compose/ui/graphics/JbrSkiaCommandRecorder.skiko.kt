@@ -88,10 +88,11 @@ object JbrSkiaCommandRecorder {
         x: Float,
         baseline: Float,
         fontSize: Float,
+        fontFamily: String?,
         color: Int,
         antiAlias: Boolean,
     ): Boolean =
-        active.get()?.drawTextUtf16(text, x, baseline, fontSize, color, antiAlias) ?: false
+        active.get()?.drawTextUtf16(text, x, baseline, fontSize, fontFamily, color, antiAlias) ?: false
 
     fun drawParagraphUtf16(
         text: String,
@@ -99,6 +100,7 @@ object JbrSkiaCommandRecorder {
         y: Float,
         width: Float,
         fontSize: Float,
+        fontFamily: String?,
         color: Int,
         fontWeight: Int,
         fontWidth: Int,
@@ -120,6 +122,7 @@ object JbrSkiaCommandRecorder {
             y,
             width,
             fontSize,
+            fontFamily,
             color,
             fontWeight,
             fontWidth,
@@ -685,6 +688,7 @@ object JbrSkiaCommandRecorder {
             y: Float,
             width: Float,
             fontSize: Float,
+            fontFamily: String?,
             color: Int,
             fontWeight: Int,
             fontWidth: Int,
@@ -700,7 +704,9 @@ object JbrSkiaCommandRecorder {
             backgroundArgb: Int,
             antiAlias: Boolean,
         ): Boolean {
+            val encodedFontFamily = fontFamily.orEmpty()
             if (text.isEmpty() || text.length > 4096 ||
+                encodedFontFamily.length > 256 ||
                 !x.isFinite() || !y.isFinite() ||
                 !width.isFinite() || width <= 0f ||
                 !fontSize.isFinite() || fontSize <= 0f ||
@@ -730,6 +736,8 @@ object JbrSkiaCommandRecorder {
                 fontWeight,
                 fontWidth,
                 fontSlant,
+                encodedFontFamily.length,
+                *IntArray(encodedFontFamily.length) { encodedFontFamily[it].code },
                 textAlign,
                 textDirection,
                 lineHeightMultiplier1000,
@@ -750,10 +758,16 @@ object JbrSkiaCommandRecorder {
             x: Float,
             baseline: Float,
             fontSize: Float,
+            fontFamily: String?,
             color: Int,
             antiAlias: Boolean,
         ): Boolean {
-            if (text.isEmpty() || text.length > 4096 || !fontSize.isFinite() || fontSize <= 0f) {
+            val encodedFontFamily = fontFamily.orEmpty()
+            if (
+                text.isEmpty() || text.length > 4096 ||
+                encodedFontFamily.length > 256 ||
+                !fontSize.isFinite() || fontSize <= 0f
+            ) {
                 return false
             }
             textCommandCount++
@@ -764,6 +778,8 @@ object JbrSkiaCommandRecorder {
                 baseline.fixed1000(),
                 fontSize.fixed1000(),
                 color,
+                encodedFontFamily.length,
+                *IntArray(encodedFontFamily.length) { encodedFontFamily[it].code },
                 text.length,
                 *IntArray(text.length) { text[it].code },
             )
@@ -1296,7 +1312,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_PATH_SWEEP_GRADIENT = 32
     private const val COMMAND_EVICT_IMAGE_CACHE_KEY = 33
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 42
+    private const val COMMAND_STREAM_ABI_ID = 43
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
