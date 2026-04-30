@@ -29,6 +29,7 @@ import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.SkiaLayerAnalytics
 import org.jetbrains.skiko.SkiaLayerProperties
 import org.jetbrains.skiko.SkikoRenderDelegate
+import org.jetbrains.skiko.jbr.JbrSkiaCommandFrame
 import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
@@ -65,9 +66,17 @@ internal class SwingSkiaLayerComponent(
                 }
 
                 override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
+                    return renderJbrSkiaCommandFrameInfo(width, height, nanoTime)?.commands
+                }
+
+                override fun renderJbrSkiaCommandFrameInfo(
+                    width: Int,
+                    height: Int,
+                    nanoTime: Long
+                ): JbrSkiaCommandFrame? {
                     mediator.onChangeDensity()
                     return (mediator as? JbrSkiaCommandRenderDelegate)
-                        ?.renderJbrSkiaCommandFrame(width, height, nanoTime)
+                        ?.renderJbrSkiaCommandFrameInfo(width, height, nanoTime)
                 }
             }
             JbrSkiaInteropRuntime.createSwingLayerOrNull(

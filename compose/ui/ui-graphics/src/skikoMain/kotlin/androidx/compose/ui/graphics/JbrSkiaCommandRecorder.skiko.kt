@@ -21,6 +21,49 @@ import androidx.compose.ui.geometry.Rect
 import java.util.LinkedHashMap
 import kotlin.math.roundToInt
 
+data class JbrSkiaCommandRecording(
+    val commands: IntArray?,
+    val commandWordCount: Int,
+    val unsupportedCount: Int,
+    val imageDefineCount: Int,
+    val imageRefCount: Int,
+    val textCommandCount: Int,
+    val paragraphTextCommandCount: Int,
+    val imageCacheClearCount: Int,
+    val imageCacheEvictCount: Int,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is JbrSkiaCommandRecording) return false
+        if (commands != null) {
+            if (other.commands == null || !commands.contentEquals(other.commands)) return false
+        } else if (other.commands != null) {
+            return false
+        }
+        if (commandWordCount != other.commandWordCount) return false
+        if (unsupportedCount != other.unsupportedCount) return false
+        if (imageDefineCount != other.imageDefineCount) return false
+        if (imageRefCount != other.imageRefCount) return false
+        if (textCommandCount != other.textCommandCount) return false
+        if (paragraphTextCommandCount != other.paragraphTextCommandCount) return false
+        if (imageCacheClearCount != other.imageCacheClearCount) return false
+        return imageCacheEvictCount == other.imageCacheEvictCount
+    }
+
+    override fun hashCode(): Int {
+        var result = commands?.contentHashCode() ?: 0
+        result = 31 * result + commandWordCount
+        result = 31 * result + unsupportedCount
+        result = 31 * result + imageDefineCount
+        result = 31 * result + imageRefCount
+        result = 31 * result + textCommandCount
+        result = 31 * result + paragraphTextCommandCount
+        result = 31 * result + imageCacheClearCount
+        result = 31 * result + imageCacheEvictCount
+        return result
+    }
+}
+
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
@@ -33,12 +76,16 @@ object JbrSkiaCommandRecorder {
     private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
 
     fun record(block: () -> Unit): IntArray? {
+        return recordFrame(block).commands
+    }
+
+    fun recordFrame(block: () -> Unit): JbrSkiaCommandRecording {
         val previous = active.get()
         val recorder = Recorder()
         active.set(recorder)
         try {
             block()
-            return recorder.toCommandArray()
+            return recorder.toRecording(recorder.toCommandArray())
         } finally {
             recorder.logFrame()
             active.set(previous)
@@ -233,6 +280,19 @@ object JbrSkiaCommandRecorder {
             } else {
                 commandStream()
             }
+
+        fun toRecording(commands: IntArray?): JbrSkiaCommandRecording =
+            JbrSkiaCommandRecording(
+                commands = commands,
+                commandWordCount = this.commands.streamSize,
+                unsupportedCount = unsupportedCount,
+                imageDefineCount = imageDefineCount,
+                imageRefCount = imageRefCount,
+                textCommandCount = textCommandCount,
+                paragraphTextCommandCount = paragraphTextCommandCount,
+                imageCacheClearCount = imageCacheClearCount,
+                imageCacheEvictCount = imageCacheEvictCount,
+            )
 
         fun logFrame() {
             val unsupported = unsupportedCount
