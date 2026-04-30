@@ -1426,9 +1426,18 @@ object JbrSkiaCommandRecorder {
             }
             val cacheKey = defineImageIfNeeded(image) ?: return false
             imageRefCount++
-            val colorFilter = paint.tintSrcInColorFilter
+            val tintColorFilter = paint.tintSrcInColorFilter
+            val descriptorColorFilter = if (tintColorFilter == null) descriptorColorFilterOrNull(paint.colorFilter) else null
+            val descriptorHandle = descriptorColorFilter?.let { defineDescriptorColorFilterIfNeeded(it) } ?: run {
+                if (descriptorColorFilter != null) return false
+                null
+            }
             commands.addCommand(
-                if (colorFilter == null) COMMAND_DRAW_IMAGE_REF else COMMAND_DRAW_IMAGE_REF_COLOR_FILTER,
+                when {
+                    tintColorFilter != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER
+                    descriptorHandle != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF
+                    else -> COMMAND_DRAW_IMAGE_REF
+                },
                 paint.recordFlags(),
                 srcLeft.fixed1000(),
                 srcTop.fixed1000(),
@@ -1444,10 +1453,10 @@ object JbrSkiaCommandRecorder {
                 image.height,
                 paint.imageAlpha1000(),
                 paint.filterQuality.value,
-                *if (colorFilter == null) {
-                    IntArray(0)
-                } else {
-                    intArrayOf(colorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
+                *when {
+                    tintColorFilter != null -> intArrayOf(tintColorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
+                    descriptorHandle != null -> intArrayOf(descriptorHandle.highInt(), descriptorHandle.lowInt())
+                    else -> IntArray(0)
                 },
             )
             return true
@@ -1664,7 +1673,7 @@ object JbrSkiaCommandRecorder {
                 state.supported &&
                     blendMode == BlendMode.SrcOver &&
                     shader == null &&
-                    (colorFilter == null || tintSrcInColorFilter != null) &&
+                    (colorFilter == null || tintSrcInColorFilter != null || descriptorColorFilterOrNull(colorFilter) != null) &&
                     pathEffect == null
 
         private val Paint.isSupportedImageShaderPaint: Boolean
@@ -2474,6 +2483,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_LAYER_BLEND_MODE = 50
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER = 51
     private const val COMMAND_SAVE_LAYER_COLOR_FILTER_REF = 52
+    private const val COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF = 53
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -2496,7 +2506,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 78
+    private const val COMMAND_STREAM_ABI_ID = 79
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
