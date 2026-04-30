@@ -133,6 +133,7 @@ class JbrSkiaCommandRecorderTest {
                     rotationZ = -4f,
                     translationX = 5f,
                     translationY = 6f,
+                    clipRect = null,
                 )
             )
         }

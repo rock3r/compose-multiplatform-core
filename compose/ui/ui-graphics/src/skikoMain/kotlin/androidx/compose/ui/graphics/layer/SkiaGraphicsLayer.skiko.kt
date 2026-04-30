@@ -393,6 +393,7 @@ actual class GraphicsLayer internal constructor(
             rotationZ = rotationZ,
             translationX = translationX,
             translationY = translationY,
+            clipRect = jbrSkiaCommandClipRect(),
         )
     }
 
@@ -408,7 +409,7 @@ actual class GraphicsLayer internal constructor(
             rotationX == 0f &&
             rotationY == 0f &&
             shadowElevation == 0f &&
-            !clip &&
+            (!clip || outline is Outline.Rectangle) &&
             blendMode == BlendMode.SrcOver &&
             colorFilter == null &&
             renderEffect == null
@@ -418,6 +419,13 @@ actual class GraphicsLayer internal constructor(
             Offset(size.width / 2f, size.height / 2f)
         } else {
             pivotOffset
+        }
+
+    private fun jbrSkiaCommandClipRect(): Rect? =
+        if (clip) {
+            (outline as? Outline.Rectangle)?.rect
+        } else {
+            null
         }
 
     private fun onAddedToParentLayer() {
