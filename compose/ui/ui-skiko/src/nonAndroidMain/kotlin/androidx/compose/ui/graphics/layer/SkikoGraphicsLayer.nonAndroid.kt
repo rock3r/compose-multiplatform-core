@@ -395,6 +395,11 @@ internal class SkikoGraphicsLayer(
             translationY = translationY,
             clipRect = jbrSkiaCommandClipRect(),
             clipPath = jbrSkiaCommandClipPath(),
+            blendMode = if (blendMode == BlendMode.SrcOver) {
+                null
+            } else {
+                JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode)
+            },
         )
     }
 
@@ -412,7 +417,8 @@ internal class SkikoGraphicsLayer(
             shadowElevation == 0f &&
             (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
                 cachedOutline is Outline.Generic) &&
-            blendMode == BlendMode.SrcOver &&
+            (blendMode == BlendMode.SrcOver ||
+                JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) != null) &&
             colorFilter == null &&
             renderEffect == null
 
