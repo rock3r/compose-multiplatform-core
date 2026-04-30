@@ -62,6 +62,39 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun recordsFrameMetadata() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.drawTextUtf16(
+                text = "Hi",
+                x = 1.25f,
+                baseline = 18.5f,
+                fontSize = 13f,
+                fontFamily = "Inter",
+                color = Color.White.toArgb(),
+                antiAlias = true,
+            )
+        }
+
+        assertEquals(recording.commands!!.size, recording.commandWordCount)
+        assertEquals(0, recording.unsupportedCount)
+        assertEquals(0, recording.imageDefineCount)
+        assertEquals(0, recording.imageRefCount)
+        assertEquals(1, recording.textCommandCount)
+        assertEquals(0, recording.paragraphTextCommandCount)
+        assertEquals(0, recording.imageCacheClearCount)
+        assertEquals(0, recording.imageCacheEvictCount)
+    }
+
+    @Test
     fun writesFillRectPlusBlendModeRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(

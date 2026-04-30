@@ -131,8 +131,12 @@ import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.GraphicsApi
 import org.jetbrains.skiko.SkikoRenderDelegate
 import org.jetbrains.skiko.hostOs
+import org.jetbrains.skiko.jbr.JbrSkiaCommandFrame
+import org.jetbrains.skiko.jbr.JbrSkiaCommandFrameKind
 import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
+
+private const val INTEROP_ONLY_COMMAND_WORD_THRESHOLD = 64
 
 /**
  * Provides a mediator for integrating a Compose scene with an AWT/Swing Component.
@@ -772,11 +776,15 @@ internal class ComposeSceneMediator(
     }
 
     override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
+        return renderJbrSkiaCommandFrameInfo(width, height, nanoTime)?.commands
+    }
+
+    override fun renderJbrSkiaCommandFrameInfo(width: Int, height: Int, nanoTime: Long): JbrSkiaCommandFrame? {
         return try {
             val recorder = PictureRecorder()
             try {
                 val canvas = recorder.beginRecording(0f, 0f, width.toFloat(), height.toFloat())
-                JbrSkiaCommandRecorder.record {
+                val recording = JbrSkiaCommandRecorder.recordFrame {
                     outOfFrameExecutor.onBeforeFrame()
                     interopContainer.postponingExecutingScheduledUpdates {
                         canvas.withSceneOffset {
@@ -787,6 +795,16 @@ internal class ComposeSceneMediator(
                         }
                     }
                 }
+                val commands = recording.commands ?: return null
+                val kind = if (recording.isInteropOnlyFrame) {
+                    JbrSkiaCommandFrameKind.InteropOnly
+                } else {
+                    JbrSkiaCommandFrameKind.FullScene
+                }
+                System.err.println(
+                    "CMP_JBR_COMMAND_FRAME_KIND kind=${kind.name} commands=${recording.commandWordCount}"
+                )
+                JbrSkiaCommandFrame(commands, kind)
             } finally {
                 recorder.finishRecordingAsPicture().close()
                 recorder.close()
@@ -796,6 +814,14 @@ internal class ComposeSceneMediator(
             null
         }
     }
+
+    private val androidx.compose.ui.graphics.JbrSkiaCommandRecording.isInteropOnlyFrame: Boolean
+        get() = commandWordCount <= INTEROP_ONLY_COMMAND_WORD_THRESHOLD &&
+            unsupportedCount == 0 &&
+            imageDefineCount == 0 &&
+            imageRefCount == 0 &&
+            textCommandCount == 0 &&
+            paragraphTextCommandCount == 0
 
     private inline fun SkCanvas.withSceneOffset(crossinline block: Canvas.() -> Unit) {
         // Offset of scene relative to [container]
