@@ -1130,6 +1130,10 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addSweepGradientRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            if (paint.style == PaintingStyle.Stroke) {
+                addSweepGradientStrokeRect(left, top, right, bottom, paint)
+                return
+            }
             val gradientPayload = paint.sweepGradientPayload() ?: return
             commands.addCommand(
                 COMMAND_FILL_RECT_SWEEP_GRADIENT,
@@ -1138,6 +1142,27 @@ object JbrSkiaCommandRecorder {
                 top.fixed1000(),
                 right.fixed1000(),
                 bottom.fixed1000(),
+                *gradientPayload,
+            )
+        }
+
+        private fun addSweepGradientStrokeRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            val gradientPayload = paint.sweepGradientPayload(requiredStyle = PaintingStyle.Stroke) ?: return
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("sweepGradientStrokeWidth")
+                return
+            }
+            commands.addCommand(
+                COMMAND_STROKE_RECT_SWEEP_GRADIENT,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                paint.strokeWidth.fixed1000(),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
                 *gradientPayload,
             )
         }
@@ -1374,9 +1399,9 @@ object JbrSkiaCommandRecorder {
             ).plus(colorStopPairs).toIntArray()
         }
 
-        private fun Paint.sweepGradientPayload(): IntArray? {
+        private fun Paint.sweepGradientPayload(requiredStyle: PaintingStyle = PaintingStyle.Fill): IntArray? {
             val gradient = shader?.jbrSkiaSweepGradient ?: return null
-            if (!isSupportedLinearGradient || style != PaintingStyle.Fill) {
+            if (!isSupportedLinearGradient || style != requiredStyle) {
                 countUnsupported("sweepGradientPaint")
                 return null
             }
@@ -1509,8 +1534,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_ROUND_RECT_LINEAR_GRADIENT = 36
     private const val COMMAND_STROKE_RECT_RADIAL_GRADIENT = 37
     private const val COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT = 38
+    private const val COMMAND_STROKE_RECT_SWEEP_GRADIENT = 39
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 48
+    private const val COMMAND_STREAM_ABI_ID = 49
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
