@@ -184,10 +184,13 @@ internal object SkikoGraphics : PlatformGraphics {
         image: ImageBitmap,
         tileModeX: TileMode,
         tileModeY: TileMode,
-    ): androidx.compose.ui.graphics.Shader =
-        image.asSkiaBitmap()
-            .makeShader(tileModeX.toSkiaTileMode(), tileModeY.toSkiaTileMode())
-            .asComposeShader()
+    ): androidx.compose.ui.graphics.Shader = Shader(
+        SkikoShader(
+            skiaShader = image.asSkiaBitmap()
+                .makeShader(tileModeX.toSkiaTileMode(), tileModeY.toSkiaTileMode()),
+            jbrSkiaImageShader = JbrSkiaImageShader(image, tileModeX, tileModeY),
+        ),
+    )
 
     override fun createCompositeShader(
         destination: androidx.compose.ui.graphics.Shader,

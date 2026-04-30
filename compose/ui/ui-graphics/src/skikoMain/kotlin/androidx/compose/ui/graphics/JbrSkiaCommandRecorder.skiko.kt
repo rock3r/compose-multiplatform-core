@@ -354,6 +354,10 @@ object JbrSkiaCommandRecorder {
                 addSweepGradientRect(left, top, right, bottom, paint)
                 return
             }
+            if (paint.shader?.jbrSkiaImageShader != null) {
+                addImageShaderRect(left, top, right, bottom, paint)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -620,46 +624,7 @@ object JbrSkiaCommandRecorder {
             if (!paint.isSupportedImagePaint || image.width <= 0 || image.height <= 0 || image.width > 2048 || image.height > 2048) {
                 return false
             }
-            val pixels = IntArray(image.width * image.height)
-            image.readPixels(pixels)
-            val cacheKey = pixels.imageCacheKey(image.width, image.height)
-            var evictedKey: Long? = null
-            val shouldDefine = synchronized(imageCacheLock) {
-                if (definedImageKeys.containsKey(cacheKey)) {
-                    definedImageKeys[cacheKey] = Unit
-                    false
-                } else {
-                    if (definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
-                        val eldest = definedImageKeys.keys.first()
-                        definedImageKeys.remove(eldest)
-                        evictedKey = eldest
-                    }
-                    definedImageKeys[cacheKey] = Unit
-                    true
-                }
-            }
-            evictedKey?.let {
-                imageCacheEvictCount++
-                commands.addCommand(
-                    COMMAND_EVICT_IMAGE_CACHE_KEY,
-                    COMMAND_RECORD_FLAGS_NONE,
-                    it.highInt(),
-                    it.lowInt(),
-                )
-            }
-            if (shouldDefine) {
-                imageDefineCount++
-                commands.addCommand(
-                    COMMAND_DEFINE_IMAGE_ARGB,
-                    COMMAND_RECORD_FLAGS_NONE,
-                    cacheKey.highInt(),
-                    cacheKey.lowInt(),
-                    image.width,
-                    image.height,
-                    pixels.size,
-                    *pixels,
-                )
-            }
+            val cacheKey = defineImageIfNeeded(image) ?: return false
             imageRefCount++
             commands.addCommand(
                 COMMAND_DRAW_IMAGE_REF,
@@ -680,6 +645,36 @@ object JbrSkiaCommandRecorder {
                 paint.filterQuality.value,
             )
             return true
+        }
+
+        private fun addImageShaderRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            val imageShader = paint.shader?.jbrSkiaImageShader ?: return
+            if (!paint.isSupportedImageShaderPaint ||
+                paint.style != PaintingStyle.Fill ||
+                imageShader.image.width <= 0 ||
+                imageShader.image.height <= 0 ||
+                imageShader.image.width > 2048 ||
+                imageShader.image.height > 2048
+            ) {
+                return
+            }
+            val cacheKey = defineImageIfNeeded(imageShader.image) ?: return
+            imageRefCount++
+            commands.addCommand(
+                COMMAND_FILL_RECT_IMAGE_SHADER,
+                paint.recordFlags(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                cacheKey.highInt(),
+                cacheKey.lowInt(),
+                imageShader.image.width,
+                imageShader.image.height,
+                imageShader.tileModeX.commandValue(),
+                imageShader.tileModeY.commandValue(),
+                paint.imageAlpha1000(),
+            )
         }
 
         fun drawParagraphUtf16(
@@ -826,6 +821,32 @@ object JbrSkiaCommandRecorder {
                     shader == null &&
                     colorFilter == null &&
                     pathEffect == null
+
+        private val Paint.isSupportedImageShaderPaint: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader?.jbrSkiaImageShader == null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
 
         private val Paint.isSupportedLinearGradient: Boolean
             get() {
@@ -975,6 +996,50 @@ object JbrSkiaCommandRecorder {
             TileMode.Mirror -> 2
             TileMode.Decal -> 3
             else -> 0
+        }
+
+        private fun defineImageIfNeeded(image: ImageBitmap): Long? {
+            val pixels = IntArray(image.width * image.height)
+            image.readPixels(pixels)
+            val cacheKey = pixels.imageCacheKey(image.width, image.height)
+            var evictedKey: Long? = null
+            val shouldDefine = synchronized(imageCacheLock) {
+                if (definedImageKeys.containsKey(cacheKey)) {
+                    definedImageKeys[cacheKey] = Unit
+                    false
+                } else {
+                    if (definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
+                        val eldest = definedImageKeys.keys.first()
+                        definedImageKeys.remove(eldest)
+                        evictedKey = eldest
+                    }
+                    definedImageKeys[cacheKey] = Unit
+                    true
+                }
+            }
+            evictedKey?.let {
+                imageCacheEvictCount++
+                commands.addCommand(
+                    COMMAND_EVICT_IMAGE_CACHE_KEY,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                imageDefineCount++
+                commands.addCommand(
+                    COMMAND_DEFINE_IMAGE_ARGB,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    cacheKey.highInt(),
+                    cacheKey.lowInt(),
+                    image.width,
+                    image.height,
+                    pixels.size,
+                    *pixels,
+                )
+            }
+            return cacheKey
         }
 
         private fun addClearRect(left: Float, top: Float, right: Float, bottom: Float) {
@@ -1311,8 +1376,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT = 31
     private const val COMMAND_FILL_PATH_SWEEP_GRADIENT = 32
     private const val COMMAND_EVICT_IMAGE_CACHE_KEY = 33
+    private const val COMMAND_FILL_RECT_IMAGE_SHADER = 34
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 43
+    private const val COMMAND_STREAM_ABI_ID = 44
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

@@ -50,6 +50,13 @@ data class JbrSkiaSweepGradientShader(
     val colorStops: List<Float>?,
 )
 
+@InternalComposeUiApi
+data class JbrSkiaImageShader(
+    val image: ImageBitmap,
+    val tileModeX: TileMode,
+    val tileModeY: TileMode,
+)
+
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaLinearGradient: JbrSkiaLinearGradientShader?
     get() = platformShader.jbrSkiaLinearGradient
@@ -61,6 +68,10 @@ internal val Shader.jbrSkiaRadialGradient: JbrSkiaRadialGradientShader?
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaSweepGradient: JbrSkiaSweepGradientShader?
     get() = platformShader.jbrSkiaSweepGradient
+
+@OptIn(InternalComposeUiApi::class)
+internal val Shader.jbrSkiaImageShader: JbrSkiaImageShader?
+    get() = platformShader.jbrSkiaImageShader
 
 @OptIn(InternalComposeUiApi::class)
 internal actual class TransformShader {
