@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.JbrSkiaCommandRecording
 import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -64,6 +65,7 @@ internal class SkikoGraphicsLayer(
     private var outsetRight: Int = 0
     private var outsetBottom: Int = 0
     private var cachedLayerPaint: SkPaint? = null
+    private var jbrSkiaCommandRecording: JbrSkiaCommandRecording? = null
 
     private var cachedOutline: Outline? = null
     private var cachedClip: Boolean = false
@@ -256,7 +258,7 @@ internal class SkikoGraphicsLayer(
     ) {
         val renderNode = renderNode ?: return
         val recordingCanvas = renderNode.beginRecording()
-        try {
+        val recordContent = {
             canvasHolder.drawInto(recordingCanvas) {
                 if (outsetLeft > 0 || outsetTop > 0) {
                     save()
@@ -274,13 +276,21 @@ internal class SkikoGraphicsLayer(
                     restore()
                 }
             }
+        }
+        try {
+            jbrSkiaCommandRecording = if (JbrSkiaCommandRecorder.isRecording()) {
+                JbrSkiaCommandRecorder.recordNested { recordContent() }
+            } else {
+                recordContent()
+                null
+            }
         } finally {
             renderNode.endRecording()
         }
     }
 
     override fun draw(canvas: Canvas) {
-        if (requiresCommandFallback()) {
+        if (!replayJbrSkiaCommandLayer()) {
             JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
         }
         renderNode?.drawInto(canvas.skiaCanvas)
@@ -362,16 +372,49 @@ internal class SkikoGraphicsLayer(
             offscreenBufferRequested
     }
 
-    private fun requiresCommandFallback(): Boolean =
-        requiresLayer() ||
-            scaleX != 1f ||
-            scaleY != 1f ||
-            translationX != 0f ||
-            translationY != 0f ||
-            rotationX != 0f ||
-            rotationY != 0f ||
-            rotationZ != 0f ||
-            cameraDistance != DefaultCameraDistance ||
-            cachedClip ||
-            shadowElevation > 0f
+    private fun replayJbrSkiaCommandLayer(): Boolean {
+        if (!JbrSkiaCommandRecorder.isRecording()) return true
+        if (!isSupportedJbrSkiaCommandLayer()) return false
+        val recording = jbrSkiaCommandRecording ?: return false
+        val pivot = resolvedPivotOffset()
+        return JbrSkiaCommandRecorder.replayRecordedLayer(
+            recording = recording,
+            left = topLeft.x.toFloat(),
+            top = topLeft.y.toFloat(),
+            width = size.width.toFloat(),
+            height = size.height.toFloat(),
+            pivotX = pivot.x,
+            pivotY = pivot.y,
+            alpha = if (compositingStrategy == CompositingStrategy.ModulateAlpha) 1f else alpha,
+            scaleX = scaleX,
+            scaleY = scaleY,
+            rotationZ = rotationZ,
+            translationX = translationX,
+            translationY = translationY,
+        )
+    }
+
+    private fun isSupportedJbrSkiaCommandLayer(): Boolean =
+        size.width >= 0 &&
+            size.height >= 0 &&
+            alpha in 0f..1f &&
+            scaleX.isFinite() &&
+            scaleY.isFinite() &&
+            rotationZ.isFinite() &&
+            translationX.isFinite() &&
+            translationY.isFinite() &&
+            rotationX == 0f &&
+            rotationY == 0f &&
+            shadowElevation == 0f &&
+            !cachedClip &&
+            blendMode == BlendMode.SrcOver &&
+            colorFilter == null &&
+            renderEffect == null
+
+    private fun resolvedPivotOffset(): Offset =
+        if (pivotOffset.isUnspecified) {
+            Offset(size.width / 2f, size.height / 2f)
+        } else {
+            pivotOffset
+        }
 }
