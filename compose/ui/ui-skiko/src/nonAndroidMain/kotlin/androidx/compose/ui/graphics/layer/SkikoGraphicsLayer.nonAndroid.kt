@@ -280,7 +280,9 @@ internal class SkikoGraphicsLayer(
     }
 
     override fun draw(canvas: Canvas) {
-        JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
+        if (requiresCommandFallback()) {
+            JbrSkiaCommandRecorder.markUnsupportedDraw("graphicsLayer")
+        }
         renderNode?.drawInto(canvas.skiaCanvas)
     }
 
@@ -359,4 +361,17 @@ internal class SkikoGraphicsLayer(
         return alphaNeedsLayer || hasColorFilter || hasBlendMode || hasRenderEffect ||
             offscreenBufferRequested
     }
+
+    private fun requiresCommandFallback(): Boolean =
+        requiresLayer() ||
+            scaleX != 1f ||
+            scaleY != 1f ||
+            translationX != 0f ||
+            translationY != 0f ||
+            rotationX != 0f ||
+            rotationY != 0f ||
+            rotationZ != 0f ||
+            cameraDistance != DefaultCameraDistance ||
+            cachedClip ||
+            shadowElevation > 0f
 }
