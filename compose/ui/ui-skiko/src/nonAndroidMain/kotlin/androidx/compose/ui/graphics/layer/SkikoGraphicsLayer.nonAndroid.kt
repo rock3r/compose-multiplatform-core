@@ -410,7 +410,8 @@ internal class SkikoGraphicsLayer(
             rotationX == 0f &&
             rotationY == 0f &&
             shadowElevation == 0f &&
-            (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded) &&
+            (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
+                cachedOutline is Outline.Generic) &&
             blendMode == BlendMode.SrcOver &&
             colorFilter == null &&
             renderEffect == null
@@ -424,8 +425,10 @@ internal class SkikoGraphicsLayer(
 
     private fun jbrSkiaCommandClipPath(): Path? =
         if (cachedClip) {
-            (cachedOutline as? Outline.Rounded)?.let { rounded ->
-                Path().apply { addOutline(rounded) }
+            when (val outline = cachedOutline) {
+                is Outline.Rounded -> Path().apply { addOutline(outline) }
+                is Outline.Generic -> outline.path
+                else -> null
             }
         } else {
             null
