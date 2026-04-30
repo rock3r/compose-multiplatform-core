@@ -208,6 +208,9 @@ object JbrSkiaCommandRecorder {
     internal fun colorMatrixColorFilterOrNull(colorFilter: ColorFilter?): ColorMatrixColorFilter? =
         colorFilter as? ColorMatrixColorFilter
 
+    internal fun lightingColorFilterOrNull(colorFilter: ColorFilter?): LightingColorFilter? =
+        colorFilter as? LightingColorFilter
+
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
     }
@@ -790,6 +793,11 @@ object JbrSkiaCommandRecorder {
                 addColorMatrixFilterHandleFillRect(left, top, right, bottom, paint, colorMatrixFilter)
                 return
             }
+            val lightingFilter = paint.lightingColorFilter
+            if (lightingFilter != null && paint.shader == null && paint.style == PaintingStyle.Fill) {
+                addLightingFilterHandleFillRect(left, top, right, bottom, paint, lightingFilter)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val x = state.x(left)
             val y = state.y(top)
@@ -1023,6 +1031,80 @@ object JbrSkiaCommandRecorder {
                     COMMAND_EFFECT_DESCRIPTOR_VERSION_1,
                     20,
                     *IntArray(20) { index -> matrix[index].toRawBits() },
+                )
+            }
+        }
+
+        private fun addLightingFilterHandleFillRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            colorFilter: LightingColorFilter,
+        ) {
+            if (!state.supported) {
+                countUnsupported("unsupportedScope")
+                return
+            }
+            if (paint.blendMode != BlendMode.SrcOver) {
+                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
+                return
+            }
+            if (paint.pathEffect != null) {
+                countUnsupported("pathEffect")
+                return
+            }
+            val handle = colorFilter.lightingHandleKey()
+            defineLightingFilterIfNeeded(handle, colorFilter)
+            commands.addCommand(
+                COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                paint.recordFlags(),
+                paint.commandColor(),
+                handle.highInt(),
+                handle.lowInt(),
+                state.x(left),
+                state.y(top),
+                state.width(right - left),
+                state.height(bottom - top),
+            )
+        }
+
+        private fun defineLightingFilterIfNeeded(handle: Long, colorFilter: LightingColorFilter) {
+            var evictedHandle: Long? = null
+            val shouldDefine = synchronized(colorFilterHandleLock) {
+                if (definedColorFilterHandles.containsKey(handle)) {
+                    definedColorFilterHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
+                        val eldest = definedColorFilterHandles.keys.first()
+                        definedColorFilterHandles.remove(eldest)
+                        evictedHandle = eldest
+                    }
+                    definedColorFilterHandles[handle] = Unit
+                    true
+                }
+            }
+            evictedHandle?.let {
+                commands.addCommand(
+                    COMMAND_EVICT_COLOR_FILTER_HANDLE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                commands.addCommand(
+                    COMMAND_DEFINE_EFFECT_DESCRIPTOR,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER,
+                    COMMAND_EFFECT_DESCRIPTOR_VERSION_1,
+                    2,
+                    colorFilter.multiply.toArgb(),
+                    colorFilter.add.toArgb(),
                 )
             }
         }
@@ -1491,6 +1573,9 @@ object JbrSkiaCommandRecorder {
         private val Paint.colorMatrixColorFilter: ColorMatrixColorFilter?
             get() = colorMatrixColorFilterOrNull(colorFilter)
 
+        private val Paint.lightingColorFilter: LightingColorFilter?
+            get() = lightingColorFilterOrNull(colorFilter)
+
         private val Paint.dashPathEffect: JbrSkiaDashPathEffect?
             get() =
                 (pathEffect as? SkiaBackedPathEffect)?.jbrSkiaDashPathEffect
@@ -1680,6 +1765,10 @@ object JbrSkiaCommandRecorder {
             forEach { mix(it.toRawBits()) }
             return hash
         }
+
+        private fun LightingColorFilter.lightingHandleKey(): Long =
+            (multiply.toArgb().toLong() shl 32) xor (add.toArgb().toLong() and 0xffffffffL) xor
+                (COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER.toLong() shl 56)
 
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
             var hash = -3750763034362895579L
@@ -2317,6 +2406,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER = 51
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
+    private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -2336,7 +2426,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 76
+    private const val COMMAND_STREAM_ABI_ID = 77
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
