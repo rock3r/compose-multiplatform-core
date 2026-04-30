@@ -437,7 +437,7 @@ actual class GraphicsLayer internal constructor(
         if (rotationX != 0f) return "graphicsLayer:rotationX"
         if (rotationY != 0f) return "graphicsLayer:rotationY"
         if (shadowElevation != 0f) return "graphicsLayer:shadowElevation"
-        if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded) {
+        if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded && outline !is Outline.Generic) {
             return "graphicsLayer:clipOutline:${outline::class.simpleName ?: "unknown"}"
         }
         if (blendMode != BlendMode.SrcOver) return "graphicsLayer:blendMode"
@@ -462,8 +462,10 @@ actual class GraphicsLayer internal constructor(
 
     private fun jbrSkiaCommandClipPath(): Path? =
         if (clip) {
-            (outline as? Outline.Rounded)?.let { rounded ->
-                Path().apply { addOutline(rounded) }
+            when (val tmpOutline = outline) {
+                is Outline.Rounded -> Path().apply { addOutline(tmpOutline) }
+                is Outline.Generic -> tmpOutline.path
+                else -> null
             }
         } else {
             null
