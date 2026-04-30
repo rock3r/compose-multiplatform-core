@@ -445,7 +445,6 @@ actual class GraphicsLayer internal constructor(
         if (blendMode != BlendMode.SrcOver && JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode) == null) {
             return "graphicsLayer:blendMode"
         }
-        if (colorFilter != null && blendMode != BlendMode.SrcOver) return "graphicsLayer:colorFilterBlendMode"
         if (colorFilter != null && JbrSkiaCommandRecorder.tintSrcInColorFilterOrNull(colorFilter) == null) {
             return "graphicsLayer:colorFilter"
         }

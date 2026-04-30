@@ -533,7 +533,20 @@ object JbrSkiaCommandRecorder {
             rotate(rotationZ)
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
-            if (colorFilter != null) {
+            if (colorFilter != null && blendMode != null) {
+                commands.addCommand(
+                    COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    blendMode,
+                    colorFilter.color.toArgb(),
+                    COMMAND_BLEND_MODE_SRC_IN,
+                )
+            } else if (colorFilter != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_COLOR_FILTER,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -2192,6 +2205,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EVICT_COLOR_FILTER_HANDLE = 48
     private const val COMMAND_DEFINE_EFFECT_DESCRIPTOR = 49
     private const val COMMAND_SAVE_LAYER_BLEND_MODE = 50
+    private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER = 51
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
@@ -2212,7 +2226,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 74
+    private const val COMMAND_STREAM_ABI_ID = 75
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
