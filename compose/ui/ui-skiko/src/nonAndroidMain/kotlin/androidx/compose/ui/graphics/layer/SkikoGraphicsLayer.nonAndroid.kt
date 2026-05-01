@@ -422,7 +422,8 @@ internal class SkikoGraphicsLayer(
             rotationY == 0f &&
             shadowElevation.isFinite() &&
             shadowElevation >= 0f &&
-            (shadowElevation == 0f || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded) &&
+            (shadowElevation == 0f || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
+                cachedOutline is Outline.Generic) &&
             (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
                 cachedOutline is Outline.Generic) &&
             (blendMode == BlendMode.SrcOver ||
@@ -453,6 +454,7 @@ internal class SkikoGraphicsLayer(
         if (shadowElevation > 0f) {
             when (val outline = cachedOutline) {
                 is Outline.Rounded -> Path().apply { addOutline(outline) }
+                is Outline.Generic -> outline.path
                 else -> null
             }
         } else {
