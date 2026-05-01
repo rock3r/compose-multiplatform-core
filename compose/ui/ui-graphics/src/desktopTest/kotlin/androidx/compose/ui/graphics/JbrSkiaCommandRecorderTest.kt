@@ -854,6 +854,82 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingReplaysLayerNestedImageFilterThenBlendModeAndColorMatrixFilter() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val blur = JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(
+            sigmaX = 2f,
+            sigmaY = 3f,
+            tileMode = 0,
+        )
+        val offset = JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(
+            dx = 4f,
+            dy = 5f,
+            input = blur,
+        )
+        val matrix = ColorMatrix().also { it[0, 4] = 64f }
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 22f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 0f,
+                    translationY = 0f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = JbrSkiaCommandRecorder.commandBlendModeOrNull(BlendMode.Plus),
+                    colorFilter = ColorFilter.colorMatrix(matrix),
+                    imageFilter = offset,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        val blurDescriptorIndex = records.indexOfFirst { it[0] == 49 && it[5] == 4 }
+        val offsetDescriptorIndex = records.indexOfFirst { it[0] == 49 && it[5] == 7 }
+        val colorFilterDescriptorIndex = records.indexOfFirst { it[0] == 49 && it[5] == 2 }
+        val saveLayerImageFilterRefIndex = records.indexOfFirst { it[0] == 55 }
+        val saveLayerBlendColorFilterRefIndex = records.indexOfFirst { it[0] == 54 }
+        val drawRectIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
+        assertTrue(blurDescriptorIndex >= 0)
+        assertTrue(offsetDescriptorIndex > blurDescriptorIndex)
+        assertTrue(colorFilterDescriptorIndex > offsetDescriptorIndex)
+        assertTrue(saveLayerImageFilterRefIndex > offsetDescriptorIndex)
+        assertTrue(saveLayerBlendColorFilterRefIndex > saveLayerImageFilterRefIndex)
+        assertTrue(drawRectIndex > saveLayerBlendColorFilterRefIndex)
+        assertEquals(records[blurDescriptorIndex][3], records[offsetDescriptorIndex][8])
+        assertEquals(records[blurDescriptorIndex][4], records[offsetDescriptorIndex][9])
+        assertEquals(records[offsetDescriptorIndex][3], records[saveLayerImageFilterRefIndex][8])
+        assertEquals(records[offsetDescriptorIndex][4], records[saveLayerImageFilterRefIndex][9])
+        assertEquals(500, records[saveLayerImageFilterRefIndex][7])
+        assertEquals(1000, records[saveLayerBlendColorFilterRefIndex][7])
+        assertEquals(1, records[saveLayerBlendColorFilterRefIndex][8])
+        assertEquals(records[colorFilterDescriptorIndex][3], records[saveLayerBlendColorFilterRefIndex][9])
+        assertEquals(records[colorFilterDescriptorIndex][4], records[saveLayerBlendColorFilterRefIndex][10])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun nestedRecordingReplaysRectangularLayerShadow() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val recording = JbrSkiaCommandRecorder.recordFrame {
