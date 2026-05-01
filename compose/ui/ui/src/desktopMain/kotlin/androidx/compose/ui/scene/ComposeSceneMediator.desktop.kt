@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
+import androidx.compose.ui.graphics.JbrSkiaCommandShadowContext
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.input.key.KeyEvent as ComposeKeyEvent
 import androidx.compose.ui.input.key.internal
@@ -715,7 +716,9 @@ internal class ComposeSceneMediator(
             val recorder = PictureRecorder()
             try {
                 val canvas = recorder.beginRecording(0f, 0f, width.toFloat(), height.toFloat())
-                val recording = JbrSkiaCommandRecorder.recordFrame {
+                val recording = JbrSkiaCommandRecorder.recordFrame(
+                    shadowContext = jbrSkiaCommandShadowContext(),
+                ) {
                     interopContainer.postponingExecutingScheduledUpdates {
                         canvas.withSceneOffset {
                             scene.render(asComposeCanvas(), nanoTime)
@@ -740,6 +743,24 @@ internal class ComposeSceneMediator(
             exceptionHandler?.onException(e) ?: throw e
             null
         }
+    }
+
+
+    private fun jbrSkiaCommandShadowContext(): JbrSkiaCommandShadowContext = with(contentComponent.density) {
+        val scale = density
+        val contentOffset = Offset(contentComponent.x * scale, contentComponent.y * scale)
+        val containerWidth = (container.width * scale).coerceAtLeast(1f)
+        val containerHeight = (container.height * scale).coerceAtLeast(1f)
+        val zRatio = kotlin.math.min(containerWidth, containerHeight) / 450.dp.toPx()
+        val zWeightedAdjustment = (zRatio + 2f) / 3f
+        JbrSkiaCommandShadowContext(
+            lightX = containerWidth / 2f - contentOffset.x,
+            lightY = 0.dp.toPx() - contentOffset.y,
+            lightZ = 500.dp.toPx() * zWeightedAdjustment,
+            lightRadius = 800.dp.toPx(),
+            ambientShadowAlpha = 0.039f,
+            spotShadowAlpha = 0.19f,
+        )
     }
 
     private val androidx.compose.ui.graphics.JbrSkiaCommandRecording.isInteropOnlyFrame: Boolean

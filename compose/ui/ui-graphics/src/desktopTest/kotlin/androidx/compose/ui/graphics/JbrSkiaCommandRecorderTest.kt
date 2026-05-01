@@ -932,7 +932,16 @@ class JbrSkiaCommandRecorderTest {
     @Test
     fun nestedRecordingReplaysRectangularLayerShadow() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
-        val recording = JbrSkiaCommandRecorder.recordFrame {
+        val recording = JbrSkiaCommandRecorder.recordFrame(
+            shadowContext = JbrSkiaCommandShadowContext(
+                lightX = 123f,
+                lightY = -45f,
+                lightZ = 678f,
+                lightRadius = 901f,
+                ambientShadowAlpha = 0.07f,
+                spotShadowAlpha = 0.27f,
+            ),
+        ) {
             val nested = JbrSkiaCommandRecorder.recordNested {
                 JbrSkiaCommandRecorder.drawRect(
                     left = 1f,
@@ -975,12 +984,13 @@ class JbrSkiaCommandRecorderTest {
         val contentLayerIndex = records.indexOfFirst { it[0] == 13 }
         val contentRectIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
         assertTrue(shadowPathIndex >= 0)
-        assertEquals(Color.Black.copy(alpha = 0.039f * 0.5f).toArgb(), records[shadowPathIndex][3])
-        assertEquals(Color.Black.copy(alpha = 0.19f * 0.5f).toArgb(), records[shadowPathIndex][4])
+        assertEquals(Color.Black.copy(alpha = 0.07f * 0.5f).toArgb(), records[shadowPathIndex][3])
+        assertEquals(Color.Black.copy(alpha = 0.27f * 0.5f).toArgb(), records[shadowPathIndex][4])
         assertEquals(8f.toRawBits(), records[shadowPathIndex][7])
-        assertEquals((-300f).toRawBits(), records[shadowPathIndex][9])
-        assertEquals(600f.toRawBits(), records[shadowPathIndex][10])
-        assertEquals(800f.toRawBits(), records[shadowPathIndex][11])
+        assertEquals(123f.toRawBits(), records[shadowPathIndex][8])
+        assertEquals((-45f).toRawBits(), records[shadowPathIndex][9])
+        assertEquals(678f.toRawBits(), records[shadowPathIndex][10])
+        assertEquals(901f.toRawBits(), records[shadowPathIndex][11])
         assertEquals(1, records[shadowPathIndex][12])
         assertEquals(0, records[shadowPathIndex][13])
         assertTrue(records[shadowPathIndex][14] > 0)

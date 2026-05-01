@@ -21,6 +21,16 @@ import androidx.compose.ui.geometry.Rect
 import java.util.LinkedHashMap
 import kotlin.math.roundToInt
 
+
+data class JbrSkiaCommandShadowContext(
+    val lightX: Float = 0f,
+    val lightY: Float = -300f,
+    val lightZ: Float = 600f,
+    val lightRadius: Float = 800f,
+    val ambientShadowAlpha: Float = 0.039f,
+    val spotShadowAlpha: Float = 0.19f,
+)
+
 data class JbrSkiaCommandRecording(
     val commands: IntArray?,
     val commandWordCount: Int,
@@ -79,12 +89,15 @@ object JbrSkiaCommandRecorder {
     private val definedShaderHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_SHADER_HANDLES, 0.75f, true)
 
     fun record(block: () -> Unit): IntArray? {
-        return recordFrame(block).commands
+        return recordFrame(block = block).commands
     }
 
-    fun recordFrame(block: () -> Unit): JbrSkiaCommandRecording {
+    fun recordFrame(
+        shadowContext: JbrSkiaCommandShadowContext = JbrSkiaCommandShadowContext(),
+        block: () -> Unit,
+    ): JbrSkiaCommandRecording {
         val previous = active.get()
-        val recorder = Recorder()
+        val recorder = Recorder(shadowContext)
         active.set(recorder)
         try {
             block()
@@ -99,7 +112,7 @@ object JbrSkiaCommandRecorder {
 
     internal fun recordNested(block: () -> Unit): JbrSkiaCommandRecording {
         val previous = active.get()
-        val recorder = Recorder()
+        val recorder = Recorder(previous?.shadowContext ?: JbrSkiaCommandShadowContext())
         active.set(recorder)
         try {
             block()
@@ -422,7 +435,7 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawImageRect(image, srcLeft, srcTop, srcRight, srcBottom, dstLeft, dstTop, dstRight, dstBottom, paint)
             ?: false
 
-    private class Recorder {
+    private class Recorder(val shadowContext: JbrSkiaCommandShadowContext) {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
         private val unsupportedReasons = linkedMapOf<String, Int>()
@@ -865,8 +878,8 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("graphicsLayer:shadowPath")
                 return false
             }
-            val ambientAlpha = (ambientColor.alpha * 0.039f * layerAlpha).coerceIn(0f, 1f)
-            val spotAlpha = (spotColor.alpha * 0.19f * layerAlpha).coerceIn(0f, 1f)
+            val ambientAlpha = (ambientColor.alpha * shadowContext.ambientShadowAlpha * layerAlpha).coerceIn(0f, 1f)
+            val spotAlpha = (spotColor.alpha * shadowContext.spotShadowAlpha * layerAlpha).coerceIn(0f, 1f)
             if (ambientAlpha <= 0f && spotAlpha <= 0f) return true
             commands.addCommand(
                 COMMAND_DRAW_SHADOW_PATH,
@@ -876,10 +889,10 @@ object JbrSkiaCommandRecorder {
                 0f.toRawBits(),
                 0f.toRawBits(),
                 elevation.toRawBits(),
-                0f.toRawBits(),
-                (-300f).toRawBits(),
-                600f.toRawBits(),
-                800f.toRawBits(),
+                shadowContext.lightX.toRawBits(),
+                shadowContext.lightY.toRawBits(),
+                shadowContext.lightZ.toRawBits(),
+                shadowContext.lightRadius.toRawBits(),
                 if (layerAlpha < 1f) 1 else 0,
                 path.fillType.commandValue(),
                 pathData.size,
