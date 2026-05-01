@@ -2312,9 +2312,16 @@ object JbrSkiaCommandRecorder {
             )
         }
 
+        @OptIn(ExperimentalGraphicsApi::class)
         private fun JbrSkiaRuntimeEffectShader.runtimeEffectDescriptorPayload(): IntArray? {
-            if (sksl.isEmpty() || sksl.length > 4096 || uniforms.size > 256 || children.size > 8) return null
+            if (sksl.isEmpty() ||
+                sksl.length > 4096 ||
+                uniforms.size > 256 ||
+                uniformSchema.size > 16 ||
+                children.size > 8
+            ) return null
             if (sksl.any { it.code !in 1..127 }) return null
+            val uniformSchemaPayload = uniformSchema.runtimeEffectUniformSchemaPayload(uniforms.size) ?: return null
             val sourceHash = sksl.shaderSourceHash()
             val childHandles = children.flatMap { child ->
                 val handle = defineShaderIfNeeded(shaderDescriptorOrNull(child) ?: return null) ?: return null
@@ -2324,12 +2331,38 @@ object JbrSkiaCommandRecorder {
                 sksl.length,
                 uniforms.size,
                 children.size,
+                uniformSchema.size,
                 sourceHash.highInt(),
                 sourceHash.lowInt(),
             ) +
                 childHandles +
+                uniformSchemaPayload +
                 sksl.map { it.code }.toIntArray() +
                 uniforms.map { it.toRawBits() }.toIntArray()
+        }
+
+        @OptIn(ExperimentalGraphicsApi::class)
+        private fun List<RuntimeEffectUniform>.runtimeEffectUniformSchemaPayload(uniformFloatCount: Int): IntArray? {
+            val values = mutableListOf<Int>()
+            for (uniform in this) {
+                if (!uniform.name.isValidRuntimeEffectUniformName() ||
+                    uniform.floatOffset < 0 ||
+                    uniform.floatCount <= 0 ||
+                    uniform.floatOffset > uniformFloatCount - uniform.floatCount
+                ) return null
+                values += uniform.floatOffset
+                values += uniform.floatCount
+                values += uniform.name.length
+                uniform.name.forEach { values += it.code }
+            }
+            return values.toIntArray()
+        }
+
+        private fun String.isValidRuntimeEffectUniformName(): Boolean {
+            if (isEmpty() || length > 64) return false
+            val first = first()
+            if (first != '_' && first !in 'A'..'Z' && first !in 'a'..'z') return false
+            return all { it == '_' || it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' }
         }
 
         private fun String.shaderSourceHash(): Long {
@@ -3016,7 +3049,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 88
+    private const val COMMAND_STREAM_ABI_ID = 89
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
