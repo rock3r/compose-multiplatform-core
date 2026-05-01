@@ -4,7 +4,7 @@ set -euo pipefail
 WINDOW_QUERY="${1:-SwingComposeWindow}"
 OUTPUT="${2:-/tmp/jbr-skia-window.png}"
 
-WINDOW_ID="$(/usr/bin/swift - "${WINDOW_QUERY}" <<'SWIFT'
+WINDOW_METADATA="$(/usr/bin/swift - "${WINDOW_QUERY}" <<'SWIFT'
 import CoreGraphics
 import Foundation
 
@@ -21,8 +21,13 @@ for window in windows {
         if alpha <= 0.0 || layer != 0 {
             continue
         }
-        if let id = window[kCGWindowNumber as String] {
-            print(id)
+        if let id = window[kCGWindowNumber as String],
+           let bounds = window[kCGWindowBounds as String] as? [String: Any] {
+            let x = bounds["X"] ?? "unknown"
+            let y = bounds["Y"] ?? "unknown"
+            let width = bounds["Width"] ?? "unknown"
+            let height = bounds["Height"] ?? "unknown"
+            print("id=\(id) owner=\(owner) name=\(name) x=\(x) y=\(y) width=\(width) height=\(height)")
             exit(0)
         }
     }
@@ -33,5 +38,7 @@ exit(1)
 SWIFT
 )"
 
-screencapture -x -l"${WINDOW_ID}" "${OUTPUT}"
+echo "window=${WINDOW_METADATA}" >&2
+WINDOW_ID="$(printf '%s\n' "${WINDOW_METADATA}" | sed -n 's/^id=\([^ ]*\).*/\1/p')"
+screencapture -x -o -l"${WINDOW_ID}" "${OUTPUT}"
 echo "${OUTPUT}"
