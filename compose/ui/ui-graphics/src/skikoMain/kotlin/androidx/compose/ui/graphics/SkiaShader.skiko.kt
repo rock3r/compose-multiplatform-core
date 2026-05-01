@@ -77,14 +77,16 @@ internal data class JbrSkiaCompositeShader(
 internal data class JbrSkiaRuntimeEffectShader(
     val sksl: String,
     val uniforms: FloatArray,
+    val children: List<Shader>,
 ) {
     override fun equals(other: Any?): Boolean =
         other is JbrSkiaRuntimeEffectShader &&
             sksl == other.sksl &&
-            uniforms.contentEquals(other.uniforms)
+            uniforms.contentEquals(other.uniforms) &&
+            children == other.children
 
     override fun hashCode(): Int =
-        31 * sksl.hashCode() + uniforms.contentHashCode()
+        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + children.hashCode()
 }
 
 /**
@@ -94,11 +96,15 @@ val Shader.skiaShader: SkShader
     get() = internalSkiaShader
 
 @ExperimentalGraphicsApi
-fun RuntimeEffectShader(sksl: String, uniforms: FloatArray = FloatArray(0)): Shader {
+fun RuntimeEffectShader(
+    sksl: String,
+    uniforms: FloatArray = FloatArray(0),
+    children: List<Shader> = emptyList(),
+): Shader {
     val uniformCopy = uniforms.copyOf()
     val skiaShader = RuntimeEffect.makeForShader(sksl).use { effect ->
         uniformCopy.toUniformData().use { uniformData ->
-            effect.makeShader(uniformData, emptyArray(), null)
+            effect.makeShader(uniformData, children.map { it.skiaShader }.toTypedArray(), null)
         }
     }
     return Shader(
@@ -106,6 +112,7 @@ fun RuntimeEffectShader(sksl: String, uniforms: FloatArray = FloatArray(0)): Sha
         jbrSkiaRuntimeEffectShader = JbrSkiaRuntimeEffectShader(
             sksl = sksl,
             uniforms = uniformCopy,
+            children = children.toList(),
         ),
     )
 }
