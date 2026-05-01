@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.JbrSkiaCommandRecording
 import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.jbrSkiaImageFilterDescriptorOrNull
 import androidx.compose.ui.graphics.materializeSkiaPath
+import androidx.compose.ui.graphics.prepareTransformationMatrix
 import androidx.compose.ui.graphics.platform.PlatformGraphicsLayer
 import androidx.compose.ui.graphics.skiaCanvas
 import androidx.compose.ui.graphics.skiaImageFilter
@@ -407,6 +409,7 @@ internal class SkikoGraphicsLayer(
             shadowColor = spotShadowColor,
             shadowPath = jbrSkiaCommandShadowPath(),
             clipToLayerBounds = compositingStrategy == CompositingStrategy.Offscreen,
+            transformMatrix = jbrSkiaCommandTransformMatrix(pivot),
         )
     }
 
@@ -419,8 +422,10 @@ internal class SkikoGraphicsLayer(
             rotationZ.isFinite() &&
             translationX.isFinite() &&
             translationY.isFinite() &&
-            rotationX == 0f &&
-            rotationY == 0f &&
+            rotationX.isFinite() &&
+            rotationY.isFinite() &&
+            cameraDistance.isFinite() &&
+            cameraDistance > 0f &&
             shadowElevation.isFinite() &&
             shadowElevation >= 0f &&
             (shadowElevation == 0f || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
@@ -461,6 +466,26 @@ internal class SkikoGraphicsLayer(
         } else {
             null
         }
+
+    @OptIn(InternalComposeUiApi::class)
+    private fun jbrSkiaCommandTransformMatrix(pivot: Offset): Matrix? {
+        if (rotationX == 0f && rotationY == 0f) return null
+        return Matrix().also {
+            prepareTransformationMatrix(
+                matrix = it,
+                pivotX = pivot.x,
+                pivotY = pivot.y,
+                translationX = translationX,
+                translationY = translationY,
+                rotationX = rotationX,
+                rotationY = rotationY,
+                rotationZ = rotationZ,
+                scaleX = scaleX,
+                scaleY = scaleY,
+                cameraDistance = cameraDistance,
+            )
+        }
+    }
 
     private fun resolvedPivotOffset(): Offset =
         if (pivotOffset.isUnspecified) {
