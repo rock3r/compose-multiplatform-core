@@ -2028,6 +2028,53 @@ class JbrSkiaCommandRecorderTest {
 
     @OptIn(ExperimentalGraphicsApi::class)
     @Test
+    fun writesRuntimeEffectColorFilterDescriptorRectInStrictMode() {
+        val sksl = """
+            uniform float phase;
+            half4 main(half4 inColor) {
+                return half4(inColor.r * phase, inColor.g, inColor.b, inColor.a);
+            }
+        """.trimIndent()
+        val colorFilter = RuntimeEffectColorFilter(
+            sksl = sksl,
+            uniforms = floatArrayOf(0.5f),
+            uniformSchema = listOf(RuntimeEffectUniform("phase", 0, 1)),
+        )
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.colorFilter = colorFilter
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(49))
+            assertEquals(1, commands.countCommand(47))
+            val descriptor = commands.commandRecords().single { it[0] == 49 }
+            assertEquals(8, descriptor[5])
+            assertEquals(1, descriptor[6])
+            assertTrue(descriptor[8] > 0)
+            assertEquals(1, descriptor[9])
+            assertEquals(1, descriptor[10])
+            assertEquals(sksl.shaderSourceHash().highInt(), descriptor[11])
+            assertEquals(sksl.shaderSourceHash().lowInt(), descriptor[12])
+            assertEquals(0, descriptor[13])
+            assertEquals(1, descriptor[14])
+            assertEquals(5, descriptor[15])
+            assertEquals("phase".map { it.code }, descriptor.copyOfRange(16, 21).toList())
+        }
+    }
+
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
     fun writesRuntimeEffectShaderDescriptorRectInStrictMode() {
         val sksl = """
             uniform float red;
