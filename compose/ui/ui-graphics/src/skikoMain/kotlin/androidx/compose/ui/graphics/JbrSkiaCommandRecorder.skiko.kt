@@ -169,7 +169,8 @@ object JbrSkiaCommandRecorder {
         colorFilter: ColorFilter? = null,
         imageFilter: ImageFilterDescriptor? = null,
         shadowElevation: Float = 0f,
-        shadowColor: Color = Color.Black,
+        ambientShadowColor: Color = Color.Black,
+        spotShadowColor: Color = Color.Black,
         shadowPath: Path? = null,
         clipToLayerBounds: Boolean = false,
         transformMatrix: Matrix? = null,
@@ -194,7 +195,8 @@ object JbrSkiaCommandRecorder {
             colorFilter = colorFilter,
             imageFilter = imageFilter,
             shadowElevation = shadowElevation,
-            shadowColor = shadowColor,
+            ambientShadowColor = ambientShadowColor,
+            spotShadowColor = spotShadowColor,
             shadowPath = shadowPath,
             clipToLayerBounds = clipToLayerBounds,
             transformMatrix = transformMatrix,
@@ -633,7 +635,8 @@ object JbrSkiaCommandRecorder {
             colorFilter: ColorFilter?,
             imageFilter: ImageFilterDescriptor?,
             shadowElevation: Float = 0f,
-            shadowColor: Color = Color.Black,
+            ambientShadowColor: Color = Color.Black,
+            spotShadowColor: Color = Color.Black,
             shadowPath: Path? = null,
             clipToLayerBounds: Boolean = false,
             transformMatrix: Matrix? = null,
@@ -672,7 +675,7 @@ object JbrSkiaCommandRecorder {
                 translate(-pivotX, -pivotY)
             }
             if (shadowElevation > 0f) {
-                if (!addLayerShadow(width, height, shadowElevation, shadowColor, shadowPath)) {
+                if (!addLayerShadow(width, height, shadowElevation, ambientShadowColor, spotShadowColor, shadowPath)) {
                     return false
                 }
             }
@@ -803,7 +806,8 @@ object JbrSkiaCommandRecorder {
             width: Float,
             height: Float,
             elevation: Float,
-            color: Color,
+            ambientColor: Color,
+            spotColor: Color,
             shapePath: Path?,
         ): Boolean {
             if (!width.isFinite() || !height.isFinite() || width < 0f || height < 0f ||
@@ -812,10 +816,40 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("graphicsLayer:shadow")
                 return false
             }
-            val sigma = (elevation * 0.5f).coerceAtLeast(1f)
+            if (!addLayerShadowPass(
+                    width = width,
+                    height = height,
+                    sigma = (elevation * 0.35f).coerceAtLeast(1f),
+                    offsetY = 0f,
+                    color = ambientColor,
+                    alphaScale = 0.18f,
+                    shapePath = shapePath,
+                )
+            ) {
+                return false
+            }
+            return addLayerShadowPass(
+                width = width,
+                height = height,
+                sigma = (elevation * 0.5f).coerceAtLeast(1f),
+                offsetY = (elevation * 0.35f).coerceAtLeast(1f),
+                color = spotColor,
+                alphaScale = 0.28f,
+                shapePath = shapePath,
+            )
+        }
+
+        private fun addLayerShadowPass(
+            width: Float,
+            height: Float,
+            sigma: Float,
+            offsetY: Float,
+            color: Color,
+            alphaScale: Float,
+            shapePath: Path?,
+        ): Boolean {
             val pad = (sigma * 3f).roundToInt().coerceAtLeast(1)
-            val offsetY = (elevation * 0.35f).coerceAtLeast(1f)
-            val shadowAlpha = (color.alpha * 0.28f).coerceIn(0f, 1f)
+            val shadowAlpha = (color.alpha * alphaScale).coerceIn(0f, 1f)
             if (shadowAlpha <= 0f) return true
             val shadowFilter = ImageFilterDescriptor.Blur(
                 sigmaX = sigma,
