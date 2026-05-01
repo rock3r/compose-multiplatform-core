@@ -80,17 +80,20 @@ internal data class JbrSkiaRuntimeEffectShader(
     val uniforms: FloatArray,
     val uniformSchema: List<RuntimeEffectUniform>,
     val children: List<Shader>,
+    val namedChildren: List<RuntimeEffectChild>,
 ) {
     override fun equals(other: Any?): Boolean =
         other is JbrSkiaRuntimeEffectShader &&
             sksl == other.sksl &&
             uniforms.contentEquals(other.uniforms) &&
             uniformSchema == other.uniformSchema &&
-            children == other.children
+            children == other.children &&
+            namedChildren == other.namedChildren
 
     override fun hashCode(): Int =
-        31 * (31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()) +
-            children.hashCode()
+        31 * (31 * (31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()) +
+            children.hashCode()) +
+            namedChildren.hashCode()
 }
 
 @ExperimentalGraphicsApi
@@ -98,6 +101,12 @@ data class RuntimeEffectUniform(
     val name: String,
     val floatOffset: Int,
     val floatCount: Int,
+)
+
+@ExperimentalGraphicsApi
+data class RuntimeEffectChild(
+    val name: String,
+    val shader: Shader,
 )
 
 /**
@@ -112,11 +121,13 @@ fun RuntimeEffectShader(
     uniforms: FloatArray = FloatArray(0),
     uniformSchema: List<RuntimeEffectUniform> = emptyList(),
     children: List<Shader> = emptyList(),
+    namedChildren: List<RuntimeEffectChild> = emptyList(),
 ): Shader {
     val uniformCopy = uniforms.copyOf()
+    val childShaders = children + namedChildren.map { it.shader }
     val skiaShader = RuntimeEffect.makeForShader(sksl).use { effect ->
         uniformCopy.toUniformData().use { uniformData ->
-            effect.makeShader(uniformData, children.map { it.skiaShader }.toTypedArray(), null)
+            effect.makeShader(uniformData, childShaders.map { it.skiaShader }.toTypedArray(), null)
         }
     }
     return Shader(
@@ -126,6 +137,7 @@ fun RuntimeEffectShader(
             uniforms = uniformCopy,
             uniformSchema = uniformSchema.toList(),
             children = children.toList(),
+            namedChildren = namedChildren.toList(),
         ),
     )
 }

@@ -2318,25 +2318,30 @@ object JbrSkiaCommandRecorder {
                 sksl.length > 4096 ||
                 uniforms.size > 256 ||
                 uniformSchema.size > 16 ||
-                children.size > 8
+                children.size + namedChildren.size > 8 ||
+                namedChildren.size > 8
             ) return null
             if (sksl.any { it.code !in 1..127 }) return null
             val uniformSchemaPayload = uniformSchema.runtimeEffectUniformSchemaPayload(uniforms.size) ?: return null
+            val childShaders = children + namedChildren.map { it.shader }
+            val namedChildSchemaPayload = namedChildren.runtimeEffectChildSchemaPayload(children.size) ?: return null
             val sourceHash = sksl.shaderSourceHash()
-            val childHandles = children.flatMap { child ->
+            val childHandles = childShaders.flatMap { child ->
                 val handle = defineShaderIfNeeded(shaderDescriptorOrNull(child) ?: return null) ?: return null
                 listOf(handle.highInt(), handle.lowInt())
             }.toIntArray()
             return intArrayOf(
                 sksl.length,
                 uniforms.size,
-                children.size,
+                childShaders.size,
                 uniformSchema.size,
+                namedChildren.size,
                 sourceHash.highInt(),
                 sourceHash.lowInt(),
             ) +
                 childHandles +
                 uniformSchemaPayload +
+                namedChildSchemaPayload +
                 sksl.map { it.code }.toIntArray() +
                 uniforms.map { it.toRawBits() }.toIntArray()
         }
@@ -2354,6 +2359,18 @@ object JbrSkiaCommandRecorder {
                 values += uniform.floatCount
                 values += uniform.name.length
                 uniform.name.forEach { values += it.code }
+            }
+            return values.toIntArray()
+        }
+
+        @OptIn(ExperimentalGraphicsApi::class)
+        private fun List<RuntimeEffectChild>.runtimeEffectChildSchemaPayload(firstNamedChildIndex: Int): IntArray? {
+            val values = mutableListOf<Int>()
+            for ((relativeIndex, child) in withIndex()) {
+                if (!child.name.isValidRuntimeEffectUniformName()) return null
+                values += firstNamedChildIndex + relativeIndex
+                values += child.name.length
+                child.name.forEach { values += it.code }
             }
             return values.toIntArray()
         }
@@ -3049,7 +3066,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 89
+    private const val COMMAND_STREAM_ABI_ID = 90
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
