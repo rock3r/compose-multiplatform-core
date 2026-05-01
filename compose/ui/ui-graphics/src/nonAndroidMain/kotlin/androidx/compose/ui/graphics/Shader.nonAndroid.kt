@@ -68,14 +68,16 @@ data class JbrSkiaCompositeShader(
 data class JbrSkiaRuntimeEffectShader(
     val sksl: String,
     val uniforms: FloatArray,
+    val children: List<Shader>,
 ) {
     override fun equals(other: Any?): Boolean =
         other is JbrSkiaRuntimeEffectShader &&
             sksl == other.sksl &&
-            uniforms.contentEquals(other.uniforms)
+            uniforms.contentEquals(other.uniforms) &&
+            children == other.children
 
     override fun hashCode(): Int =
-        31 * sksl.hashCode() + uniforms.contentHashCode()
+        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + children.hashCode()
 }
 
 @OptIn(InternalComposeUiApi::class)

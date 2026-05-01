@@ -38,11 +38,15 @@ internal class SkikoShader(
 ) : PlatformShader
 
 @ExperimentalGraphicsApi
-fun RuntimeEffectShader(sksl: String, uniforms: FloatArray = FloatArray(0)): Shader {
+fun RuntimeEffectShader(
+    sksl: String,
+    uniforms: FloatArray = FloatArray(0),
+    children: List<Shader> = emptyList(),
+): Shader {
     val uniformCopy = uniforms.copyOf()
     val skiaShader = RuntimeEffect.makeForShader(sksl).use { effect ->
         uniformCopy.toUniformData().use { uniformData ->
-            effect.makeShader(uniformData, emptyArray(), null)
+            effect.makeShader(uniformData, children.map { it.skiaShader }.toTypedArray(), null)
         }
     }
     return Shader(
@@ -51,6 +55,7 @@ fun RuntimeEffectShader(sksl: String, uniforms: FloatArray = FloatArray(0)): Sha
             jbrSkiaRuntimeEffectShader = JbrSkiaRuntimeEffectShader(
                 sksl = sksl,
                 uniforms = uniformCopy,
+                children = children.toList(),
             ),
         ),
     )
