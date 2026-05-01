@@ -43,11 +43,13 @@ fun RuntimeEffectShader(
     uniforms: FloatArray = FloatArray(0),
     uniformSchema: List<RuntimeEffectUniform> = emptyList(),
     children: List<Shader> = emptyList(),
+    namedChildren: List<RuntimeEffectChild> = emptyList(),
 ): Shader {
     val uniformCopy = uniforms.copyOf()
+    val childShaders = children + namedChildren.map { it.shader }
     val skiaShader = RuntimeEffect.makeForShader(sksl).use { effect ->
         uniformCopy.toUniformData().use { uniformData ->
-            effect.makeShader(uniformData, children.map { it.skiaShader }.toTypedArray(), null)
+            effect.makeShader(uniformData, childShaders.map { it.skiaShader }.toTypedArray(), null)
         }
     }
     return Shader(
@@ -58,6 +60,7 @@ fun RuntimeEffectShader(
                 uniforms = uniformCopy,
                 uniformSchema = uniformSchema.toList(),
                 children = children.toList(),
+                namedChildren = namedChildren.toList(),
             ),
         ),
     )
