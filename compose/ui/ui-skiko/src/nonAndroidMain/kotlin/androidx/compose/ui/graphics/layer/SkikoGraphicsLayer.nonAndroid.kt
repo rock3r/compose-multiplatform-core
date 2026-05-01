@@ -403,6 +403,8 @@ internal class SkikoGraphicsLayer(
             },
             colorFilter = JbrSkiaCommandRecorder.descriptorColorFilterOrNull(colorFilter),
             imageFilter = renderEffect?.jbrSkiaImageFilterDescriptorOrNull(),
+            shadowElevation = shadowElevation,
+            shadowColor = spotShadowColor,
         )
     }
 
@@ -417,7 +419,9 @@ internal class SkikoGraphicsLayer(
             translationY.isFinite() &&
             rotationX == 0f &&
             rotationY == 0f &&
-            shadowElevation == 0f &&
+            shadowElevation.isFinite() &&
+            shadowElevation >= 0f &&
+            (shadowElevation == 0f || cachedOutline is Outline.Rectangle) &&
             (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
                 cachedOutline is Outline.Generic) &&
             (blendMode == BlendMode.SrcOver ||

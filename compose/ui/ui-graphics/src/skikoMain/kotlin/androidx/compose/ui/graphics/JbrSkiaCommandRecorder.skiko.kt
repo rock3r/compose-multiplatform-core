@@ -169,6 +169,8 @@ object JbrSkiaCommandRecorder {
         blendMode: Int?,
         colorFilter: ColorFilter? = null,
         imageFilter: ImageFilterDescriptor? = null,
+        shadowElevation: Float = 0f,
+        shadowColor: Color = Color.Black,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -189,6 +191,8 @@ object JbrSkiaCommandRecorder {
             blendMode = blendMode,
             colorFilter = colorFilter,
             imageFilter = imageFilter,
+            shadowElevation = shadowElevation,
+            shadowColor = shadowColor,
         ) ?: false
 
     @InternalComposeUiApi
@@ -602,6 +606,8 @@ object JbrSkiaCommandRecorder {
             blendMode: Int?,
             colorFilter: ColorFilter?,
             imageFilter: ImageFilterDescriptor?,
+            shadowElevation: Float = 0f,
+            shadowColor: Color = Color.Black,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -631,6 +637,11 @@ object JbrSkiaCommandRecorder {
             rotate(rotationZ)
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
+            if (shadowElevation > 0f) {
+                if (!addRectangularLayerShadow(width, height, shadowElevation, shadowColor)) {
+                    return false
+                }
+            }
             val tintColorFilter = tintSrcInColorFilterOrNull(colorFilter)
             val descriptorColorFilter = descriptorColorFilterOrNull(colorFilter)
             if (imageFilter != null && (tintColorFilter != null || descriptorColorFilter != null || blendMode != null)) {
@@ -747,6 +758,57 @@ object JbrSkiaCommandRecorder {
             imageCacheClearCount += recording.imageCacheClearCount
             imageCacheEvictCount += recording.imageCacheEvictCount
             restore()
+            restore()
+            return true
+        }
+
+        private fun addRectangularLayerShadow(
+            width: Float,
+            height: Float,
+            elevation: Float,
+            color: Color,
+        ): Boolean {
+            if (!width.isFinite() || !height.isFinite() || width < 0f || height < 0f ||
+                !elevation.isFinite() || elevation <= 0f
+            ) {
+                countUnsupported("graphicsLayer:shadow")
+                return false
+            }
+            val sigma = (elevation * 0.5f).coerceAtLeast(1f)
+            val pad = (sigma * 3f).roundToInt().coerceAtLeast(1)
+            val offsetY = (elevation * 0.35f).coerceAtLeast(1f)
+            val shadowAlpha = (color.alpha * 0.28f).coerceIn(0f, 1f)
+            if (shadowAlpha <= 0f) return true
+            val shadowFilter = ImageFilterDescriptor.Blur(
+                sigmaX = sigma,
+                sigmaY = sigma,
+                tileMode = 3,
+            )
+            val handle = defineImageFilterIfNeeded(shadowFilter) ?: run {
+                countUnsupported("graphicsLayer:shadowFilter")
+                return false
+            }
+            commands.addCommand(
+                COMMAND_SAVE_LAYER_IMAGE_FILTER_REF,
+                COMMAND_RECORD_FLAGS_NONE,
+                -pad,
+                (offsetY - pad).roundToInt(),
+                (width + pad * 2f).roundToInt().coerceAtLeast(0),
+                (height + pad * 2f).roundToInt().coerceAtLeast(0),
+                1000,
+                handle.highInt(),
+                handle.lowInt(),
+            )
+            commands.addCommand(
+                COMMAND_FILL_RECT,
+                COMMAND_RECORD_FLAG_ANTIALIAS,
+                color.copy(alpha = shadowAlpha).toArgb(),
+                0,
+                offsetY.roundToInt(),
+                width.roundToInt().coerceAtLeast(0),
+                height.roundToInt().coerceAtLeast(0),
+                0,
+            )
             restore()
             return true
         }
