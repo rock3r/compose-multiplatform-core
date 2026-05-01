@@ -43,3 +43,10 @@ For a repeatable old/new smoke report:
 ```shell
 compose/desktop/desktop/samples/scripts/jbr-skia-interop-report.sh
 ```
+
+The command recorder owns process-local caches for image keys, effect handles,
+and shader handles. Skiko clears those caches after a JBR destination
+surface/context change by reflectively calling
+`JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()`, so the next
+command frame redefines resources for the replacement JBR surface before it
+emits handle references.

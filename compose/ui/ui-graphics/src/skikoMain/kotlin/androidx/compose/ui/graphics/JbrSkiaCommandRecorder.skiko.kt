@@ -263,7 +263,8 @@ object JbrSkiaCommandRecorder {
         active.get()?.unsupportedDraw(reason)
     }
 
-    internal fun clearImageCacheForTesting() {
+    @JvmStatic
+    fun clearInteropCachesForSurfaceChange() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
         }
@@ -273,6 +274,10 @@ object JbrSkiaCommandRecorder {
         synchronized(shaderHandleLock) {
             definedShaderHandles.clear()
         }
+    }
+
+    internal fun clearImageCacheForTesting() {
+        clearInteropCachesForSurfaceChange()
     }
 
     fun drawTextUtf16(
