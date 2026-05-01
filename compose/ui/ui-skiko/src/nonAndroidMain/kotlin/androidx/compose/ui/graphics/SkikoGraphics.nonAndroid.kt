@@ -196,9 +196,18 @@ internal object SkikoGraphics : PlatformGraphics {
         destination: androidx.compose.ui.graphics.Shader,
         source: androidx.compose.ui.graphics.Shader,
         blendMode: BlendMode,
-    ): androidx.compose.ui.graphics.Shader =
-        SkShader.makeBlend(blendMode.toSkia(), destination.skiaShader, source.skiaShader)
-            .asComposeShader()
+    ): androidx.compose.ui.graphics.Shader = Shader(
+        SkikoShader(
+            skiaShader = SkShader.makeBlend(blendMode.toSkia(), destination.skiaShader, source.skiaShader),
+            jbrSkiaCompositeShader = if (
+                destination.hasJbrSkiaShaderMetadata && source.hasJbrSkiaShaderMetadata
+            ) {
+                JbrSkiaCompositeShader(destination, source, blendMode)
+            } else {
+                null
+            },
+        ),
+    )
 
     override fun transformShader(shader: Shader, matrix: Matrix): Shader =
         transformSkikoShader(shader, matrix)
@@ -322,6 +331,14 @@ internal object SkikoGraphics : PlatformGraphics {
             style.toSkiaStampedPathEffectStyle(),
         ).asComposePathEffect()
 }
+
+@OptIn(InternalComposeUiApi::class)
+private val Shader.hasJbrSkiaShaderMetadata: Boolean
+    get() = jbrSkiaLinearGradient != null ||
+        jbrSkiaRadialGradient != null ||
+        jbrSkiaSweepGradient != null ||
+        jbrSkiaImageShader != null ||
+        jbrSkiaCompositeShader != null
 
 private fun ImageBitmapConfig.toSkiaColorType() = when (this) {
     ImageBitmapConfig.Argb8888 -> ColorType.N32
