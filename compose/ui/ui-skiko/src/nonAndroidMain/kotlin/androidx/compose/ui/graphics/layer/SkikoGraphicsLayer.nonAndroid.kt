@@ -420,6 +420,7 @@ internal class SkikoGraphicsLayer(
             translationY.isFinite() &&
             rotationX == 0f &&
             rotationY == 0f &&
+            compositingStrategy != CompositingStrategy.Offscreen &&
             shadowElevation.isFinite() &&
             shadowElevation >= 0f &&
             (shadowElevation == 0f || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
