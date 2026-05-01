@@ -1574,6 +1574,11 @@ object JbrSkiaCommandRecorder {
                 addSweepGradientRoundRect(left, top, right, bottom, radiusX, radiusY, paint)
                 return
             }
+            val dashPathEffect = paint.dashPathEffect
+            if (dashPathEffect != null && paint.style == PaintingStyle.Stroke) {
+                addDashedRoundRect(left, top, right, bottom, radiusX, radiusY, paint, dashPathEffect)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
@@ -1598,6 +1603,49 @@ object JbrSkiaCommandRecorder {
                 if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
                 if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
                 if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
+            )
+        }
+
+        private fun addDashedRoundRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            radiusX: Float,
+            radiusY: Float,
+            paint: Paint,
+            dashPathEffect: JbrSkiaDashPathEffect,
+        ) {
+            if (!paint.isSupportedDashedSolidColor) return
+            val intervals = dashPathEffect.intervals
+            if (
+                intervals.size !in 2..16 ||
+                intervals.any { !it.isFinite() || it <= 0f } ||
+                !dashPathEffect.phase.isFinite() ||
+                !radiusX.isFinite() ||
+                !radiusY.isFinite() ||
+                dashPathEffect.phase < 0f
+            ) {
+                countUnsupported("pathEffect")
+                return
+            }
+            commands.addCommand(
+                COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT,
+                paint.recordFlags(),
+                paint.commandColor(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                radiusX.fixed1000().coerceAtLeast(0),
+                radiusY.fixed1000().coerceAtLeast(0),
+                state.stroke(paint.strokeWidth),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
+                dashPathEffect.phase.fixed1000(),
+                intervals.size,
+                *IntArray(intervals.size) { intervals[it].fixed1000() },
             )
         }
 
@@ -3228,6 +3276,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EVICT_SHADER_HANDLE = 57
     private const val COMMAND_FILL_RECT_SHADER_REF = 58
     private const val COMMAND_STROKE_RECT_DASH_PATH_EFFECT = 59
+    private const val COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT = 60
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -3263,7 +3312,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-        private const val COMMAND_STREAM_ABI_ID = 93
+        private const val COMMAND_STREAM_ABI_ID = 94
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
