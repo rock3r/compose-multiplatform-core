@@ -276,6 +276,7 @@ object JbrSkiaCommandRecorder {
         data class Image(val shader: JbrSkiaImageShader) : ShaderDescriptor()
         data class Composite(val shader: JbrSkiaCompositeShader) : ShaderDescriptor()
         data class RuntimeEffect(val shader: JbrSkiaRuntimeEffectShader) : ShaderDescriptor()
+        data class ColorFiltered(val shader: ShaderDescriptor, val colorFilter: ColorFilter) : ShaderDescriptor()
     }
 
     internal fun shaderDescriptorOrNull(shader: Shader?): ShaderDescriptor? {
@@ -1055,8 +1056,13 @@ object JbrSkiaCommandRecorder {
                 return
             }
             val descriptor = shaderDescriptorOrNull(paint.shader)
+            val shaderColorFilter = descriptorColorFilterOrNull(paint.colorFilter)
+            if (descriptor != null && shaderColorFilter != null && paint.style == PaintingStyle.Fill) {
+                addShaderDescriptorRect(left, top, right, bottom, paint, ShaderDescriptor.ColorFiltered(descriptor, shaderColorFilter))
+                return
+            }
             if (descriptor is ShaderDescriptor.Composite || descriptor is ShaderDescriptor.RuntimeEffect) {
-                addShaderDescriptorRect(left, top, right, bottom, paint)
+                addShaderDescriptorRect(left, top, right, bottom, paint, descriptor)
                 return
             }
             if (paint.shader?.jbrSkiaLinearGradient != null) {
@@ -2265,9 +2271,16 @@ object JbrSkiaCommandRecorder {
             )
         }
 
-        private fun addShaderDescriptorRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
-            val descriptor = shaderDescriptorOrNull(paint.shader) ?: return
-            if (!paint.isSupportedShaderDescriptorPaint || paint.style != PaintingStyle.Fill) {
+        private fun addShaderDescriptorRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            descriptor: ShaderDescriptor? = shaderDescriptorOrNull(paint.shader),
+        ) {
+            descriptor ?: return
+            if (!paint.isSupportedShaderDescriptorPaint(descriptor) || paint.style != PaintingStyle.Fill) {
                 return
             }
             val handle = defineShaderIfNeeded(descriptor) ?: run {
@@ -2523,31 +2536,30 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
-        private val Paint.isSupportedShaderDescriptorPaint: Boolean
-            get() {
-                var supported = true
-                if (!state.supported) {
-                    countUnsupported("unsupportedScope")
-                    supported = false
-                }
-                if (blendMode != BlendMode.SrcOver) {
-                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                    supported = false
-                }
-                if (shaderDescriptorOrNull(shader) == null) {
-                    countUnsupported("shader")
-                    supported = false
-                }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
-                    supported = false
-                }
-                if (pathEffect != null) {
-                    countUnsupported("pathEffect")
-                    supported = false
-                }
-                return supported
+        private fun Paint.isSupportedShaderDescriptorPaint(descriptor: ShaderDescriptor): Boolean {
+            var supported = true
+            if (!state.supported) {
+                countUnsupported("unsupportedScope")
+                supported = false
             }
+            if (blendMode != BlendMode.SrcOver) {
+                countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                supported = false
+            }
+            if (shaderDescriptorOrNull(shader) == null) {
+                countUnsupported("shader")
+                supported = false
+            }
+            if (colorFilter != null && descriptor !is ShaderDescriptor.ColorFiltered) {
+                countUnsupported("colorFilter")
+                supported = false
+            }
+            if (pathEffect != null) {
+                countUnsupported("pathEffect")
+                supported = false
+            }
+            return supported
+        }
 
         private val Paint.isSupportedLinearGradient: Boolean
             get() {
@@ -2760,6 +2772,16 @@ object JbrSkiaCommandRecorder {
                     val blendMode = commandShaderBlendModeOrNull(shader.shader.blendMode) ?: return null
                     intArrayOf(dstHandle.highInt(), dstHandle.lowInt(), srcHandle.highInt(), srcHandle.lowInt(), blendMode)
                 }
+                is ShaderDescriptor.ColorFiltered -> {
+                    val shaderHandle = defineShaderIfNeeded(shader.shader) ?: return null
+                    val colorFilterHandle = defineDescriptorColorFilterIfNeeded(shader.colorFilter) ?: return null
+                    intArrayOf(
+                        shaderHandle.highInt(),
+                        shaderHandle.lowInt(),
+                        colorFilterHandle.highInt(),
+                        colorFilterHandle.lowInt(),
+                    )
+                }
             } ?: return null
             val type = shader.commandDescriptorType()
             val handle = shaderHandleKey(type, payload)
@@ -2813,6 +2835,7 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.Image -> COMMAND_SHADER_DESCRIPTOR_IMAGE
                 is ShaderDescriptor.Composite -> COMMAND_SHADER_DESCRIPTOR_COMPOSITE
                 is ShaderDescriptor.RuntimeEffect -> COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT
+                is ShaderDescriptor.ColorFiltered -> COMMAND_SHADER_DESCRIPTOR_COLOR_FILTER
             }
 
         private fun shaderHandleKey(type: Int, payload: IntArray): Long {
@@ -3686,6 +3709,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SHADER_DESCRIPTOR_IMAGE = 4
     private const val COMMAND_SHADER_DESCRIPTOR_COMPOSITE = 5
     private const val COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT = 6
+    private const val COMMAND_SHADER_DESCRIPTOR_COLOR_FILTER = 7
     private const val COMMAND_SHADER_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2

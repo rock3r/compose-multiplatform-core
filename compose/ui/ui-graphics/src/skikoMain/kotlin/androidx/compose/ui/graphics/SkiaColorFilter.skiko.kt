@@ -76,10 +76,20 @@ fun RuntimeEffectColorFilter(
 ): ColorFilter {
     val uniformCopy = uniforms.copyOf()
     val childColorFilters = children + namedChildren.map { it.colorFilter }
-    val skiaColorFilter = RuntimeEffect.makeForColorFilter(sksl).use { effect ->
-        uniformCopy.toUniformData().use { uniformData ->
-            effect.makeColorFilter(uniformData, childColorFilters.map { it.nativeColorFilter }.toTypedArray())
+    val skiaColorFilter = runCatching {
+        RuntimeEffect.makeForColorFilter(sksl).use { effect ->
+            uniformCopy.toUniformData().use { uniformData ->
+                val method = effect.javaClass.getMethod(
+                    "makeColorFilter",
+                    org.jetbrains.skia.Data::class.java,
+                    Array<SkColorFilter?>::class.java,
+                )
+                @Suppress("UNCHECKED_CAST")
+                method.invoke(effect, uniformData, childColorFilters.map { it.nativeColorFilter }.toTypedArray()) as SkColorFilter
+            }
         }
+    }.getOrElse {
+        SkColorFilter.makeLighting(0xFFFFFFFF.toInt(), 0x00000000)
     }
     return JbrSkiaRuntimeEffectColorFilterHolder(
         nativeColorFilter = skiaColorFilter,
