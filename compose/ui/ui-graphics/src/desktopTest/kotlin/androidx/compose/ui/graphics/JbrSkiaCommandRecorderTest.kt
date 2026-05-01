@@ -1483,6 +1483,55 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesChainedPathEffectDescriptorPathRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val stamp = Path().apply {
+            moveTo(0f, -5f)
+            lineTo(5f, 5f)
+            lineTo(-5f, 5f)
+            close()
+        }
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Green
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    pathEffect = PathEffect.chainPathEffect(
+                        outer = PathEffect.cornerPathEffect(6f),
+                        inner = PathEffect.stampedPathEffect(stamp, 18f, 3f, StampedPathEffectStyle.Rotate),
+                    )
+                },
+            )
+        }!!
+
+        assertEquals(79, commands.size)
+        assertArrayEquals(intArrayOf(1246972723, 98, 0, 73, 1, 1), commands.copyOfRange(0, 6))
+        assertArrayEquals(intArrayOf(49, 36, 0), commands.copyOfRange(6, 9))
+        assertEquals(9, commands[11])
+        assertArrayEquals(intArrayOf(49, 104, 0), commands.copyOfRange(15, 18))
+        assertEquals(10, commands[20])
+        assertArrayEquals(intArrayOf(49, 48, 0), commands.copyOfRange(41, 44))
+        assertEquals(11, commands[46])
+        assertArrayEquals(
+            intArrayOf(commands[9], commands[10], commands[18], commands[19]),
+            commands.copyOfRange(49, 53),
+        )
+        assertArrayEquals(
+            intArrayOf(62, 104, 1, 1, Color.Green.toArgb(), 8, 0, 1, 0, commands[44], commands[45], 0, 13),
+            commands.copyOfRange(53, 66),
+        )
+    }
+
+    @Test
     fun writesLinearGradientPathRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)

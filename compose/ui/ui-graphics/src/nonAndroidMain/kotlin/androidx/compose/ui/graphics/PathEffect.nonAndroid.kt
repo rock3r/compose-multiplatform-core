@@ -34,6 +34,10 @@ sealed interface JbrSkiaPathEffectDescriptor {
         val phase: Float,
         val style: StampedPathEffectStyle,
     ) : JbrSkiaPathEffectDescriptor
+    data class Chain(
+        val outer: JbrSkiaPathEffectDescriptor,
+        val inner: JbrSkiaPathEffectDescriptor,
+    ) : JbrSkiaPathEffectDescriptor
 }
 
 @InternalComposeUiApi

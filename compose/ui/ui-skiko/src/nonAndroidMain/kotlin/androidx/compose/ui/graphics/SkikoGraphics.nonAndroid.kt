@@ -318,8 +318,19 @@ internal object SkikoGraphics : PlatformGraphics {
     override fun createChainPathEffect(
         outer: PathEffect,
         inner: PathEffect,
-    ): PathEffect =
-        outer.asSkiaPathEffect().makeCompose(inner.asSkiaPathEffect()).asComposePathEffect()
+    ): PathEffect {
+        val outerDescriptor = (outer as? JbrSkiaPathEffectMetadata)?.jbrSkiaPathEffectDescriptor
+        val innerDescriptor = (inner as? JbrSkiaPathEffectMetadata)?.jbrSkiaPathEffectDescriptor
+        val descriptor = if (outerDescriptor != null && innerDescriptor != null) {
+            JbrSkiaPathEffectDescriptor.Chain(outerDescriptor, innerDescriptor)
+        } else {
+            null
+        }
+        return SkiaBackedPathEffect(
+            outer.asSkiaPathEffect().makeCompose(inner.asSkiaPathEffect()),
+            jbrSkiaPathEffectDescriptor = descriptor,
+        )
+    }
 
     override fun createStampedPathEffect(
         shape: Path,
