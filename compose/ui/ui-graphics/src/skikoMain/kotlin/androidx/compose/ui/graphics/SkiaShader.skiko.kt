@@ -28,6 +28,7 @@ actual class Shader internal constructor(
     internal val jbrSkiaRadialGradient: JbrSkiaRadialGradientShader? = null,
     internal val jbrSkiaSweepGradient: JbrSkiaSweepGradientShader? = null,
     internal val jbrSkiaImageShader: JbrSkiaImageShader? = null,
+    internal val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
 )
 
 /**
@@ -61,6 +62,12 @@ internal data class JbrSkiaImageShader(
     val image: ImageBitmap,
     val tileModeX: TileMode,
     val tileModeY: TileMode,
+)
+
+internal data class JbrSkiaCompositeShader(
+    val dst: Shader,
+    val src: Shader,
+    val blendMode: BlendMode,
 )
 
 /**
@@ -194,11 +201,25 @@ internal actual fun ActualImageShader(
 }
 
 internal actual fun ActualCompositeShader(dst: Shader, src: Shader, blendMode: BlendMode): Shader =
-    SkShader.makeBlend(
-        mode = blendMode.toSkia(),
-        dst = dst.skiaShader,
-        src = src.skiaShader
-    ).asComposeShader()
+    Shader(
+        internalSkiaShader = SkShader.makeBlend(
+            mode = blendMode.toSkia(),
+            dst = dst.skiaShader,
+            src = src.skiaShader
+        ),
+        jbrSkiaCompositeShader = if (dst.hasJbrSkiaShaderMetadata && src.hasJbrSkiaShaderMetadata) {
+            JbrSkiaCompositeShader(dst = dst, src = src, blendMode = blendMode)
+        } else {
+            null
+        },
+    )
+
+private val Shader.hasJbrSkiaShaderMetadata: Boolean
+    get() = jbrSkiaLinearGradient != null ||
+        jbrSkiaRadialGradient != null ||
+        jbrSkiaSweepGradient != null ||
+        jbrSkiaImageShader != null ||
+        jbrSkiaCompositeShader != null
 
 private fun List<Color>.toSkiaGradient(
     colorStops: List<Float>?,

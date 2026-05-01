@@ -1919,6 +1919,32 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compositeShaderKeepsJbrSkiaMetadataForStructuredChildren() {
+        val shader = CompositeShader(
+            dst = LinearGradientShader(
+                from = Offset(1f, 2f),
+                to = Offset(11f, 12f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+            src = RadialGradientShader(
+                center = Offset(6f, 7f),
+                radius = 8f,
+                colors = listOf(Color.Green, Color.White),
+                colorStops = listOf(0.2f, 0.8f),
+                tileMode = TileMode.Clamp,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        val composite = shader.jbrSkiaCompositeShader
+        assertEquals(BlendMode.SrcOver, composite?.blendMode)
+        assertTrue(composite?.dst?.jbrSkiaLinearGradient != null)
+        assertTrue(composite?.src?.jbrSkiaRadialGradient != null)
+    }
+
+    @Test
     fun rejectsGradientStrokePaintInStrictMode() {
         withStrictCommandRecording {
             val commands = JbrSkiaCommandRecorder.record {
