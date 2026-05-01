@@ -327,12 +327,15 @@ internal object SkikoGraphics : PlatformGraphics {
         phase: Float,
         style: StampedPathEffectStyle,
     ): PathEffect =
-        SkPathEffect.makePath1D(
-            shape.materializeSkiaPath(),
-            advance,
-            phase,
-            style.toSkiaStampedPathEffectStyle(),
-        ).asComposePathEffect()
+        SkiaBackedPathEffect(
+            SkPathEffect.makePath1D(
+                shape.materializeSkiaPath(),
+                advance,
+                phase,
+                style.toSkiaStampedPathEffectStyle(),
+            ),
+            jbrSkiaPathEffectDescriptor = JbrSkiaPathEffectDescriptor.Stamped(shape, advance, phase, style),
+        )
 }
 
 @OptIn(InternalComposeUiApi::class)

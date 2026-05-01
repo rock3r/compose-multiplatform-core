@@ -28,6 +28,12 @@ data class JbrSkiaDashPathEffect(
 @InternalComposeUiApi
 sealed interface JbrSkiaPathEffectDescriptor {
     data class Corner(val radius: Float) : JbrSkiaPathEffectDescriptor
+    data class Stamped(
+        val shape: Path,
+        val advance: Float,
+        val phase: Float,
+        val style: StampedPathEffectStyle,
+    ) : JbrSkiaPathEffectDescriptor
 }
 
 @InternalComposeUiApi
