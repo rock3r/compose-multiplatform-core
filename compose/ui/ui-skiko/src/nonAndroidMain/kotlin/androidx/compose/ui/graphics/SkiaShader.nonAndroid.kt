@@ -22,6 +22,9 @@ package androidx.compose.ui.graphics
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.graphics.platform.PlatformShader
 import kotlin.jvm.JvmName
+import org.jetbrains.skia.Data
+import org.jetbrains.skia.RuntimeEffect
+import org.jetbrains.skia.impl.use
 import org.jetbrains.skia.Shader as SkShader
 
 internal class SkikoShader(
@@ -31,7 +34,41 @@ internal class SkikoShader(
     override val jbrSkiaSweepGradient: JbrSkiaSweepGradientShader? = null,
     override val jbrSkiaImageShader: JbrSkiaImageShader? = null,
     override val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
+    override val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
 ) : PlatformShader
+
+@ExperimentalGraphicsApi
+fun RuntimeEffectShader(sksl: String, uniforms: FloatArray = FloatArray(0)): Shader {
+    val uniformCopy = uniforms.copyOf()
+    val skiaShader = RuntimeEffect.makeForShader(sksl).use { effect ->
+        uniformCopy.toUniformData().use { uniformData ->
+            effect.makeShader(uniformData, emptyArray(), null)
+        }
+    }
+    return Shader(
+        SkikoShader(
+            skiaShader = skiaShader,
+            jbrSkiaRuntimeEffectShader = JbrSkiaRuntimeEffectShader(
+                sksl = sksl,
+                uniforms = uniformCopy,
+            ),
+        ),
+    )
+}
+
+private fun FloatArray.toUniformData(): Data {
+    if (isEmpty()) return Data.makeEmpty()
+    val bytes = ByteArray(size * 4)
+    forEachIndexed { index, value ->
+        val bits = value.toRawBits()
+        val offset = index * 4
+        bytes[offset] = bits.toByte()
+        bytes[offset + 1] = (bits ushr 8).toByte()
+        bytes[offset + 2] = (bits ushr 16).toByte()
+        bytes[offset + 3] = (bits ushr 24).toByte()
+    }
+    return Data.makeFromBytes(bytes)
+}
 
 /** Convert the [org.jetbrains.skia.Shader] instance into a Compose-compatible Shader */
 fun SkShader.asComposeShader(): Shader = Shader(SkikoShader(this))

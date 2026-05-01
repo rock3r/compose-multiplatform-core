@@ -20,6 +20,7 @@ import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.graphics.JbrSkiaLinearGradientShader
 import androidx.compose.ui.graphics.JbrSkiaImageShader
 import androidx.compose.ui.graphics.JbrSkiaCompositeShader
+import androidx.compose.ui.graphics.JbrSkiaRuntimeEffectShader
 import androidx.compose.ui.graphics.JbrSkiaRadialGradientShader
 import androidx.compose.ui.graphics.JbrSkiaSweepGradientShader
 import androidx.compose.ui.graphics.Shader
@@ -44,5 +45,8 @@ interface PlatformShader {
         get() = null
 
     val jbrSkiaCompositeShader: JbrSkiaCompositeShader?
+        get() = null
+
+    val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader?
         get() = null
 }
