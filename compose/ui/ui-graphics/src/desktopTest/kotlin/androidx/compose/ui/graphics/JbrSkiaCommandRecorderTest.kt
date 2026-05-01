@@ -1088,6 +1088,42 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun clearsTintColorFilterHandleCacheForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        withColorFilterHandles {
+            JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 3f,
+                    top = 4f,
+                    right = 13f,
+                    bottom = 24f,
+                    paint = Paint().apply {
+                        color = Color.Magenta
+                        colorFilter = ColorFilter.tint(Color.Cyan)
+                    },
+                )
+            }
+
+            JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 5f,
+                    top = 6f,
+                    right = 15f,
+                    bottom = 26f,
+                    paint = Paint().apply {
+                        color = Color.Magenta
+                        colorFilter = ColorFilter.tint(Color.Cyan)
+                    },
+                )
+            }!!
+
+            assertTrue(commands.contains(49))
+        }
+    }
+
+    @Test
     fun writesDashedStrokeLineRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawLine(
