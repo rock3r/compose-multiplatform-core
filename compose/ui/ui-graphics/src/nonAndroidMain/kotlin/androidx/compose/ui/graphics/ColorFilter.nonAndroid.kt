@@ -23,6 +23,27 @@ import androidx.compose.ui.graphics.platform.PlatformGraphicsRegistry
 @OptIn(InternalComposeUiApi::class)
 internal actual typealias NativeColorFilter = PlatformColorFilter
 
+@InternalComposeUiApi
+@OptIn(ExperimentalGraphicsApi::class)
+data class JbrSkiaRuntimeEffectColorFilter(
+    val sksl: String,
+    val uniforms: FloatArray,
+    val uniformSchema: List<RuntimeEffectUniform>,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is JbrSkiaRuntimeEffectColorFilter &&
+            sksl == other.sksl &&
+            uniforms.contentEquals(other.uniforms) &&
+            uniformSchema == other.uniformSchema
+
+    override fun hashCode(): Int =
+        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()
+}
+
+@OptIn(InternalComposeUiApi::class)
+internal val ColorFilter.jbrSkiaRuntimeEffectColorFilter: JbrSkiaRuntimeEffectColorFilter?
+    get() = nativeColorFilter.jbrSkiaRuntimeEffectColorFilter
+
 @OptIn(InternalComposeUiApi::class)
 internal actual fun actualTintColorFilter(color: Color, blendMode: BlendMode): NativeColorFilter =
     PlatformGraphicsRegistry.requireCurrent()

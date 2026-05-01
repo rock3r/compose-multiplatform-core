@@ -25,10 +25,35 @@ import androidx.compose.ui.graphics.platform.asComposeColorFilter
 import androidx.compose.ui.graphics.platform.platformColorFilter
 import kotlin.jvm.JvmName
 import org.jetbrains.skia.ColorFilter as SkColorFilter
+import org.jetbrains.skia.RuntimeEffect
+import org.jetbrains.skia.impl.use
 
 internal class SkikoColorFilter(
     val skiaColorFilter: SkColorFilter,
+    override val jbrSkiaRuntimeEffectColorFilter: JbrSkiaRuntimeEffectColorFilter? = null,
 ) : PlatformColorFilter()
+
+@ExperimentalGraphicsApi
+fun RuntimeEffectColorFilter(
+    sksl: String,
+    uniforms: FloatArray = FloatArray(0),
+    uniformSchema: List<RuntimeEffectUniform> = emptyList(),
+): ColorFilter {
+    val uniformCopy = uniforms.copyOf()
+    val skiaColorFilter = RuntimeEffect.makeForColorFilter(sksl).use { effect ->
+        uniformCopy.toUniformData().use { uniformData ->
+            effect.makeColorFilter(uniformData)
+        }
+    }
+    return SkikoColorFilter(
+        skiaColorFilter = skiaColorFilter,
+        jbrSkiaRuntimeEffectColorFilter = JbrSkiaRuntimeEffectColorFilter(
+            sksl = sksl,
+            uniforms = uniformCopy,
+            uniformSchema = uniformSchema.toList(),
+        ),
+    ).asComposeColorFilter()
+}
 
 /** Obtain a [org.jetbrains.skia.ColorFilter] instance from this [ColorFilter] */
 @OptIn(InternalComposeUiApi::class)

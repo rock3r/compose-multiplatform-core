@@ -18,6 +18,7 @@ package androidx.compose.ui.graphics.platform
 
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.JbrSkiaRuntimeEffectColorFilter
 import androidx.compose.ui.graphics.NativeColorFilter
 
 /**
@@ -26,7 +27,10 @@ import androidx.compose.ui.graphics.NativeColorFilter
  * to and from its native color-filter type.
  */
 @InternalComposeUiApi
-open class PlatformColorFilter
+open class PlatformColorFilter {
+    open val jbrSkiaRuntimeEffectColorFilter: JbrSkiaRuntimeEffectColorFilter?
+        get() = null
+}
 
 /**
  * Exposes the underlying platform color-filter binding to the registered backend so it can recover
