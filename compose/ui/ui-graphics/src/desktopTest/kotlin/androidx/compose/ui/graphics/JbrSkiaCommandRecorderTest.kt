@@ -654,6 +654,59 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingReplaysOffscreenLayerBoundsClipBeforeContent() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = -20f,
+                    top = -10f,
+                    right = 50f,
+                    bottom = 60f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 0f,
+                    translationY = 0f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = null,
+                    shadowElevation = 0f,
+                    shadowColor = Color.Black,
+                    shadowPath = null,
+                    clipToLayerBounds = true,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        val contentLayerIndex = records.indexOfFirst { it[0] == 13 }
+        val boundsClipIndex = records.indexOfFirst {
+            it[0] == 9 && it[3] == 0 && it[4] == 0 && it[5] == 30 && it[6] == 40 && it[7] == 0
+        }
+        val childFillIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
+        assertTrue(contentLayerIndex >= 0)
+        assertTrue(boundsClipIndex > contentLayerIndex)
+        assertTrue(childFillIndex > boundsClipIndex)
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesFillRectPlusBlendModeRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
