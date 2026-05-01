@@ -38,6 +38,10 @@ internal sealed interface JbrSkiaPathEffectDescriptor {
         val phase: Float,
         val style: StampedPathEffectStyle,
     ) : JbrSkiaPathEffectDescriptor
+    data class Chain(
+        val outer: JbrSkiaPathEffectDescriptor,
+        val inner: JbrSkiaPathEffectDescriptor,
+    ) : JbrSkiaPathEffectDescriptor
 }
 
 /**
@@ -72,8 +76,19 @@ internal actual fun actualDashPathEffect(
         JbrSkiaDashPathEffect(intervals.copyOf(), phase),
     )
 
-internal actual fun actualChainPathEffect(outer: PathEffect, inner: PathEffect): PathEffect =
-    SkiaBackedPathEffect(outer.asSkiaPathEffect().makeCompose(inner.asSkiaPathEffect()))
+internal actual fun actualChainPathEffect(outer: PathEffect, inner: PathEffect): PathEffect {
+    val outerBacked = outer as? SkiaBackedPathEffect
+    val innerBacked = inner as? SkiaBackedPathEffect
+    val descriptor = outerBacked?.jbrSkiaPathEffectDescriptor?.let { outerDescriptor ->
+        innerBacked?.jbrSkiaPathEffectDescriptor?.let { innerDescriptor ->
+            JbrSkiaPathEffectDescriptor.Chain(outerDescriptor, innerDescriptor)
+        }
+    }
+    return SkiaBackedPathEffect(
+        outer.asSkiaPathEffect().makeCompose(inner.asSkiaPathEffect()),
+        jbrSkiaPathEffectDescriptor = descriptor,
+    )
+}
 
 @OptIn(InternalComposeUiApi::class)
 internal actual fun actualStampedPathEffect(

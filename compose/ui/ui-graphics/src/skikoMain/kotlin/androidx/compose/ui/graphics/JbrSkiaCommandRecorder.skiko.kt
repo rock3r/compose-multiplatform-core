@@ -1879,10 +1879,21 @@ object JbrSkiaCommandRecorder {
                         *pathData,
                     )
                 }
+                is JbrSkiaPathEffectDescriptor.Chain -> {
+                    val outerHandle = definePathEffectIfNeeded(descriptor.outer) ?: return null
+                    val innerHandle = definePathEffectIfNeeded(descriptor.inner) ?: return null
+                    intArrayOf(
+                        outerHandle.highInt(),
+                        outerHandle.lowInt(),
+                        innerHandle.highInt(),
+                        innerHandle.lowInt(),
+                    )
+                }
             }
             val type = when (descriptor) {
                 is JbrSkiaPathEffectDescriptor.Corner -> COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT
                 is JbrSkiaPathEffectDescriptor.Stamped -> COMMAND_EFFECT_DESCRIPTOR_STAMPED_PATH_EFFECT
+                is JbrSkiaPathEffectDescriptor.Chain -> COMMAND_EFFECT_DESCRIPTOR_CHAIN_PATH_EFFECT
             }
             val handle = effectDescriptorHandleKey(type, payload)
             defineEffectDescriptorIfNeeded(handle, type, payload)
@@ -3444,6 +3455,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EFFECT_DESCRIPTOR_RUNTIME_COLOR_FILTER = 8
     private const val COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT = 9
     private const val COMMAND_EFFECT_DESCRIPTOR_STAMPED_PATH_EFFECT = 10
+    private const val COMMAND_EFFECT_DESCRIPTOR_CHAIN_PATH_EFFECT = 11
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_SHADER_DESCRIPTOR_LINEAR_GRADIENT = 1
     private const val COMMAND_SHADER_DESCRIPTOR_RADIAL_GRADIENT = 2
@@ -3471,7 +3483,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-        private const val COMMAND_STREAM_ABI_ID = 97
+        private const val COMMAND_STREAM_ABI_ID = 98
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
