@@ -1745,6 +1745,11 @@ object JbrSkiaCommandRecorder {
                 addDashedPath(path, paint, dashPathEffect)
                 return
             }
+            val pathEffectDescriptor = paint.pathEffectDescriptor
+            if (pathEffectDescriptor != null) {
+                addPathEffectDescriptorPath(path, paint, pathEffectDescriptor)
+                return
+            }
             if (!paint.isSupportedSolidColor) return
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
@@ -1767,6 +1772,42 @@ object JbrSkiaCommandRecorder {
                 if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
                 if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
                 if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
+                path.fillType.commandValue(),
+                pathData.size,
+                *pathData,
+            )
+        }
+
+        private fun addPathEffectDescriptorPath(
+            path: Path,
+            paint: Paint,
+            descriptor: JbrSkiaPathEffectDescriptor,
+        ) {
+            if (!paint.isSupportedPathEffectDescriptorSolidColor) return
+            val style = when (paint.style) {
+                PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
+                PaintingStyle.Stroke -> COMMAND_PAINT_STYLE_STROKE
+                else -> {
+                    countUnsupported("paintStyle")
+                    return
+                }
+            }
+            val handle = definePathEffectIfNeeded(descriptor) ?: return
+            val pathData = path.commandData() ?: run {
+                countUnsupported("path")
+                return
+            }
+            commands.addCommand(
+                COMMAND_DRAW_PATH_PATH_EFFECT_REF,
+                paint.recordFlags(),
+                style,
+                paint.commandColor(),
+                if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
+                if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
+                handle.highInt(),
+                handle.lowInt(),
                 path.fillType.commandValue(),
                 pathData.size,
                 *pathData,
@@ -1804,6 +1845,21 @@ object JbrSkiaCommandRecorder {
                 pathData.size,
                 *pathData,
             )
+        }
+
+        private fun definePathEffectIfNeeded(descriptor: JbrSkiaPathEffectDescriptor): Long? {
+            val payload = when (descriptor) {
+                is JbrSkiaPathEffectDescriptor.Corner -> {
+                    if (!descriptor.radius.isFinite() || descriptor.radius < 0f) {
+                        countUnsupported("pathEffect")
+                        return null
+                    }
+                    intArrayOf(descriptor.radius.toRawBits())
+                }
+            }
+            val handle = effectDescriptorHandleKey(COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT, payload)
+            defineEffectDescriptorIfNeeded(handle, COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT, payload)
+            return handle
         }
 
         private fun addLinearGradientPath(path: Path, paint: Paint) {
@@ -2137,12 +2193,38 @@ object JbrSkiaCommandRecorder {
             get() =
                 (pathEffect as? SkiaBackedPathEffect)?.jbrSkiaDashPathEffect
 
+        private val Paint.pathEffectDescriptor: JbrSkiaPathEffectDescriptor?
+            get() =
+                (pathEffect as? SkiaBackedPathEffect)?.jbrSkiaPathEffectDescriptor
+
         private val Paint.isSupportedLayerPaint: Boolean
             get() =
                 (blendMode == BlendMode.SrcOver || commandBlendMode != null) &&
                     shader == null &&
                     (colorFilter == null || descriptorColorFilterOrNull(colorFilter) != null) &&
                     pathEffect == null
+
+        private val Paint.isSupportedPathEffectDescriptorSolidColor: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                return supported
+            }
 
         private val Paint.commandBlendMode: Int?
             get() = commandBlendModeOrNull(blendMode)
@@ -3316,6 +3398,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_RECT_DASH_PATH_EFFECT = 59
     private const val COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT = 60
     private const val COMMAND_STROKE_PATH_DASH_PATH_EFFECT = 61
+    private const val COMMAND_DRAW_PATH_PATH_EFFECT_REF = 62
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -3324,6 +3407,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EFFECT_DESCRIPTOR_BLUR_IMAGE_FILTER_WITH_INPUT = 6
     private const val COMMAND_EFFECT_DESCRIPTOR_OFFSET_IMAGE_FILTER_WITH_INPUT = 7
     private const val COMMAND_EFFECT_DESCRIPTOR_RUNTIME_COLOR_FILTER = 8
+    private const val COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT = 9
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_SHADER_DESCRIPTOR_LINEAR_GRADIENT = 1
     private const val COMMAND_SHADER_DESCRIPTOR_RADIAL_GRADIENT = 2
@@ -3351,7 +3435,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-        private const val COMMAND_STREAM_ABI_ID = 95
+        private const val COMMAND_STREAM_ABI_ID = 96
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

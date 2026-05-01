@@ -1379,6 +1379,50 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesCornerPathEffectDescriptorPathRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Green
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    pathEffect = PathEffect.cornerPathEffect(6f)
+                },
+            )
+        }!!
+
+        assertEquals(41, commands.size)
+        assertArrayEquals(
+            intArrayOf(1246972723, 96, 0, 35, 1, 1, 49, 36, 0),
+            commands.copyOfRange(0, 9),
+        )
+        assertEquals(9, commands[11])
+        assertEquals(1, commands[12])
+        assertEquals(1, commands[13])
+        assertEquals(6f.toRawBits(), commands[14])
+        assertArrayEquals(
+            intArrayOf(
+                62, 104, 1, 1, Color.Green.toArgb(), 8, 0, 1, 0, commands[9], commands[10], 0, 13,
+                0, 1000, 2000,
+                1, 11000, 12000,
+                1, 21000, 2000,
+                1, 1000, 2000,
+                4,
+            ),
+            commands.copyOfRange(15, 41),
+        )
+    }
+
+    @Test
     fun writesLinearGradientPathRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)
