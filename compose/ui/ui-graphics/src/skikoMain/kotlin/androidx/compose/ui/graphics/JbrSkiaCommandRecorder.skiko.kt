@@ -675,7 +675,7 @@ object JbrSkiaCommandRecorder {
                 translate(-pivotX, -pivotY)
             }
             if (shadowElevation > 0f) {
-                if (!addLayerShadow(width, height, shadowElevation, ambientShadowColor, spotShadowColor, shadowPath)) {
+                if (!addLayerShadow(width, height, shadowElevation, alpha, ambientShadowColor, spotShadowColor, shadowPath)) {
                     return false
                 }
             }
@@ -814,6 +814,7 @@ object JbrSkiaCommandRecorder {
             width: Float,
             height: Float,
             elevation: Float,
+            layerAlpha: Float,
             ambientColor: Color,
             spotColor: Color,
             shapePath: Path?,
@@ -823,6 +824,12 @@ object JbrSkiaCommandRecorder {
             ) {
                 countUnsupported("graphicsLayer:shadow")
                 return false
+            }
+            val shadowPath = shapePath ?: Path().apply {
+                addRect(Rect(0f, 0f, width, height))
+            }
+            if (addLayerShadowPath(shadowPath, elevation, layerAlpha, ambientColor, spotColor)) {
+                return true
             }
             if (!addLayerShadowPass(
                     width = width,
@@ -845,6 +852,40 @@ object JbrSkiaCommandRecorder {
                 alphaScale = 0.28f,
                 shapePath = shapePath,
             )
+        }
+
+        private fun addLayerShadowPath(
+            path: Path,
+            elevation: Float,
+            layerAlpha: Float,
+            ambientColor: Color,
+            spotColor: Color,
+        ): Boolean {
+            val pathData = path.commandData() ?: run {
+                countUnsupported("graphicsLayer:shadowPath")
+                return false
+            }
+            val ambientAlpha = (ambientColor.alpha * 0.039f * layerAlpha).coerceIn(0f, 1f)
+            val spotAlpha = (spotColor.alpha * 0.19f * layerAlpha).coerceIn(0f, 1f)
+            if (ambientAlpha <= 0f && spotAlpha <= 0f) return true
+            commands.addCommand(
+                COMMAND_DRAW_SHADOW_PATH,
+                COMMAND_RECORD_FLAG_ANTIALIAS,
+                ambientColor.copy(alpha = ambientAlpha).toArgb(),
+                spotColor.copy(alpha = spotAlpha).toArgb(),
+                0f.toRawBits(),
+                0f.toRawBits(),
+                elevation.toRawBits(),
+                0f.toRawBits(),
+                (-300f).toRawBits(),
+                600f.toRawBits(),
+                800f.toRawBits(),
+                if (layerAlpha < 1f) 1 else 0,
+                path.fillType.commandValue(),
+                pathData.size,
+                *pathData,
+            )
+            return true
         }
 
         private fun addLayerShadowPass(
@@ -3652,7 +3693,8 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-        private const val COMMAND_STREAM_ABI_ID = 99
+    private const val COMMAND_DRAW_SHADOW_PATH = 64
+    private const val COMMAND_STREAM_ABI_ID = 99
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
