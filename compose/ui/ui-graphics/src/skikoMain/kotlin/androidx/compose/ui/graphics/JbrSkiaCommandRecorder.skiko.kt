@@ -245,6 +245,7 @@ object JbrSkiaCommandRecorder {
         data class SweepGradient(val shader: JbrSkiaSweepGradientShader) : ShaderDescriptor()
         data class Image(val shader: JbrSkiaImageShader) : ShaderDescriptor()
         data class Composite(val shader: JbrSkiaCompositeShader) : ShaderDescriptor()
+        data class RuntimeEffect(val shader: JbrSkiaRuntimeEffectShader) : ShaderDescriptor()
     }
 
     internal fun shaderDescriptorOrNull(shader: Shader?): ShaderDescriptor? {
@@ -254,6 +255,7 @@ object JbrSkiaCommandRecorder {
         shader.jbrSkiaSweepGradient?.let { return ShaderDescriptor.SweepGradient(it) }
         shader.jbrSkiaImageShader?.let { return ShaderDescriptor.Image(it) }
         shader.jbrSkiaCompositeShader?.let { return ShaderDescriptor.Composite(it) }
+        shader.jbrSkiaRuntimeEffectShader?.let { return ShaderDescriptor.RuntimeEffect(it) }
         return null
     }
 
@@ -824,7 +826,8 @@ object JbrSkiaCommandRecorder {
                 addClearRect(left, top, right, bottom)
                 return
             }
-            if (paint.shader?.jbrSkiaCompositeShader != null) {
+            val descriptor = shaderDescriptorOrNull(paint.shader)
+            if (descriptor is ShaderDescriptor.Composite || descriptor is ShaderDescriptor.RuntimeEffect) {
                 addShaderDescriptorRect(left, top, right, bottom, paint)
                 return
             }
@@ -2168,6 +2171,7 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.RadialGradient -> shader.shader.radialGradientDescriptorPayload()
                 is ShaderDescriptor.SweepGradient -> shader.shader.sweepGradientDescriptorPayload()
                 is ShaderDescriptor.Image -> shader.shader.imageShaderDescriptorPayload()
+                is ShaderDescriptor.RuntimeEffect -> shader.shader.runtimeEffectDescriptorPayload()
                 is ShaderDescriptor.Composite -> {
                     val dstHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.dst) ?: return null) ?: return null
                     val srcHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.src) ?: return null) ?: return null
@@ -2226,6 +2230,7 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.SweepGradient -> COMMAND_SHADER_DESCRIPTOR_SWEEP_GRADIENT
                 is ShaderDescriptor.Image -> COMMAND_SHADER_DESCRIPTOR_IMAGE
                 is ShaderDescriptor.Composite -> COMMAND_SHADER_DESCRIPTOR_COMPOSITE
+                is ShaderDescriptor.RuntimeEffect -> COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT
             }
 
         private fun shaderHandleKey(type: Int, payload: IntArray): Long {
@@ -2305,6 +2310,14 @@ object JbrSkiaCommandRecorder {
                 tileModeX.commandValue(),
                 tileModeY.commandValue(),
             )
+        }
+
+        private fun JbrSkiaRuntimeEffectShader.runtimeEffectDescriptorPayload(): IntArray? {
+            if (sksl.isEmpty() || sksl.length > 4096 || uniforms.size > 256) return null
+            if (sksl.any { it.code !in 1..127 }) return null
+            return intArrayOf(sksl.length, uniforms.size) +
+                sksl.map { it.code }.toIntArray() +
+                uniforms.map { it.toRawBits() }.toIntArray()
         }
 
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
@@ -2961,6 +2974,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SHADER_DESCRIPTOR_SWEEP_GRADIENT = 3
     private const val COMMAND_SHADER_DESCRIPTOR_IMAGE = 4
     private const val COMMAND_SHADER_DESCRIPTOR_COMPOSITE = 5
+    private const val COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT = 6
     private const val COMMAND_SHADER_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -2981,7 +2995,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 85
+    private const val COMMAND_STREAM_ABI_ID = 86
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

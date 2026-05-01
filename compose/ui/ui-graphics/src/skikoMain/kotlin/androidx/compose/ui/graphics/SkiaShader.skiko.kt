@@ -18,8 +18,11 @@ package androidx.compose.ui.graphics
 
 import androidx.compose.ui.geometry.Offset
 import org.jetbrains.skia.Color4f
+import org.jetbrains.skia.Data
 import org.jetbrains.skia.Gradient
 import org.jetbrains.skia.Matrix33
+import org.jetbrains.skia.RuntimeEffect
+import org.jetbrains.skia.impl.use
 import org.jetbrains.skia.Shader as SkShader
 
 actual class Shader internal constructor(
@@ -29,6 +32,7 @@ actual class Shader internal constructor(
     internal val jbrSkiaSweepGradient: JbrSkiaSweepGradientShader? = null,
     internal val jbrSkiaImageShader: JbrSkiaImageShader? = null,
     internal val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
+    internal val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
 )
 
 /**
@@ -70,11 +74,41 @@ internal data class JbrSkiaCompositeShader(
     val blendMode: BlendMode,
 )
 
+internal data class JbrSkiaRuntimeEffectShader(
+    val sksl: String,
+    val uniforms: FloatArray,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is JbrSkiaRuntimeEffectShader &&
+            sksl == other.sksl &&
+            uniforms.contentEquals(other.uniforms)
+
+    override fun hashCode(): Int =
+        31 * sksl.hashCode() + uniforms.contentHashCode()
+}
+
 /**
  * Provides access to the underlying [org.jetbrains.skia.Shader] instance.
  */
 val Shader.skiaShader: SkShader
     get() = internalSkiaShader
+
+@ExperimentalGraphicsApi
+fun RuntimeEffectShader(sksl: String, uniforms: FloatArray = FloatArray(0)): Shader {
+    val uniformCopy = uniforms.copyOf()
+    val skiaShader = RuntimeEffect.makeForShader(sksl).use { effect ->
+        uniformCopy.toUniformData().use { uniformData ->
+            effect.makeShader(uniformData, emptyArray(), null)
+        }
+    }
+    return Shader(
+        internalSkiaShader = skiaShader,
+        jbrSkiaRuntimeEffectShader = JbrSkiaRuntimeEffectShader(
+            sksl = sksl,
+            uniforms = uniformCopy,
+        ),
+    )
+}
 
 internal actual class TransformShader {
     private var _shader: Shader? = null
@@ -219,7 +253,22 @@ private val Shader.hasJbrSkiaShaderMetadata: Boolean
         jbrSkiaRadialGradient != null ||
         jbrSkiaSweepGradient != null ||
         jbrSkiaImageShader != null ||
-        jbrSkiaCompositeShader != null
+        jbrSkiaCompositeShader != null ||
+        jbrSkiaRuntimeEffectShader != null
+
+private fun FloatArray.toUniformData(): Data {
+    if (isEmpty()) return Data.makeEmpty()
+    val bytes = ByteArray(size * 4)
+    forEachIndexed { index, value ->
+        val bits = value.toRawBits()
+        val offset = index * 4
+        bytes[offset] = bits.toByte()
+        bytes[offset + 1] = (bits ushr 8).toByte()
+        bytes[offset + 2] = (bits ushr 16).toByte()
+        bytes[offset + 3] = (bits ushr 24).toByte()
+    }
+    return Data.makeFromBytes(bytes)
+}
 
 private fun List<Color>.toSkiaGradient(
     colorStops: List<Float>?,
