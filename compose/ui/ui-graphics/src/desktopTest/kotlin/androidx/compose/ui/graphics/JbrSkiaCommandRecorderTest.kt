@@ -1165,7 +1165,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 94, 0, 16, 1, 1,
+                1246972723, 95, 0, 16, 1, 1,
                 59, 64, 1, Color.White.toArgb(), 1, 2, 20, 30, 8, 0, 1, 0, 3000, 2, 16000, 10000,
             ),
             commands,
@@ -1193,7 +1193,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 94, 0, 18, 1, 1,
+                1246972723, 95, 0, 18, 1, 1,
                 60, 72, 1, Color.White.toArgb(), 1000, 2000, 21000, 32000, 4000, 5000,
                 8, 0, 1, 0, 3000, 2, 16000, 10000,
             ),
@@ -1333,6 +1333,41 @@ class JbrSkiaCommandRecorderTest {
             intArrayOf(
                 1246972723, 90, 0, 24, 1, 1,
                 21, 96, 1, 0, Color.Green.toArgb(), 0, 0, 0, 0, 0, 13,
+                0, 1000, 2000,
+                1, 11000, 12000,
+                1, 21000, 2000,
+                1, 1000, 2000,
+                4,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesDashedStrokePathRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Green
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 10f), 3f)
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 95, 0, 27, 1, 1,
+                61, 108, 1, Color.Green.toArgb(), 8, 0, 1, 0, 3000, 2, 16000, 10000, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
                 1, 21000, 2000,
