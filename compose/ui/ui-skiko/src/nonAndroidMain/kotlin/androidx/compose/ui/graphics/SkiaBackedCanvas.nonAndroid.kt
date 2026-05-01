@@ -141,7 +141,7 @@ internal class SkiaBackedCanvas : Canvas {
 
     override fun concat(matrix: Matrix) {
         if (!matrix.isIdentity()) {
-            JbrSkiaCommandRecorder.unsupportedTransform()
+            JbrSkiaCommandRecorder.concat(matrix)
             internalSkiaCanvas.concat(matrix.toSkia())
         }
     }
