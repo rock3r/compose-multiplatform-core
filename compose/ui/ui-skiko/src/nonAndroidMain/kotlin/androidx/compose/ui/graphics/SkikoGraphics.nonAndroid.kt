@@ -301,7 +301,10 @@ internal object SkikoGraphics : PlatformGraphics {
     override fun colorMatrixFromFilter(filter: PlatformColorFilter): ColorMatrix = ColorMatrix()
 
     override fun createCornerPathEffect(radius: Float): PathEffect =
-        SkPathEffect.makeCorner(radius).asComposePathEffect()
+        SkiaBackedPathEffect(
+            SkPathEffect.makeCorner(radius),
+            jbrSkiaPathEffectDescriptor = JbrSkiaPathEffectDescriptor.Corner(radius),
+        )
 
     override fun createDashPathEffect(
         intervals: FloatArray,

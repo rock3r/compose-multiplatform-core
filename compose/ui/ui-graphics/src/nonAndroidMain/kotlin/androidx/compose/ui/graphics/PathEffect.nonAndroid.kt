@@ -19,6 +19,26 @@ package androidx.compose.ui.graphics
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.graphics.platform.PlatformGraphicsRegistry
 
+@InternalComposeUiApi
+data class JbrSkiaDashPathEffect(
+    val intervals: FloatArray,
+    val phase: Float,
+)
+
+@InternalComposeUiApi
+sealed interface JbrSkiaPathEffectDescriptor {
+    data class Corner(val radius: Float) : JbrSkiaPathEffectDescriptor
+}
+
+@InternalComposeUiApi
+interface JbrSkiaPathEffectMetadata {
+    val jbrSkiaDashPathEffect: JbrSkiaDashPathEffect?
+        get() = null
+
+    val jbrSkiaPathEffectDescriptor: JbrSkiaPathEffectDescriptor?
+        get() = null
+}
+
 @OptIn(InternalComposeUiApi::class)
 internal actual fun actualCornerPathEffect(radius: Float): PathEffect =
     PlatformGraphicsRegistry.requireCurrent().createCornerPathEffect(radius)

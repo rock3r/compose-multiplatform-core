@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
+@file:OptIn(androidx.compose.ui.InternalComposeUiApi::class)
 @file:JvmName("SkiaBackedPathEffect_skikoKt")
 
 package androidx.compose.ui.graphics
 
 import kotlin.jvm.JvmName
+import androidx.compose.ui.InternalComposeUiApi
 import org.jetbrains.skia.PathEffect as SkPathEffect
 
 internal class SkiaBackedPathEffect(
     internal val internalSkiaPathEffect: SkPathEffect,
-    internal val jbrSkiaDashPathEffect: JbrSkiaDashPathEffect? = null,
-) : PathEffect
-
-internal class JbrSkiaDashPathEffect(
-    val intervals: FloatArray,
-    val phase: Float,
-)
+    override val jbrSkiaDashPathEffect: JbrSkiaDashPathEffect? = null,
+    override val jbrSkiaPathEffectDescriptor: JbrSkiaPathEffectDescriptor? = null,
+) : PathEffect, JbrSkiaPathEffectMetadata
 
 /**
  * Convert the [org.jetbrains.skia.PathEffect] instance into a Compose-compatible PathEffect
