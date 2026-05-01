@@ -38,11 +38,14 @@ fun RuntimeEffectColorFilter(
     sksl: String,
     uniforms: FloatArray = FloatArray(0),
     uniformSchema: List<RuntimeEffectUniform> = emptyList(),
+    children: List<ColorFilter> = emptyList(),
+    namedChildren: List<RuntimeEffectColorFilterChild> = emptyList(),
 ): ColorFilter {
     val uniformCopy = uniforms.copyOf()
+    val childColorFilters = children + namedChildren.map { it.colorFilter }
     val skiaColorFilter = RuntimeEffect.makeForColorFilter(sksl).use { effect ->
         uniformCopy.toUniformData().use { uniformData ->
-            effect.makeColorFilter(uniformData)
+            effect.makeColorFilter(uniformData, childColorFilters.map { it.asSkiaColorFilter() }.toTypedArray())
         }
     }
     return SkikoColorFilter(
@@ -51,6 +54,8 @@ fun RuntimeEffectColorFilter(
             sksl = sksl,
             uniforms = uniformCopy,
             uniformSchema = uniformSchema.toList(),
+            children = children.toList(),
+            namedChildren = namedChildren.toList(),
         ),
     ).asComposeColorFilter()
 }

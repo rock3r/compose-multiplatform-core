@@ -29,16 +29,28 @@ data class JbrSkiaRuntimeEffectColorFilter(
     val sksl: String,
     val uniforms: FloatArray,
     val uniformSchema: List<RuntimeEffectUniform>,
+    val children: List<ColorFilter>,
+    val namedChildren: List<RuntimeEffectColorFilterChild>,
 ) {
     override fun equals(other: Any?): Boolean =
         other is JbrSkiaRuntimeEffectColorFilter &&
             sksl == other.sksl &&
             uniforms.contentEquals(other.uniforms) &&
-            uniformSchema == other.uniformSchema
+            uniformSchema == other.uniformSchema &&
+            children == other.children &&
+            namedChildren == other.namedChildren
 
     override fun hashCode(): Int =
-        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()
+        31 * (31 * (31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()) +
+            children.hashCode()) +
+            namedChildren.hashCode()
 }
+
+@ExperimentalGraphicsApi
+data class RuntimeEffectColorFilterChild(
+    val name: String,
+    val colorFilter: ColorFilter,
+)
 
 @OptIn(InternalComposeUiApi::class)
 internal val ColorFilter.jbrSkiaRuntimeEffectColorFilter: JbrSkiaRuntimeEffectColorFilter?
