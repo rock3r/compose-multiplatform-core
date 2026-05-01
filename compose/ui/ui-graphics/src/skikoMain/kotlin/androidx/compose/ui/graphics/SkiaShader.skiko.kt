@@ -288,7 +288,7 @@ private val Shader.hasJbrSkiaShaderMetadata: Boolean
         jbrSkiaCompositeShader != null ||
         jbrSkiaRuntimeEffectShader != null
 
-private fun FloatArray.toUniformData(): Data {
+internal fun FloatArray.toUniformData(): Data {
     if (isEmpty()) return Data.makeEmpty()
     val bytes = ByteArray(size * 4)
     forEachIndexed { index, value ->

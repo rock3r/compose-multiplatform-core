@@ -18,6 +18,7 @@ package androidx.compose.ui.graphics
 
 import org.jetbrains.skia.ColorFilter as SkColorFilter
 import org.jetbrains.skia.ColorMatrix as SkColorMatrix
+import org.jetbrains.skia.RuntimeEffect
 
 internal actual typealias NativeColorFilter = SkColorFilter
 
@@ -30,6 +31,50 @@ fun ColorFilter.asSkiaColorFilter(): SkColorFilter = nativeColorFilter
  * Create a [ColorFilter] from the given [org.jetbrains.skia.ColorFilter] instance
  */
 fun SkColorFilter.asComposeColorFilter(): ColorFilter = ColorFilter(this)
+
+@OptIn(ExperimentalGraphicsApi::class)
+internal data class JbrSkiaRuntimeEffectColorFilter(
+    val sksl: String,
+    val uniforms: FloatArray,
+    val uniformSchema: List<RuntimeEffectUniform>,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is JbrSkiaRuntimeEffectColorFilter &&
+            sksl == other.sksl &&
+            uniforms.contentEquals(other.uniforms) &&
+            uniformSchema == other.uniformSchema
+
+    override fun hashCode(): Int =
+        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()
+}
+
+@OptIn(ExperimentalGraphicsApi::class)
+internal class JbrSkiaRuntimeEffectColorFilterHolder(
+    nativeColorFilter: NativeColorFilter,
+    val jbrSkiaRuntimeEffectColorFilter: JbrSkiaRuntimeEffectColorFilter,
+) : ColorFilter(nativeColorFilter)
+
+@ExperimentalGraphicsApi
+fun RuntimeEffectColorFilter(
+    sksl: String,
+    uniforms: FloatArray = FloatArray(0),
+    uniformSchema: List<RuntimeEffectUniform> = emptyList(),
+): ColorFilter {
+    val uniformCopy = uniforms.copyOf()
+    val skiaColorFilter = RuntimeEffect.makeForColorFilter(sksl).use { effect ->
+        uniformCopy.toUniformData().use { uniformData ->
+            effect.makeColorFilter(uniformData)
+        }
+    }
+    return JbrSkiaRuntimeEffectColorFilterHolder(
+        nativeColorFilter = skiaColorFilter,
+        jbrSkiaRuntimeEffectColorFilter = JbrSkiaRuntimeEffectColorFilter(
+            sksl = sksl,
+            uniforms = uniformCopy,
+            uniformSchema = uniformSchema.toList(),
+        ),
+    )
+}
 
 internal actual fun actualTintColorFilter(color: Color, blendMode: BlendMode): NativeColorFilter =
     SkColorFilter.makeBlend(color.toArgb(), blendMode.toSkia())

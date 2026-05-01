@@ -2008,6 +2008,26 @@ class JbrSkiaCommandRecorderTest {
 
     @OptIn(ExperimentalGraphicsApi::class)
     @Test
+    fun runtimeEffectColorFilterKeepsJbrSkiaMetadata() {
+        val colorFilter = RuntimeEffectColorFilter(
+            sksl = """
+                uniform float phase;
+                half4 main(half4 inColor) {
+                    return half4(inColor.r * phase, inColor.g, inColor.b, inColor.a);
+                }
+            """.trimIndent(),
+            uniforms = floatArrayOf(0.5f),
+            uniformSchema = listOf(RuntimeEffectUniform("phase", 0, 1)),
+        )
+
+        val runtimeEffect = (colorFilter as? JbrSkiaRuntimeEffectColorFilterHolder)?.jbrSkiaRuntimeEffectColorFilter
+        assertEquals(floatArrayOf(0.5f).toList(), runtimeEffect?.uniforms?.toList())
+        assertEquals(listOf(RuntimeEffectUniform("phase", 0, 1)), runtimeEffect?.uniformSchema)
+        assertTrue(runtimeEffect?.sksl?.contains("uniform float phase") == true)
+    }
+
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
     fun writesRuntimeEffectShaderDescriptorRectInStrictMode() {
         val sksl = """
             uniform float red;
