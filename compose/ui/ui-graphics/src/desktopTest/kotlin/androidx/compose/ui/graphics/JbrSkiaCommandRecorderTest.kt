@@ -2846,6 +2846,43 @@ class JbrSkiaCommandRecorderTest {
         assertTrue(composite?.src?.jbrSkiaRadialGradient != null)
     }
 
+    @Test
+    fun writesLinearGradientShaderWithColorFilterDescriptorRectInStrictMode() {
+        val shader = LinearGradientShader(
+            from = Offset(1f, 2f),
+            to = Offset(11f, 12f),
+            colors = listOf(Color.Red, Color.Blue),
+            colorStops = listOf(0.25f, 0.75f),
+            tileMode = TileMode.Clamp,
+        )
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                        colorFilter = ColorFilter.tint(Color.Cyan, BlendMode.SrcIn)
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(49))
+            assertEquals(2, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+            val shaderDescriptors = commands.commandRecords().filter { it[0] == 56 }
+            assertEquals(1, shaderDescriptors.first()[5])
+            assertEquals(7, shaderDescriptors.last()[5])
+            assertEquals(1, shaderDescriptors.last()[6])
+            assertEquals(4, shaderDescriptors.last()[7])
+        }
+    }
+
     @OptIn(ExperimentalGraphicsApi::class)
     @Test
     fun runtimeEffectShaderKeepsJbrSkiaMetadata() {
