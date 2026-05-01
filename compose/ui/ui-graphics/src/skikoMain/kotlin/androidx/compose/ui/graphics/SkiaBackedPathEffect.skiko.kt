@@ -32,6 +32,12 @@ internal class JbrSkiaDashPathEffect(
 
 internal sealed interface JbrSkiaPathEffectDescriptor {
     data class Corner(val radius: Float) : JbrSkiaPathEffectDescriptor
+    data class Stamped(
+        val shape: Path,
+        val advance: Float,
+        val phase: Float,
+        val style: StampedPathEffectStyle,
+    ) : JbrSkiaPathEffectDescriptor
 }
 
 /**
@@ -82,7 +88,8 @@ internal actual fun actualStampedPathEffect(
             advance,
             phase,
             style.toSkiaStampedPathEffectStyle()
-        )
+        ),
+        jbrSkiaPathEffectDescriptor = JbrSkiaPathEffectDescriptor.Stamped(shape, advance, phase, style),
     )
 
 internal fun StampedPathEffectStyle.toSkiaStampedPathEffectStyle(): SkPathEffect.Style =

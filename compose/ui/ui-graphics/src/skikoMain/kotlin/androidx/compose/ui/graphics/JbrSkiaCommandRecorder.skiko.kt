@@ -1856,9 +1856,36 @@ object JbrSkiaCommandRecorder {
                     }
                     intArrayOf(descriptor.radius.toRawBits())
                 }
+                is JbrSkiaPathEffectDescriptor.Stamped -> {
+                    if (!descriptor.advance.isFinite() || descriptor.advance <= 0f ||
+                        !descriptor.phase.isFinite() || descriptor.phase < 0f
+                    ) {
+                        countUnsupported("pathEffect")
+                        return null
+                    }
+                    val pathData = descriptor.shape.commandData() ?: run {
+                        countUnsupported("pathEffect")
+                        return null
+                    }
+                    intArrayOf(
+                        descriptor.advance.toRawBits(),
+                        descriptor.phase.toRawBits(),
+                        descriptor.style.commandValue() ?: run {
+                            countUnsupported("pathEffect")
+                            return null
+                        },
+                        descriptor.shape.fillType.commandValue(),
+                        pathData.size,
+                        *pathData,
+                    )
+                }
             }
-            val handle = effectDescriptorHandleKey(COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT, payload)
-            defineEffectDescriptorIfNeeded(handle, COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT, payload)
+            val type = when (descriptor) {
+                is JbrSkiaPathEffectDescriptor.Corner -> COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT
+                is JbrSkiaPathEffectDescriptor.Stamped -> COMMAND_EFFECT_DESCRIPTOR_STAMPED_PATH_EFFECT
+            }
+            val handle = effectDescriptorHandleKey(type, payload)
+            defineEffectDescriptorIfNeeded(handle, type, payload)
             return handle
         }
 
@@ -2402,6 +2429,14 @@ object JbrSkiaCommandRecorder {
                 PathFillType.NonZero -> PATH_FILL_TYPE_NON_ZERO
                 PathFillType.EvenOdd -> PATH_FILL_TYPE_EVEN_ODD
                 else -> PATH_FILL_TYPE_NON_ZERO
+            }
+
+        private fun StampedPathEffectStyle.commandValue(): Int? =
+            when (this) {
+                StampedPathEffectStyle.Translate -> 0
+                StampedPathEffectStyle.Rotate -> 1
+                StampedPathEffectStyle.Morph -> 2
+                else -> null
             }
 
         private fun Long.highInt(): Int = (this ushr 32).toInt()
@@ -3408,6 +3443,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EFFECT_DESCRIPTOR_OFFSET_IMAGE_FILTER_WITH_INPUT = 7
     private const val COMMAND_EFFECT_DESCRIPTOR_RUNTIME_COLOR_FILTER = 8
     private const val COMMAND_EFFECT_DESCRIPTOR_CORNER_PATH_EFFECT = 9
+    private const val COMMAND_EFFECT_DESCRIPTOR_STAMPED_PATH_EFFECT = 10
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_SHADER_DESCRIPTOR_LINEAR_GRADIENT = 1
     private const val COMMAND_SHADER_DESCRIPTOR_RADIAL_GRADIENT = 2
@@ -3435,7 +3471,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-        private const val COMMAND_STREAM_ABI_ID = 96
+        private const val COMMAND_STREAM_ABI_ID = 97
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
