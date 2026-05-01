@@ -69,11 +69,14 @@ object JbrSkiaCommandRecorder {
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
+    private const val MAX_DEFINED_SHADER_HANDLES = 1024
     private val active = ThreadLocal<Recorder?>()
     private val imageCacheLock = Any()
     private val definedImageKeys = LinkedHashMap<Long, Unit>(MAX_DEFINED_IMAGE_KEYS, 0.75f, true)
     private val colorFilterHandleLock = Any()
     private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
+    private val shaderHandleLock = Any()
+    private val definedShaderHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_SHADER_HANDLES, 0.75f, true)
 
     fun record(block: () -> Unit): IntArray? {
         return recordFrame(block).commands
@@ -204,6 +207,9 @@ object JbrSkiaCommandRecorder {
             else -> null
         }
 
+    internal fun commandShaderBlendModeOrNull(blendMode: BlendMode): Int? =
+        if (blendMode == BlendMode.SrcOver) COMMAND_BLEND_MODE_SRC_OVER else commandBlendModeOrNull(blendMode)
+
     internal fun tintSrcInColorFilterOrNull(colorFilter: ColorFilter?): BlendModeColorFilter? =
         (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
@@ -233,6 +239,24 @@ object JbrSkiaCommandRecorder {
         ) : ImageFilterDescriptor()
     }
 
+    internal sealed class ShaderDescriptor {
+        data class LinearGradient(val shader: JbrSkiaLinearGradientShader) : ShaderDescriptor()
+        data class RadialGradient(val shader: JbrSkiaRadialGradientShader) : ShaderDescriptor()
+        data class SweepGradient(val shader: JbrSkiaSweepGradientShader) : ShaderDescriptor()
+        data class Image(val shader: JbrSkiaImageShader) : ShaderDescriptor()
+        data class Composite(val shader: JbrSkiaCompositeShader) : ShaderDescriptor()
+    }
+
+    internal fun shaderDescriptorOrNull(shader: Shader?): ShaderDescriptor? {
+        shader ?: return null
+        shader.jbrSkiaLinearGradient?.let { return ShaderDescriptor.LinearGradient(it) }
+        shader.jbrSkiaRadialGradient?.let { return ShaderDescriptor.RadialGradient(it) }
+        shader.jbrSkiaSweepGradient?.let { return ShaderDescriptor.SweepGradient(it) }
+        shader.jbrSkiaImageShader?.let { return ShaderDescriptor.Image(it) }
+        shader.jbrSkiaCompositeShader?.let { return ShaderDescriptor.Composite(it) }
+        return null
+    }
+
     fun markUnsupportedDraw(reason: String) {
         active.get()?.unsupportedDraw(reason)
     }
@@ -243,6 +267,9 @@ object JbrSkiaCommandRecorder {
         }
         synchronized(colorFilterHandleLock) {
             definedColorFilterHandles.clear()
+        }
+        synchronized(shaderHandleLock) {
+            definedShaderHandles.clear()
         }
     }
 
@@ -795,6 +822,10 @@ object JbrSkiaCommandRecorder {
         fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
             if (paint.blendMode == BlendMode.Clear) {
                 addClearRect(left, top, right, bottom)
+                return
+            }
+            if (paint.shader?.jbrSkiaCompositeShader != null) {
+                addShaderDescriptorRect(left, top, right, bottom, paint)
                 return
             }
             if (paint.shader?.jbrSkiaLinearGradient != null) {
@@ -1694,6 +1725,28 @@ object JbrSkiaCommandRecorder {
             )
         }
 
+        private fun addShaderDescriptorRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
+            val descriptor = shaderDescriptorOrNull(paint.shader) ?: return
+            if (!paint.isSupportedShaderDescriptorPaint || paint.style != PaintingStyle.Fill) {
+                return
+            }
+            val handle = defineShaderIfNeeded(descriptor) ?: run {
+                countUnsupported("shaderDescriptor")
+                return
+            }
+            commands.addCommand(
+                COMMAND_FILL_RECT_SHADER_REF,
+                paint.recordFlags(),
+                handle.highInt(),
+                handle.lowInt(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                paint.imageAlpha1000(),
+            )
+        }
+
         fun drawParagraphUtf16(
             text: String,
             x: Float,
@@ -1904,6 +1957,32 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
+        private val Paint.isSupportedShaderDescriptorPaint: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shaderDescriptorOrNull(shader) == null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
+
         private val Paint.isSupportedLinearGradient: Boolean
             get() {
                 var supported = true
@@ -2082,6 +2161,151 @@ object JbrSkiaCommandRecorder {
                 is ImageFilterDescriptor.Blur -> blurHandleKey()
                 is ImageFilterDescriptor.Offset -> offsetHandleKey()
             }
+
+        private fun defineShaderIfNeeded(shader: ShaderDescriptor): Long? {
+            val payload = when (shader) {
+                is ShaderDescriptor.LinearGradient -> shader.shader.linearGradientDescriptorPayload()
+                is ShaderDescriptor.RadialGradient -> shader.shader.radialGradientDescriptorPayload()
+                is ShaderDescriptor.SweepGradient -> shader.shader.sweepGradientDescriptorPayload()
+                is ShaderDescriptor.Image -> shader.shader.imageShaderDescriptorPayload()
+                is ShaderDescriptor.Composite -> {
+                    val dstHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.dst) ?: return null) ?: return null
+                    val srcHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.src) ?: return null) ?: return null
+                    val blendMode = commandShaderBlendModeOrNull(shader.shader.blendMode) ?: return null
+                    intArrayOf(dstHandle.highInt(), dstHandle.lowInt(), srcHandle.highInt(), srcHandle.lowInt(), blendMode)
+                }
+            } ?: return null
+            val type = shader.commandDescriptorType()
+            val handle = shaderHandleKey(type, payload)
+            defineShaderHandleIfNeeded(handle, type, payload)
+            return handle
+        }
+
+        private fun defineShaderHandleIfNeeded(handle: Long, type: Int, payload: IntArray) {
+            var evictedHandle: Long? = null
+            val shouldDefine = synchronized(shaderHandleLock) {
+                if (definedShaderHandles.containsKey(handle)) {
+                    definedShaderHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedShaderHandles.size >= MAX_DEFINED_SHADER_HANDLES) {
+                        val eldest = definedShaderHandles.keys.first()
+                        definedShaderHandles.remove(eldest)
+                        evictedHandle = eldest
+                    }
+                    definedShaderHandles[handle] = Unit
+                    true
+                }
+            }
+            evictedHandle?.let {
+                commands.addCommand(
+                    COMMAND_EVICT_SHADER_HANDLE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                commands.addCommand(
+                    COMMAND_DEFINE_SHADER_DESCRIPTOR,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    type,
+                    COMMAND_SHADER_DESCRIPTOR_VERSION_1,
+                    payload.size,
+                    *payload,
+                )
+            }
+        }
+
+        private fun ShaderDescriptor.commandDescriptorType(): Int =
+            when (this) {
+                is ShaderDescriptor.LinearGradient -> COMMAND_SHADER_DESCRIPTOR_LINEAR_GRADIENT
+                is ShaderDescriptor.RadialGradient -> COMMAND_SHADER_DESCRIPTOR_RADIAL_GRADIENT
+                is ShaderDescriptor.SweepGradient -> COMMAND_SHADER_DESCRIPTOR_SWEEP_GRADIENT
+                is ShaderDescriptor.Image -> COMMAND_SHADER_DESCRIPTOR_IMAGE
+                is ShaderDescriptor.Composite -> COMMAND_SHADER_DESCRIPTOR_COMPOSITE
+            }
+
+        private fun shaderHandleKey(type: Int, payload: IntArray): Long {
+            var hash = -3750763034362895579L
+            fun mix(value: Int) {
+                hash = hash xor value.toLong()
+                hash *= 1099511628211L
+            }
+            mix(type)
+            payload.forEach(::mix)
+            return hash
+        }
+
+        private fun JbrSkiaLinearGradientShader.linearGradientDescriptorPayload(): IntArray? {
+            if (colors.size !in 2..16 ||
+                !from.x.isFinite() ||
+                !from.y.isFinite() ||
+                !to.x.isFinite() ||
+                !to.y.isFinite()
+            ) return null
+            val stops = colorStops ?: evenlyDistributedStops(colors.size)
+            if (!stops.areValidGradientStops(colors.size)) return null
+            return listOf(
+                from.x.fixed1000(),
+                from.y.fixed1000(),
+                to.x.fixed1000(),
+                to.y.fixed1000(),
+                tileMode.commandValue(),
+                colors.size,
+            ).plus(colors.flatMapIndexed { index, color ->
+                listOf(color.toArgb(), stops[index].fixed1000())
+            }).toIntArray()
+        }
+
+        private fun JbrSkiaRadialGradientShader.radialGradientDescriptorPayload(): IntArray? {
+            if (colors.size !in 2..16 ||
+                !center.x.isFinite() ||
+                !center.y.isFinite() ||
+                !radius.isFinite() ||
+                radius <= 0f
+            ) return null
+            val stops = colorStops ?: evenlyDistributedStops(colors.size)
+            if (!stops.areValidGradientStops(colors.size)) return null
+            return listOf(
+                center.x.fixed1000(),
+                center.y.fixed1000(),
+                radius.fixed1000(),
+                tileMode.commandValue(),
+                colors.size,
+            ).plus(colors.flatMapIndexed { index, color ->
+                listOf(color.toArgb(), stops[index].fixed1000())
+            }).toIntArray()
+        }
+
+        private fun JbrSkiaSweepGradientShader.sweepGradientDescriptorPayload(): IntArray? {
+            if (colors.size !in 2..16 || !center.x.isFinite() || !center.y.isFinite()) return null
+            val stops = colorStops ?: evenlyDistributedStops(colors.size)
+            if (!stops.areValidGradientStops(colors.size)) return null
+            return listOf(
+                center.x.fixed1000(),
+                center.y.fixed1000(),
+                colors.size,
+            ).plus(colors.flatMapIndexed { index, color ->
+                listOf(color.toArgb(), stops[index].fixed1000())
+            }).toIntArray()
+        }
+
+        private fun JbrSkiaImageShader.imageShaderDescriptorPayload(): IntArray? {
+            if (image.width <= 0 || image.height <= 0 || image.width > 2048 || image.height > 2048) return null
+            val cacheKey = defineImageIfNeeded(image) ?: return null
+            imageRefCount++
+            return intArrayOf(
+                cacheKey.highInt(),
+                cacheKey.lowInt(),
+                image.width,
+                image.height,
+                tileModeX.commandValue(),
+                tileModeY.commandValue(),
+            )
+        }
 
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
             var hash = -3750763034362895579L
@@ -2721,6 +2945,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF = 53
     private const val COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF = 54
     private const val COMMAND_SAVE_LAYER_IMAGE_FILTER_REF = 55
+    private const val COMMAND_DEFINE_SHADER_DESCRIPTOR = 56
+    private const val COMMAND_EVICT_SHADER_HANDLE = 57
+    private const val COMMAND_FILL_RECT_SHADER_REF = 58
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -2729,6 +2956,12 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EFFECT_DESCRIPTOR_BLUR_IMAGE_FILTER_WITH_INPUT = 6
     private const val COMMAND_EFFECT_DESCRIPTOR_OFFSET_IMAGE_FILTER_WITH_INPUT = 7
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
+    private const val COMMAND_SHADER_DESCRIPTOR_LINEAR_GRADIENT = 1
+    private const val COMMAND_SHADER_DESCRIPTOR_RADIAL_GRADIENT = 2
+    private const val COMMAND_SHADER_DESCRIPTOR_SWEEP_GRADIENT = 3
+    private const val COMMAND_SHADER_DESCRIPTOR_IMAGE = 4
+    private const val COMMAND_SHADER_DESCRIPTOR_COMPOSITE = 5
+    private const val COMMAND_SHADER_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
     private const val COMMAND_BLEND_MODE_MULTIPLY = 3
@@ -2746,8 +2979,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_SATURATION = 15
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
+    private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 84
+    private const val COMMAND_STREAM_ABI_ID = 85
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
