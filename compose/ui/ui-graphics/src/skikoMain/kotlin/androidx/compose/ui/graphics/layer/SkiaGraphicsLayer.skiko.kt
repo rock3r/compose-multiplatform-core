@@ -424,6 +424,7 @@ actual class GraphicsLayer internal constructor(
             imageFilter = renderEffect?.jbrSkiaImageFilterDescriptorOrNull(),
             shadowElevation = shadowElevation,
             shadowColor = spotShadowColor,
+            shadowPath = jbrSkiaCommandShadowPath(),
         )
     }
 
@@ -442,7 +443,9 @@ actual class GraphicsLayer internal constructor(
         if (rotationX != 0f) return "graphicsLayer:rotationX"
         if (rotationY != 0f) return "graphicsLayer:rotationY"
         if (!shadowElevation.isFinite() || shadowElevation < 0f) return "graphicsLayer:shadowElevation"
-        if (shadowElevation > 0f && outline !is Outline.Rectangle) return "graphicsLayer:shadowOutline"
+        if (shadowElevation > 0f && outline !is Outline.Rectangle && outline !is Outline.Rounded) {
+            return "graphicsLayer:shadowOutline"
+        }
         if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded && outline !is Outline.Generic) {
             return "graphicsLayer:clipOutline:${outline::class.simpleName ?: "unknown"}"
         }
@@ -477,6 +480,16 @@ actual class GraphicsLayer internal constructor(
             when (val tmpOutline = outline) {
                 is Outline.Rounded -> Path().apply { addOutline(tmpOutline) }
                 is Outline.Generic -> tmpOutline.path
+                else -> null
+            }
+        } else {
+            null
+        }
+
+    private fun jbrSkiaCommandShadowPath(): Path? =
+        if (shadowElevation > 0f) {
+            when (val tmpOutline = outline) {
+                is Outline.Rounded -> Path().apply { addOutline(tmpOutline) }
                 else -> null
             }
         } else {
