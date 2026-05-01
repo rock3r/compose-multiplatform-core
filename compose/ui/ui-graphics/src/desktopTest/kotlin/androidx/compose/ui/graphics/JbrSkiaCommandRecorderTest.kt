@@ -631,30 +631,48 @@ class JbrSkiaCommandRecorderTest {
                     clipPath = null,
                     blendMode = null,
                     shadowElevation = 8f,
-                    shadowColor = Color.Black,
+                    ambientShadowColor = Color.Black,
+                    spotShadowColor = Color.Black,
                 )
             )
         }
 
         val records = recording.commands!!.commandRecords()
-        val descriptorIndex = records.indexOfFirst { it[0] == 49 }
-        val shadowLayerIndex = records.indexOfFirst { it[0] == 55 }
-        val shadowRectIndex = records.indexOfFirst { it[0] == 2 && it[3] != Color.Red.toArgb() }
+        val descriptorIndices = records.indices.filter { records[it][0] == 49 }
+        val shadowLayerIndices = records.indices.filter { records[it][0] == 55 }
+        val shadowRectIndices = records.indices.filter { records[it][0] == 2 && records[it][3] != Color.Red.toArgb() }
         val contentLayerIndex = records.indexOfFirst { it[0] == 13 }
         val contentRectIndex = records.indexOfFirst { it[0] == 2 && it[3] == Color.Red.toArgb() }
-        assertTrue(descriptorIndex >= 0)
-        assertEquals(4, records[descriptorIndex][5])
-        assertTrue(shadowLayerIndex > descriptorIndex)
-        assertTrue(shadowRectIndex > shadowLayerIndex)
-        assertEquals(-12, records[shadowLayerIndex][3])
-        assertEquals(-9, records[shadowLayerIndex][4])
-        assertEquals(54, records[shadowLayerIndex][5])
-        assertEquals(64, records[shadowLayerIndex][6])
-        assertEquals(0, records[shadowRectIndex][4])
-        assertEquals(3, records[shadowRectIndex][5])
-        assertEquals(30, records[shadowRectIndex][6])
-        assertEquals(40, records[shadowRectIndex][7])
-        assertTrue(contentLayerIndex > shadowRectIndex)
+        assertTrue(descriptorIndices.size >= 2)
+        assertEquals(4, records[descriptorIndices[0]][5])
+        assertEquals(4, records[descriptorIndices[1]][5])
+        assertTrue(shadowLayerIndices.size >= 2)
+        val ambientLayerIndex = shadowLayerIndices[0]
+        val spotLayerIndex = shadowLayerIndices[1]
+        assertTrue(ambientLayerIndex > descriptorIndices[0])
+        assertTrue(spotLayerIndex > ambientLayerIndex)
+        assertEquals(-8, records[ambientLayerIndex][3])
+        assertEquals(-8, records[ambientLayerIndex][4])
+        assertEquals(46, records[ambientLayerIndex][5])
+        assertEquals(56, records[ambientLayerIndex][6])
+        assertEquals(-12, records[spotLayerIndex][3])
+        assertEquals(-9, records[spotLayerIndex][4])
+        assertEquals(54, records[spotLayerIndex][5])
+        assertEquals(64, records[spotLayerIndex][6])
+        assertTrue(shadowRectIndices.size >= 2)
+        val ambientRectIndex = shadowRectIndices[0]
+        val spotRectIndex = shadowRectIndices[1]
+        assertTrue(ambientRectIndex > ambientLayerIndex)
+        assertTrue(spotRectIndex > spotLayerIndex)
+        assertEquals(0, records[ambientRectIndex][4])
+        assertEquals(0, records[ambientRectIndex][5])
+        assertEquals(30, records[ambientRectIndex][6])
+        assertEquals(40, records[ambientRectIndex][7])
+        assertEquals(0, records[spotRectIndex][4])
+        assertEquals(3, records[spotRectIndex][5])
+        assertEquals(30, records[spotRectIndex][6])
+        assertEquals(40, records[spotRectIndex][7])
+        assertTrue(contentLayerIndex > spotRectIndex)
         assertTrue(contentRectIndex > contentLayerIndex)
         assertEquals(0, recording.unsupportedCount)
     }
@@ -700,20 +718,25 @@ class JbrSkiaCommandRecorderTest {
                     clipPath = null,
                     blendMode = null,
                     shadowElevation = 8f,
-                    shadowColor = Color.Black,
+                    ambientShadowColor = Color.Black,
+                    spotShadowColor = Color.Black,
                     shadowPath = shadowPath,
                 )
             )
         }
 
         val records = recording.commands!!.commandRecords()
-        val shadowLayerIndex = records.indexOfFirst { it[0] == 55 }
+        val shadowLayerIndices = records.indices.filter { records[it][0] == 55 }
         val shadowTranslateIndex = records.indexOfFirst { it[0] == 10 && it[3] == 0 && it[4] == 2800 }
-        val shadowClipPathIndex = records.indexOfFirst { it[0] == 20 }
-        val shadowRectIndex = records.indexOfFirst { it[0] == 2 && it[3] != Color.Red.toArgb() }
+        val shadowClipPathIndex = records.indices.firstOrNull {
+            it > shadowTranslateIndex && records[it][0] == 20
+        } ?: -1
+        val shadowRectIndex = records.indices.firstOrNull {
+            it > shadowClipPathIndex && records[it][0] == 2 && records[it][3] != Color.Red.toArgb()
+        } ?: -1
         val contentLayerIndex = records.indexOfFirst { it[0] == 13 }
-        assertTrue(shadowLayerIndex >= 0)
-        assertTrue(shadowTranslateIndex > shadowLayerIndex)
+        assertTrue(shadowLayerIndices.size >= 2)
+        assertTrue(shadowTranslateIndex > shadowLayerIndices[1])
         assertTrue(shadowClipPathIndex > shadowTranslateIndex)
         assertTrue(shadowRectIndex > shadowClipPathIndex)
         assertEquals(0, records[shadowRectIndex][5])
@@ -755,7 +778,8 @@ class JbrSkiaCommandRecorderTest {
                     clipPath = null,
                     blendMode = null,
                     shadowElevation = 0f,
-                    shadowColor = Color.Black,
+                    ambientShadowColor = Color.Black,
+                    spotShadowColor = Color.Black,
                     shadowPath = null,
                     clipToLayerBounds = true,
                 )
