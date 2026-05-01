@@ -3862,6 +3862,39 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesImageShaderWithColorFilterDescriptorRectInStrictMode() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(7)
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 2f,
+                    top = 3f,
+                    right = 42f,
+                    bottom = 33f,
+                    paint = Paint().apply {
+                        shader = ImageShader(image, TileMode.Repeated, TileMode.Mirror)
+                        colorFilter = ColorFilter.tint(Color.Cyan, BlendMode.SrcIn)
+                        alpha = 0.75f
+                        isAntiAlias = true
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(15))
+            assertEquals(1, commands.countCommand(49))
+            assertEquals(2, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+            val shaderDescriptors = commands.commandRecords().filter { it[0] == 56 }
+            assertEquals(4, shaderDescriptors.first()[5])
+            assertEquals(7, shaderDescriptors.last()[5])
+        }
+    }
+
+    @Test
     fun evictsOldestImageCacheEntryBeforeRedefiningAfterThreshold() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
 
