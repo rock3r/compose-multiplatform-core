@@ -425,6 +425,7 @@ actual class GraphicsLayer internal constructor(
             shadowElevation = shadowElevation,
             shadowColor = spotShadowColor,
             shadowPath = jbrSkiaCommandShadowPath(),
+            clipToLayerBounds = compositingStrategy == CompositingStrategy.Offscreen,
         )
     }
 
@@ -442,7 +443,6 @@ actual class GraphicsLayer internal constructor(
         if (!translationY.isFinite()) return "graphicsLayer:translationY"
         if (rotationX != 0f) return "graphicsLayer:rotationX"
         if (rotationY != 0f) return "graphicsLayer:rotationY"
-        if (compositingStrategy == CompositingStrategy.Offscreen) return "graphicsLayer:compositingStrategy"
         if (!shadowElevation.isFinite() || shadowElevation < 0f) return "graphicsLayer:shadowElevation"
         if (shadowElevation > 0f &&
             outline !is Outline.Rectangle &&

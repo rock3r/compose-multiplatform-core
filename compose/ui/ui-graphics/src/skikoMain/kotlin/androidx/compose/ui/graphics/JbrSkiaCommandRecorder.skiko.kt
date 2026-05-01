@@ -167,6 +167,7 @@ object JbrSkiaCommandRecorder {
         shadowElevation: Float = 0f,
         shadowColor: Color = Color.Black,
         shadowPath: Path? = null,
+        clipToLayerBounds: Boolean = false,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -190,6 +191,7 @@ object JbrSkiaCommandRecorder {
             shadowElevation = shadowElevation,
             shadowColor = shadowColor,
             shadowPath = shadowPath,
+            clipToLayerBounds = clipToLayerBounds,
         ) ?: false
 
     internal fun commandBlendModeOrNull(blendMode: BlendMode): Int? =
@@ -602,6 +604,7 @@ object JbrSkiaCommandRecorder {
             shadowElevation: Float = 0f,
             shadowColor: Color = Color.Black,
             shadowPath: Path? = null,
+            clipToLayerBounds: Boolean = false,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -737,6 +740,9 @@ object JbrSkiaCommandRecorder {
                     height.roundToInt().coerceAtLeast(0),
                     (alpha * 1000f).roundToInt().coerceIn(0, 1000),
                 )
+            }
+            if (clipToLayerBounds) {
+                clipRect(0f, 0f, width, height, ClipOp.Intersect)
             }
             if (clipRect != null) {
                 clipRect(clipRect.left, clipRect.top, clipRect.right, clipRect.bottom, ClipOp.Intersect)
