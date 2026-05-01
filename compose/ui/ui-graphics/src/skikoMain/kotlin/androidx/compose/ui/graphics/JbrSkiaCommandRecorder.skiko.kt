@@ -690,10 +690,7 @@ object JbrSkiaCommandRecorder {
             }
             val tintColorFilter = tintSrcInColorFilterOrNull(colorFilter)
             val descriptorColorFilter = descriptorColorFilterOrNull(colorFilter)
-            if (imageFilter != null && (tintColorFilter != null || descriptorColorFilter != null || blendMode != null)) {
-                countUnsupported("graphicsLayer:renderEffectPaint")
-                return false
-            }
+            var layerSaveCount = 0
             if (imageFilter != null) {
                 val handle = defineImageFilterIfNeeded(imageFilter) ?: run {
                     countUnsupported("graphicsLayer:renderEffect")
@@ -710,7 +707,10 @@ object JbrSkiaCommandRecorder {
                     handle.highInt(),
                     handle.lowInt(),
                 )
-            } else if (tintColorFilter != null && blendMode != null) {
+                layerSaveCount++
+            }
+            val paintLayerAlpha = if (imageFilter != null) 1f else alpha
+            if (tintColorFilter != null && blendMode != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -718,11 +718,12 @@ object JbrSkiaCommandRecorder {
                     0,
                     width.roundToInt().coerceAtLeast(0),
                     height.roundToInt().coerceAtLeast(0),
-                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    (paintLayerAlpha * 1000f).roundToInt().coerceIn(0, 1000),
                     blendMode,
                     tintColorFilter.color.toArgb(),
                     COMMAND_BLEND_MODE_SRC_IN,
                 )
+                layerSaveCount++
             } else if (descriptorColorFilter != null && blendMode != null) {
                 val handle = defineDescriptorColorFilterIfNeeded(descriptorColorFilter) ?: run {
                     countUnsupported("graphicsLayer:colorFilter")
@@ -735,11 +736,12 @@ object JbrSkiaCommandRecorder {
                     0,
                     width.roundToInt().coerceAtLeast(0),
                     height.roundToInt().coerceAtLeast(0),
-                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    (paintLayerAlpha * 1000f).roundToInt().coerceIn(0, 1000),
                     blendMode,
                     handle.highInt(),
                     handle.lowInt(),
                 )
+                layerSaveCount++
             } else if (tintColorFilter != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_COLOR_FILTER,
@@ -748,10 +750,11 @@ object JbrSkiaCommandRecorder {
                     0,
                     width.roundToInt().coerceAtLeast(0),
                     height.roundToInt().coerceAtLeast(0),
-                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    (paintLayerAlpha * 1000f).roundToInt().coerceIn(0, 1000),
                     tintColorFilter.color.toArgb(),
                     COMMAND_BLEND_MODE_SRC_IN,
                 )
+                layerSaveCount++
             } else if (descriptorColorFilter != null) {
                 val handle = defineDescriptorColorFilterIfNeeded(descriptorColorFilter) ?: run {
                     countUnsupported("graphicsLayer:colorFilter")
@@ -764,10 +767,11 @@ object JbrSkiaCommandRecorder {
                     0,
                     width.roundToInt().coerceAtLeast(0),
                     height.roundToInt().coerceAtLeast(0),
-                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    (paintLayerAlpha * 1000f).roundToInt().coerceIn(0, 1000),
                     handle.highInt(),
                     handle.lowInt(),
                 )
+                layerSaveCount++
             } else if (blendMode != null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER_BLEND_MODE,
@@ -776,10 +780,11 @@ object JbrSkiaCommandRecorder {
                     0,
                     width.roundToInt().coerceAtLeast(0),
                     height.roundToInt().coerceAtLeast(0),
-                    (alpha * 1000f).roundToInt().coerceIn(0, 1000),
+                    (paintLayerAlpha * 1000f).roundToInt().coerceIn(0, 1000),
                     blendMode,
                 )
-            } else {
+                layerSaveCount++
+            } else if (imageFilter == null) {
                 commands.addCommand(
                     COMMAND_SAVE_LAYER,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -789,6 +794,7 @@ object JbrSkiaCommandRecorder {
                     height.roundToInt().coerceAtLeast(0),
                     (alpha * 1000f).roundToInt().coerceIn(0, 1000),
                 )
+                layerSaveCount++
             }
             if (clipToLayerBounds) {
                 clipRect(0f, 0f, width, height, ClipOp.Intersect)
@@ -806,7 +812,9 @@ object JbrSkiaCommandRecorder {
             paragraphTextCommandCount += recording.paragraphTextCommandCount
             imageCacheClearCount += recording.imageCacheClearCount
             imageCacheEvictCount += recording.imageCacheEvictCount
-            restore()
+            repeat(layerSaveCount) {
+                restore()
+            }
             restore()
             return true
         }
