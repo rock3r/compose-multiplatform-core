@@ -1436,6 +1436,41 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesConcatMatrix33Record() {
+        val matrix = Matrix().apply {
+            values[Matrix.ScaleX] = 1.25f
+            values[Matrix.SkewX] = 0.5f
+            values[Matrix.TranslateX] = 7f
+            values[Matrix.SkewY] = -0.25f
+            values[Matrix.ScaleY] = 0.75f
+            values[Matrix.TranslateY] = 9f
+            values[Matrix.Perspective0] = 0.001f
+            values[Matrix.Perspective1] = -0.002f
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.concat(matrix)
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 99, 0, 12, 1, 1,
+                63, 48, 0,
+                1.25f.toRawBits(),
+                0.5f.toRawBits(),
+                7f.toRawBits(),
+                (-0.25f).toRawBits(),
+                0.75f.toRawBits(),
+                9f.toRawBits(),
+                0.001f.toRawBits(),
+                (-0.002f).toRawBits(),
+                1f.toRawBits(),
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun writesClipRectOp() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.clipRect(1f, 2f, 11f, 12f, ClipOp.Intersect)

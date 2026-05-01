@@ -137,6 +137,10 @@ object JbrSkiaCommandRecorder {
         active.get()?.rotate(degrees)
     }
 
+    internal fun concat(matrix: Matrix) {
+        active.get()?.concat(matrix)
+    }
+
     internal fun unsupportedTransform() {
         active.get()?.unsupportedTransform()
     }
@@ -571,6 +575,31 @@ object JbrSkiaCommandRecorder {
             if (degrees != 0f) {
                 commands.addCommand(COMMAND_ROTATE, COMMAND_RECORD_FLAGS_NONE, degrees.fixed1000())
             }
+        }
+
+        fun concat(matrix: Matrix) {
+            if (matrix.isIdentity()) return
+            val values = matrix.values
+            val matrixValues = floatArrayOf(
+                values[Matrix.ScaleX],
+                values[Matrix.SkewX],
+                values[Matrix.TranslateX],
+                values[Matrix.SkewY],
+                values[Matrix.ScaleY],
+                values[Matrix.TranslateY],
+                values[Matrix.Perspective0],
+                values[Matrix.Perspective1],
+                values[Matrix.Perspective2],
+            )
+            if (matrixValues.any { !it.isFinite() }) {
+                unsupportedTransform()
+                return
+            }
+            commands.addCommand(
+                COMMAND_CONCAT_MATRIX33,
+                COMMAND_RECORD_FLAGS_NONE,
+                *IntArray(matrixValues.size) { index -> matrixValues[index].toRawBits() },
+            )
         }
 
         fun unsupportedTransform() {
@@ -3534,6 +3563,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT = 60
     private const val COMMAND_STROKE_PATH_DASH_PATH_EFFECT = 61
     private const val COMMAND_DRAW_PATH_PATH_EFFECT_REF = 62
+    private const val COMMAND_CONCAT_MATRIX33 = 63
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -3572,7 +3602,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-        private const val COMMAND_STREAM_ABI_ID = 98
+        private const val COMMAND_STREAM_ABI_ID = 99
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
