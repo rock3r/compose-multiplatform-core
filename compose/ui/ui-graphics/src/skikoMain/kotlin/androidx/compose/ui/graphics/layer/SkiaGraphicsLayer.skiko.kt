@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.JbrSkiaCommandRecording
 import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RenderEffect
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.skiaCanvas
 import androidx.compose.ui.graphics.skiaImageFilter
 import androidx.compose.ui.graphics.materializeSkiaPath
+import androidx.compose.ui.graphics.prepareTransformationMatrix
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toSkia
 import androidx.compose.ui.unit.Density
@@ -426,6 +428,7 @@ actual class GraphicsLayer internal constructor(
             shadowColor = spotShadowColor,
             shadowPath = jbrSkiaCommandShadowPath(),
             clipToLayerBounds = compositingStrategy == CompositingStrategy.Offscreen,
+            transformMatrix = jbrSkiaCommandTransformMatrix(pivot),
         )
     }
 
@@ -441,8 +444,9 @@ actual class GraphicsLayer internal constructor(
         if (!rotationZ.isFinite()) return "graphicsLayer:rotationZ"
         if (!translationX.isFinite()) return "graphicsLayer:translationX"
         if (!translationY.isFinite()) return "graphicsLayer:translationY"
-        if (rotationX != 0f) return "graphicsLayer:rotationX"
-        if (rotationY != 0f) return "graphicsLayer:rotationY"
+        if (!rotationX.isFinite()) return "graphicsLayer:rotationX"
+        if (!rotationY.isFinite()) return "graphicsLayer:rotationY"
+        if (!cameraDistance.isFinite() || cameraDistance <= 0f) return "graphicsLayer:cameraDistance"
         if (!shadowElevation.isFinite() || shadowElevation < 0f) return "graphicsLayer:shadowElevation"
         if (shadowElevation > 0f &&
             outline !is Outline.Rectangle &&
@@ -501,6 +505,26 @@ actual class GraphicsLayer internal constructor(
         } else {
             null
         }
+
+    @OptIn(InternalComposeUiApi::class)
+    private fun jbrSkiaCommandTransformMatrix(pivot: Offset): Matrix? {
+        if (rotationX == 0f && rotationY == 0f) return null
+        return Matrix().also {
+            prepareTransformationMatrix(
+                matrix = it,
+                pivotX = pivot.x,
+                pivotY = pivot.y,
+                translationX = translationX,
+                translationY = translationY,
+                rotationX = rotationX,
+                rotationY = rotationY,
+                rotationZ = rotationZ,
+                scaleX = scaleX,
+                scaleY = scaleY,
+                cameraDistance = cameraDistance,
+            )
+        }
+    }
 
     private fun onAddedToParentLayer() {
         parentLayerUsages++

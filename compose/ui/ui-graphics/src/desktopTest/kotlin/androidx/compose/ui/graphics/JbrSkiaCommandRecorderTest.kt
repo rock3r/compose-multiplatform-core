@@ -159,6 +159,74 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingReplaysLayerMatrixTransformBeforeSaveLayer() {
+        val matrix = Matrix().apply {
+            values[Matrix.ScaleX] = 1.1f
+            values[Matrix.SkewX] = 0.2f
+            values[Matrix.TranslateX] = 3f
+            values[Matrix.SkewY] = -0.1f
+            values[Matrix.ScaleY] = 0.9f
+            values[Matrix.TranslateY] = 4f
+            values[Matrix.Perspective0] = 0.001f
+        }
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 22f,
+                    paint = Paint().apply {
+                        color = Color.Red
+                    },
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 15f,
+                    pivotY = 20f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 0f,
+                    translationY = 0f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = null,
+                    transformMatrix = matrix,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(7, records[0][0])
+        assertEquals(10, records[1][0])
+        assertEquals(100000, records[1][3])
+        assertEquals(200000, records[1][4])
+        assertEquals(63, records[2][0])
+        assertEquals(1.1f.toRawBits(), records[2][3])
+        assertEquals(0.2f.toRawBits(), records[2][4])
+        assertEquals(3f.toRawBits(), records[2][5])
+        assertEquals((-0.1f).toRawBits(), records[2][6])
+        assertEquals(0.9f.toRawBits(), records[2][7])
+        assertEquals(4f.toRawBits(), records[2][8])
+        assertEquals(0.001f.toRawBits(), records[2][9])
+        assertEquals(13, records[3][0])
+        assertEquals(2, records[4][0])
+        assertEquals(Color.Red.toArgb(), records[4][3])
+        assertEquals(8, records[5][0])
+        assertEquals(8, records[6][0])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun nestedRecordingReplaysLayerClipPath() {
         val clipPath = Path().apply {
             moveTo(1f, 2f)
