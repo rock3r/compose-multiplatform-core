@@ -65,20 +65,31 @@ data class JbrSkiaCompositeShader(
 )
 
 @InternalComposeUiApi
+@OptIn(ExperimentalGraphicsApi::class)
 data class JbrSkiaRuntimeEffectShader(
     val sksl: String,
     val uniforms: FloatArray,
+    val uniformSchema: List<RuntimeEffectUniform>,
     val children: List<Shader>,
 ) {
     override fun equals(other: Any?): Boolean =
         other is JbrSkiaRuntimeEffectShader &&
             sksl == other.sksl &&
             uniforms.contentEquals(other.uniforms) &&
+            uniformSchema == other.uniformSchema &&
             children == other.children
 
     override fun hashCode(): Int =
-        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + children.hashCode()
+        31 * (31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()) +
+            children.hashCode()
 }
+
+@ExperimentalGraphicsApi
+data class RuntimeEffectUniform(
+    val name: String,
+    val floatOffset: Int,
+    val floatCount: Int,
+)
 
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaLinearGradient: JbrSkiaLinearGradientShader?

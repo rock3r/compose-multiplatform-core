@@ -41,6 +41,7 @@ internal class SkikoShader(
 fun RuntimeEffectShader(
     sksl: String,
     uniforms: FloatArray = FloatArray(0),
+    uniformSchema: List<RuntimeEffectUniform> = emptyList(),
     children: List<Shader> = emptyList(),
 ): Shader {
     val uniformCopy = uniforms.copyOf()
@@ -55,6 +56,7 @@ fun RuntimeEffectShader(
             jbrSkiaRuntimeEffectShader = JbrSkiaRuntimeEffectShader(
                 sksl = sksl,
                 uniforms = uniformCopy,
+                uniformSchema = uniformSchema.toList(),
                 children = children.toList(),
             ),
         ),
