@@ -422,6 +422,8 @@ actual class GraphicsLayer internal constructor(
             blendMode = if (blendMode == BlendMode.SrcOver) null else JbrSkiaCommandRecorder.commandBlendModeOrNull(blendMode),
             colorFilter = JbrSkiaCommandRecorder.descriptorColorFilterOrNull(colorFilter),
             imageFilter = renderEffect?.jbrSkiaImageFilterDescriptorOrNull(),
+            shadowElevation = shadowElevation,
+            shadowColor = spotShadowColor,
         )
     }
 
@@ -439,7 +441,8 @@ actual class GraphicsLayer internal constructor(
         if (!translationY.isFinite()) return "graphicsLayer:translationY"
         if (rotationX != 0f) return "graphicsLayer:rotationX"
         if (rotationY != 0f) return "graphicsLayer:rotationY"
-        if (shadowElevation != 0f) return "graphicsLayer:shadowElevation"
+        if (!shadowElevation.isFinite() || shadowElevation < 0f) return "graphicsLayer:shadowElevation"
+        if (shadowElevation > 0f && outline !is Outline.Rectangle) return "graphicsLayer:shadowOutline"
         if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded && outline !is Outline.Generic) {
             return "graphicsLayer:clipOutline:${outline::class.simpleName ?: "unknown"}"
         }
