@@ -222,7 +222,8 @@ internal object SkikoGraphics : PlatformGraphics {
                 null,
             )
         }
-        val descriptor = if (renderEffect != null || !sigmaX.isFinite() || !sigmaY.isFinite() ||
+        val input = renderEffect?.jbrSkiaImageFilterDescriptorOrNull()
+        val descriptor = if ((renderEffect != null && input == null) || !sigmaX.isFinite() || !sigmaY.isFinite() ||
             sigmaX < 0f || sigmaY < 0f
         ) {
             null
@@ -234,7 +235,7 @@ internal object SkikoGraphics : PlatformGraphics {
                 TileMode.Decal -> 3
                 else -> null
             }
-            tileMode?.let { JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(sigmaX, sigmaY, it) }
+            tileMode?.let { JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(sigmaX, sigmaY, it, input) }
         }
         return SkikoRenderEffect(imageFilter, descriptor)
     }
@@ -242,10 +243,20 @@ internal object SkikoGraphics : PlatformGraphics {
     override fun createOffsetRenderEffect(
         renderEffect: RenderEffect?,
         offset: Offset,
-    ): PlatformRenderEffect =
-        SkikoRenderEffect(
-            ImageFilter.makeOffset(offset.x, offset.y, renderEffect?.skiaImageFilter, null)
+    ): PlatformRenderEffect {
+        val input = renderEffect?.jbrSkiaImageFilterDescriptorOrNull()
+        val descriptor = if (renderEffect != null && input == null) {
+            null
+        } else if (offset.x.isFinite() && offset.y.isFinite()) {
+            JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(offset.x, offset.y, input)
+        } else {
+            null
+        }
+        return SkikoRenderEffect(
+            ImageFilter.makeOffset(offset.x, offset.y, renderEffect?.skiaImageFilter, null),
+            descriptor,
         )
+    }
 
     override fun createBlurFilter(radius: Float): PlatformBlurFilter =
         SkikoBlurFilter(

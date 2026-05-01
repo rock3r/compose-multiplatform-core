@@ -152,8 +152,9 @@ actual class OffsetEffect actual constructor(
     }
 
     internal override fun jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? {
-        if (renderEffect != null) return null
+        val input = renderEffect?.jbrSkiaImageFilterDescriptorOrNull()
+            ?: if (renderEffect == null) null else return null
         if (!offset.x.isFinite() || !offset.y.isFinite()) return null
-        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(offset.x, offset.y)
+        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(offset.x, offset.y, input)
     }
 }
