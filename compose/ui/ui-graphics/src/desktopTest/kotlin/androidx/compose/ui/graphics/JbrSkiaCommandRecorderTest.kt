@@ -2989,6 +2989,48 @@ class JbrSkiaCommandRecorderTest {
 
     @OptIn(ExperimentalGraphicsApi::class)
     @Test
+    fun writesRuntimeEffectShaderWithColorFilterDescriptorRectInStrictMode() {
+        val sksl = """
+            half4 main(float2 p) {
+                return half4(0.25, 0.50, 0.75, 1.0);
+            }
+        """.trimIndent()
+        val shader = RuntimeEffectShader(sksl = sksl)
+        val colorFilter = ColorFilter.tint(Color.Red)
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                        this.colorFilter = colorFilter
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(49))
+            assertEquals(2, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+            val colorFilterDescriptor = commands.commandRecords().single { it[0] == 49 }
+            val shaderDescriptor = commands.commandRecords().last { it[0] == 56 }
+            assertEquals(1, colorFilterDescriptor[5])
+            assertEquals(7, shaderDescriptor[5])
+            assertEquals(1, shaderDescriptor[6])
+            assertEquals(4, shaderDescriptor[7])
+            assertTrue(shaderDescriptor[8] != 0 || shaderDescriptor[9] != 0)
+            assertEquals(colorFilterDescriptor[2], shaderDescriptor[10])
+            assertEquals(colorFilterDescriptor[3], shaderDescriptor[11])
+        }
+    }
+
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
     fun writesRuntimeEffectShaderDescriptorRectInStrictMode() {
         val sksl = """
             uniform float red;
