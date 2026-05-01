@@ -185,4 +185,10 @@ actual class OffsetEffect actual constructor(
     override fun toString(): String {
         return "OffsetEffect(renderEffect=$renderEffect, offset=$offset)"
     }
+
+    internal override fun jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? {
+        if (renderEffect != null) return null
+        if (!offset.x.isFinite() || !offset.y.isFinite()) return null
+        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(offset.x, offset.y)
+    }
 }

@@ -220,6 +220,7 @@ object JbrSkiaCommandRecorder {
 
     internal sealed class ImageFilterDescriptor {
         data class Blur(val sigmaX: Float, val sigmaY: Float, val tileMode: Int) : ImageFilterDescriptor()
+        data class Offset(val dx: Float, val dy: Float) : ImageFilterDescriptor()
     }
 
     fun markUnsupportedDraw(reason: String) {
@@ -1084,6 +1085,15 @@ object JbrSkiaCommandRecorder {
                         handle
                     }
                 }
+                is ImageFilterDescriptor.Offset -> {
+                    if (!imageFilter.dx.isFinite() || !imageFilter.dy.isFinite()) {
+                        null
+                    } else {
+                        val handle = imageFilter.offsetHandleKey()
+                        defineOffsetImageFilterIfNeeded(handle, imageFilter)
+                        handle
+                    }
+                }
             }
 
         private fun defineBlurImageFilterIfNeeded(handle: Long, imageFilter: ImageFilterDescriptor.Blur) {
@@ -1122,6 +1132,45 @@ object JbrSkiaCommandRecorder {
                     imageFilter.sigmaX.toRawBits(),
                     imageFilter.sigmaY.toRawBits(),
                     imageFilter.tileMode,
+                )
+            }
+        }
+
+        private fun defineOffsetImageFilterIfNeeded(handle: Long, imageFilter: ImageFilterDescriptor.Offset) {
+            var evictedHandle: Long? = null
+            val shouldDefine = synchronized(colorFilterHandleLock) {
+                if (definedColorFilterHandles.containsKey(handle)) {
+                    definedColorFilterHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
+                        val eldest = definedColorFilterHandles.keys.first()
+                        definedColorFilterHandles.remove(eldest)
+                        evictedHandle = eldest
+                    }
+                    definedColorFilterHandles[handle] = Unit
+                    true
+                }
+            }
+            evictedHandle?.let {
+                commands.addCommand(
+                    COMMAND_EVICT_COLOR_FILTER_HANDLE,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    it.highInt(),
+                    it.lowInt(),
+                )
+            }
+            if (shouldDefine) {
+                commands.addCommand(
+                    COMMAND_DEFINE_EFFECT_DESCRIPTOR,
+                    COMMAND_RECORD_FLAGS_NONE,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    COMMAND_EFFECT_DESCRIPTOR_OFFSET_IMAGE_FILTER,
+                    COMMAND_EFFECT_DESCRIPTOR_VERSION_1,
+                    2,
+                    imageFilter.dx.toRawBits(),
+                    imageFilter.dy.toRawBits(),
                 )
             }
         }
@@ -1961,6 +2010,18 @@ object JbrSkiaCommandRecorder {
             return hash
         }
 
+        private fun ImageFilterDescriptor.Offset.offsetHandleKey(): Long {
+            var hash = -3750763034362895579L
+            fun mix(value: Int) {
+                hash = hash xor value.toLong()
+                hash *= 1099511628211L
+            }
+            mix(COMMAND_EFFECT_DESCRIPTOR_OFFSET_IMAGE_FILTER)
+            mix(dx.toRawBits())
+            mix(dy.toRawBits())
+            return hash
+        }
+
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
             var hash = -3750763034362895579L
             fun mix(value: Int) {
@@ -2603,6 +2664,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
     private const val COMMAND_EFFECT_DESCRIPTOR_BLUR_IMAGE_FILTER = 4
+    private const val COMMAND_EFFECT_DESCRIPTOR_OFFSET_IMAGE_FILTER = 5
     private const val COMMAND_EFFECT_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -2622,7 +2684,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_COLOR = 16
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 82
+    private const val COMMAND_STREAM_ABI_ID = 83
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
