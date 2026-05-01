@@ -37,16 +37,28 @@ internal data class JbrSkiaRuntimeEffectColorFilter(
     val sksl: String,
     val uniforms: FloatArray,
     val uniformSchema: List<RuntimeEffectUniform>,
+    val children: List<ColorFilter>,
+    val namedChildren: List<RuntimeEffectColorFilterChild>,
 ) {
     override fun equals(other: Any?): Boolean =
         other is JbrSkiaRuntimeEffectColorFilter &&
             sksl == other.sksl &&
             uniforms.contentEquals(other.uniforms) &&
-            uniformSchema == other.uniformSchema
+            uniformSchema == other.uniformSchema &&
+            children == other.children &&
+            namedChildren == other.namedChildren
 
     override fun hashCode(): Int =
-        31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()
+        31 * (31 * (31 * (31 * sksl.hashCode() + uniforms.contentHashCode()) + uniformSchema.hashCode()) +
+            children.hashCode()) +
+            namedChildren.hashCode()
 }
+
+@ExperimentalGraphicsApi
+data class RuntimeEffectColorFilterChild(
+    val name: String,
+    val colorFilter: ColorFilter,
+)
 
 @OptIn(ExperimentalGraphicsApi::class)
 internal class JbrSkiaRuntimeEffectColorFilterHolder(
@@ -59,11 +71,14 @@ fun RuntimeEffectColorFilter(
     sksl: String,
     uniforms: FloatArray = FloatArray(0),
     uniformSchema: List<RuntimeEffectUniform> = emptyList(),
+    children: List<ColorFilter> = emptyList(),
+    namedChildren: List<RuntimeEffectColorFilterChild> = emptyList(),
 ): ColorFilter {
     val uniformCopy = uniforms.copyOf()
+    val childColorFilters = children + namedChildren.map { it.colorFilter }
     val skiaColorFilter = RuntimeEffect.makeForColorFilter(sksl).use { effect ->
         uniformCopy.toUniformData().use { uniformData ->
-            effect.makeColorFilter(uniformData)
+            effect.makeColorFilter(uniformData, childColorFilters.map { it.nativeColorFilter }.toTypedArray())
         }
     }
     return JbrSkiaRuntimeEffectColorFilterHolder(
@@ -72,6 +87,8 @@ fun RuntimeEffectColorFilter(
             sksl = sksl,
             uniforms = uniformCopy,
             uniformSchema = uniformSchema.toList(),
+            children = children.toList(),
+            namedChildren = namedChildren.toList(),
         ),
     )
 }

@@ -2011,18 +2011,23 @@ class JbrSkiaCommandRecorderTest {
     fun runtimeEffectColorFilterKeepsJbrSkiaMetadata() {
         val colorFilter = RuntimeEffectColorFilter(
             sksl = """
+                uniform colorFilter content;
                 uniform float phase;
                 half4 main(half4 inColor) {
-                    return half4(inColor.r * phase, inColor.g, inColor.b, inColor.a);
+                    return content.eval(half4(inColor.r * phase, inColor.g, inColor.b, inColor.a));
                 }
             """.trimIndent(),
             uniforms = floatArrayOf(0.5f),
             uniformSchema = listOf(RuntimeEffectUniform("phase", 0, 1)),
+            namedChildren = listOf(RuntimeEffectColorFilterChild("content", ColorFilter.tint(Color.Red))),
         )
 
         val runtimeEffect = (colorFilter as? JbrSkiaRuntimeEffectColorFilterHolder)?.jbrSkiaRuntimeEffectColorFilter
         assertEquals(floatArrayOf(0.5f).toList(), runtimeEffect?.uniforms?.toList())
         assertEquals(listOf(RuntimeEffectUniform("phase", 0, 1)), runtimeEffect?.uniformSchema)
+        assertEquals(emptyList<ColorFilter>(), runtimeEffect?.children)
+        assertEquals(1, runtimeEffect?.namedChildren?.size)
+        assertEquals("content", runtimeEffect?.namedChildren?.singleOrNull()?.name)
         assertTrue(runtimeEffect?.sksl?.contains("uniform float phase") == true)
     }
 
@@ -2063,13 +2068,61 @@ class JbrSkiaCommandRecorderTest {
             assertEquals(1, descriptor[6])
             assertTrue(descriptor[8] > 0)
             assertEquals(1, descriptor[9])
-            assertEquals(1, descriptor[10])
-            assertEquals(sksl.shaderSourceHash().highInt(), descriptor[11])
-            assertEquals(sksl.shaderSourceHash().lowInt(), descriptor[12])
-            assertEquals(0, descriptor[13])
-            assertEquals(1, descriptor[14])
-            assertEquals(5, descriptor[15])
-            assertEquals("phase".map { it.code }, descriptor.copyOfRange(16, 21).toList())
+            assertEquals(0, descriptor[10])
+            assertEquals(1, descriptor[11])
+            assertEquals(0, descriptor[12])
+            assertEquals(sksl.shaderSourceHash().highInt(), descriptor[13])
+            assertEquals(sksl.shaderSourceHash().lowInt(), descriptor[14])
+            assertEquals(0, descriptor[15])
+            assertEquals(1, descriptor[16])
+            assertEquals(5, descriptor[17])
+            assertEquals("phase".map { it.code }, descriptor.copyOfRange(18, 23).toList())
+        }
+    }
+
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
+    fun writesRuntimeEffectColorFilterDescriptorWithNamedChildInStrictMode() {
+        val sksl = """
+            uniform colorFilter content;
+            half4 main(half4 inColor) {
+                return content.eval(inColor).bgra;
+            }
+        """.trimIndent()
+        val colorFilter = RuntimeEffectColorFilter(
+            sksl = sksl,
+            namedChildren = listOf(RuntimeEffectColorFilterChild("content", ColorFilter.tint(Color.Red))),
+        )
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.colorFilter = colorFilter
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(2, commands.countCommand(49))
+            assertEquals(1, commands.countCommand(47))
+            val runtimeDescriptor = commands.commandRecords().last { it[0] == 49 }
+            assertEquals(8, runtimeDescriptor[5])
+            assertEquals(1, runtimeDescriptor[6])
+            assertEquals(1, runtimeDescriptor[10])
+            assertEquals(0, runtimeDescriptor[11])
+            assertEquals(1, runtimeDescriptor[12])
+            assertEquals(sksl.shaderSourceHash().highInt(), runtimeDescriptor[13])
+            assertEquals(sksl.shaderSourceHash().lowInt(), runtimeDescriptor[14])
+            assertTrue(runtimeDescriptor[15] != 0 || runtimeDescriptor[16] != 0)
+            assertEquals(0, runtimeDescriptor[17])
+            assertEquals(7, runtimeDescriptor[18])
+            assertEquals("content".map { it.code }, runtimeDescriptor.copyOfRange(19, 26).toList())
         }
     }
 
