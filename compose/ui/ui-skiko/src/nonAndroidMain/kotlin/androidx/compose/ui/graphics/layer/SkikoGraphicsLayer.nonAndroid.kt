@@ -405,6 +405,7 @@ internal class SkikoGraphicsLayer(
             imageFilter = renderEffect?.jbrSkiaImageFilterDescriptorOrNull(),
             shadowElevation = shadowElevation,
             shadowColor = spotShadowColor,
+            shadowPath = jbrSkiaCommandShadowPath(),
         )
     }
 
@@ -421,7 +422,7 @@ internal class SkikoGraphicsLayer(
             rotationY == 0f &&
             shadowElevation.isFinite() &&
             shadowElevation >= 0f &&
-            (shadowElevation == 0f || cachedOutline is Outline.Rectangle) &&
+            (shadowElevation == 0f || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded) &&
             (!cachedClip || cachedOutline is Outline.Rectangle || cachedOutline is Outline.Rounded ||
                 cachedOutline is Outline.Generic) &&
             (blendMode == BlendMode.SrcOver ||
@@ -442,6 +443,16 @@ internal class SkikoGraphicsLayer(
             when (val outline = cachedOutline) {
                 is Outline.Rounded -> Path().apply { addOutline(outline) }
                 is Outline.Generic -> outline.path
+                else -> null
+            }
+        } else {
+            null
+        }
+
+    private fun jbrSkiaCommandShadowPath(): Path? =
+        if (shadowElevation > 0f) {
+            when (val outline = cachedOutline) {
+                is Outline.Rounded -> Path().apply { addOutline(outline) }
                 else -> null
             }
         } else {

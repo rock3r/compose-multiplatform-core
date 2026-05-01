@@ -171,6 +171,7 @@ object JbrSkiaCommandRecorder {
         imageFilter: ImageFilterDescriptor? = null,
         shadowElevation: Float = 0f,
         shadowColor: Color = Color.Black,
+        shadowPath: Path? = null,
     ): Boolean =
         active.get()?.replayRecordedLayer(
             recording = recording,
@@ -193,6 +194,7 @@ object JbrSkiaCommandRecorder {
             imageFilter = imageFilter,
             shadowElevation = shadowElevation,
             shadowColor = shadowColor,
+            shadowPath = shadowPath,
         ) ?: false
 
     @InternalComposeUiApi
@@ -608,6 +610,7 @@ object JbrSkiaCommandRecorder {
             imageFilter: ImageFilterDescriptor?,
             shadowElevation: Float = 0f,
             shadowColor: Color = Color.Black,
+            shadowPath: Path? = null,
         ): Boolean {
             val childCommands = recording.commands ?: run {
                 countUnsupported("graphicsLayer:childCommands")
@@ -638,7 +641,7 @@ object JbrSkiaCommandRecorder {
             scale(scaleX, scaleY)
             translate(-pivotX, -pivotY)
             if (shadowElevation > 0f) {
-                if (!addRectangularLayerShadow(width, height, shadowElevation, shadowColor)) {
+                if (!addLayerShadow(width, height, shadowElevation, shadowColor, shadowPath)) {
                     return false
                 }
             }
@@ -762,11 +765,12 @@ object JbrSkiaCommandRecorder {
             return true
         }
 
-        private fun addRectangularLayerShadow(
+        private fun addLayerShadow(
             width: Float,
             height: Float,
             elevation: Float,
             color: Color,
+            shapePath: Path?,
         ): Boolean {
             if (!width.isFinite() || !height.isFinite() || width < 0f || height < 0f ||
                 !elevation.isFinite() || elevation <= 0f
@@ -799,16 +803,33 @@ object JbrSkiaCommandRecorder {
                 handle.highInt(),
                 handle.lowInt(),
             )
-            commands.addCommand(
-                COMMAND_FILL_RECT,
-                COMMAND_RECORD_FLAG_ANTIALIAS,
-                color.copy(alpha = shadowAlpha).toArgb(),
-                0,
-                offsetY.roundToInt(),
-                width.roundToInt().coerceAtLeast(0),
-                height.roundToInt().coerceAtLeast(0),
-                0,
-            )
+            if (shapePath != null) {
+                save()
+                translate(0f, offsetY)
+                clipPath(shapePath, ClipOp.Intersect)
+                commands.addCommand(
+                    COMMAND_FILL_RECT,
+                    COMMAND_RECORD_FLAG_ANTIALIAS,
+                    color.copy(alpha = shadowAlpha).toArgb(),
+                    0,
+                    0,
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    0,
+                )
+                restore()
+            } else {
+                commands.addCommand(
+                    COMMAND_FILL_RECT,
+                    COMMAND_RECORD_FLAG_ANTIALIAS,
+                    color.copy(alpha = shadowAlpha).toArgb(),
+                    0,
+                    offsetY.roundToInt(),
+                    width.roundToInt().coerceAtLeast(0),
+                    height.roundToInt().coerceAtLeast(0),
+                    0,
+                )
+            }
             restore()
             return true
         }
