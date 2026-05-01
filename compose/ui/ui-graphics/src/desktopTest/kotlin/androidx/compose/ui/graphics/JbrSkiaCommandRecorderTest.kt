@@ -1147,6 +1147,32 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesDashedStrokeRectRecord() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 21f,
+                bottom = 32f,
+                paint = Paint().apply {
+                    color = Color.White
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 10f), 3f)
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 93, 0, 16, 1, 1,
+                59, 64, 1, Color.White.toArgb(), 1, 2, 20, 30, 8, 0, 1, 0, 3000, 2, 16000, 10000,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun writesStrokeMetadata() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawLine(
