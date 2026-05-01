@@ -124,7 +124,8 @@ actual class BlurEffect actual constructor(
 
     @OptIn(InternalComposeUiApi::class)
     internal override fun jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? {
-        if (renderEffect != null) return null
+        val input = renderEffect?.jbrSkiaImageFilterDescriptorOrNull()
+            ?: if (renderEffect == null) null else return null
         val sigmaX = convertRadiusToSigma(radiusX)
         val sigmaY = convertRadiusToSigma(radiusY)
         if (!sigmaX.isFinite() || !sigmaY.isFinite() || sigmaX < 0f || sigmaY < 0f) return null
@@ -135,7 +136,7 @@ actual class BlurEffect actual constructor(
             TileMode.Decal -> 3
             else -> return null
         }
-        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(sigmaX, sigmaY, tileMode)
+        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(sigmaX, sigmaY, tileMode, input)
     }
 
     companion object {
@@ -187,8 +188,9 @@ actual class OffsetEffect actual constructor(
     }
 
     internal override fun jbrSkiaImageFilterDescriptorOrNull(): JbrSkiaCommandRecorder.ImageFilterDescriptor? {
-        if (renderEffect != null) return null
+        val input = renderEffect?.jbrSkiaImageFilterDescriptorOrNull()
+            ?: if (renderEffect == null) null else return null
         if (!offset.x.isFinite() || !offset.y.isFinite()) return null
-        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(offset.x, offset.y)
+        return JbrSkiaCommandRecorder.ImageFilterDescriptor.Offset(offset.x, offset.y, input)
     }
 }
