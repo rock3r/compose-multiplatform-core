@@ -2315,14 +2315,30 @@ object JbrSkiaCommandRecorder {
         private fun JbrSkiaRuntimeEffectShader.runtimeEffectDescriptorPayload(): IntArray? {
             if (sksl.isEmpty() || sksl.length > 4096 || uniforms.size > 256 || children.size > 8) return null
             if (sksl.any { it.code !in 1..127 }) return null
+            val sourceHash = sksl.shaderSourceHash()
             val childHandles = children.flatMap { child ->
                 val handle = defineShaderIfNeeded(shaderDescriptorOrNull(child) ?: return null) ?: return null
                 listOf(handle.highInt(), handle.lowInt())
             }.toIntArray()
-            return intArrayOf(sksl.length, uniforms.size, children.size) +
+            return intArrayOf(
+                sksl.length,
+                uniforms.size,
+                children.size,
+                sourceHash.highInt(),
+                sourceHash.lowInt(),
+            ) +
                 childHandles +
                 sksl.map { it.code }.toIntArray() +
                 uniforms.map { it.toRawBits() }.toIntArray()
+        }
+
+        private fun String.shaderSourceHash(): Long {
+            var hash = -3750763034362895579L
+            forEach { char ->
+                hash = hash xor char.code.toLong()
+                hash *= 1099511628211L
+            }
+            return hash
         }
 
         private fun IntArray.imageCacheKey(width: Int, height: Int): Long {
@@ -3000,7 +3016,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 87
+    private const val COMMAND_STREAM_ABI_ID = 88
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
