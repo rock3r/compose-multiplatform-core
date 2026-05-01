@@ -443,7 +443,11 @@ actual class GraphicsLayer internal constructor(
         if (rotationX != 0f) return "graphicsLayer:rotationX"
         if (rotationY != 0f) return "graphicsLayer:rotationY"
         if (!shadowElevation.isFinite() || shadowElevation < 0f) return "graphicsLayer:shadowElevation"
-        if (shadowElevation > 0f && outline !is Outline.Rectangle && outline !is Outline.Rounded) {
+        if (shadowElevation > 0f &&
+            outline !is Outline.Rectangle &&
+            outline !is Outline.Rounded &&
+            outline !is Outline.Generic
+        ) {
             return "graphicsLayer:shadowOutline"
         }
         if (clip && outline !is Outline.Rectangle && outline !is Outline.Rounded && outline !is Outline.Generic) {
@@ -490,6 +494,7 @@ actual class GraphicsLayer internal constructor(
         if (shadowElevation > 0f) {
             when (val tmpOutline = outline) {
                 is Outline.Rounded -> Path().apply { addOutline(tmpOutline) }
+                is Outline.Generic -> tmpOutline.path
                 else -> null
             }
         } else {
