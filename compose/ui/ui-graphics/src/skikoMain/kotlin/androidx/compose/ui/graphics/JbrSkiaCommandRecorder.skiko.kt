@@ -170,6 +170,14 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawRawPointLines(points, paint, stepBy)
     }
 
+    internal fun drawPoints(points: List<Offset>, paint: Paint) {
+        active.get()?.drawPoints(points, paint)
+    }
+
+    internal fun drawRawPoints(points: FloatArray, paint: Paint) {
+        active.get()?.drawRawPoints(points, paint)
+    }
+
     internal fun replayRecordedLayer(
         recording: JbrSkiaCommandRecording,
         left: Float,
@@ -1043,6 +1051,53 @@ object JbrSkiaCommandRecorder {
                 )
                 i += stepBy * 2
             }
+        }
+
+        fun drawPoints(points: List<Offset>, paint: Paint) {
+            if (points.isEmpty()) return
+            if (!paint.isSupportedSolidColor) return
+            val payload = IntArray(points.size * 2)
+            var payloadIndex = 0
+            for (point in points) {
+                payload[payloadIndex++] = state.x(point.x)
+                payload[payloadIndex++] = state.y(point.y)
+            }
+            commands.addCommand(
+                COMMAND_DRAW_POINTS,
+                paint.recordFlags(),
+                paint.commandColor(),
+                state.stroke(paint.strokeWidth),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
+                points.size,
+                *payload,
+            )
+        }
+
+        fun drawRawPoints(points: FloatArray, paint: Paint) {
+            if (points.isEmpty() || points.size % 2 != 0) return
+            if (!paint.isSupportedSolidColor) return
+            val pointCount = points.size / 2
+            val payload = IntArray(points.size)
+            var sourceIndex = 0
+            var payloadIndex = 0
+            while (sourceIndex < points.size - 1) {
+                payload[payloadIndex++] = state.x(points[sourceIndex])
+                payload[payloadIndex++] = state.y(points[sourceIndex + 1])
+                sourceIndex += 2
+            }
+            commands.addCommand(
+                COMMAND_DRAW_POINTS,
+                paint.recordFlags(),
+                paint.commandColor(),
+                state.stroke(paint.strokeWidth),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
+                pointCount,
+                *payload,
+            )
         }
 
         private fun addDashedLine(
@@ -3721,6 +3776,8 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_PATH_DASH_PATH_EFFECT = 61
     private const val COMMAND_DRAW_PATH_PATH_EFFECT_REF = 62
     private const val COMMAND_CONCAT_MATRIX33 = 63
+    private const val COMMAND_DRAW_SHADOW_PATH = 64
+    private const val COMMAND_DRAW_POINTS = 65
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -3760,8 +3817,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_DRAW_SHADOW_PATH = 64
-    private const val COMMAND_STREAM_ABI_ID = 99
+    private const val COMMAND_STREAM_ABI_ID = 100
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1

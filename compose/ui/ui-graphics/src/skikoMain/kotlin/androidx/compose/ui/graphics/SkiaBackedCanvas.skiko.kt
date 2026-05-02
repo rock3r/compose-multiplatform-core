@@ -362,7 +362,7 @@ internal class SkiaBackedCanvas(
 
             // Draw a point at each provided coordinate
             PointMode.Points -> {
-                JbrSkiaCommandRecorder.unsupportedDraw("points")
+                JbrSkiaCommandRecorder.drawPoints(points, paint)
                 drawPoints(points, paint)
             }
         }
@@ -425,7 +425,7 @@ internal class SkiaBackedCanvas(
                 drawRawLines(points, paint, 1)
             }
             PointMode.Points -> {
-                JbrSkiaCommandRecorder.unsupportedDraw("rawPoints")
+                JbrSkiaCommandRecorder.drawRawPoints(points, paint)
                 drawRawPoints(points, paint, 2)
             }
         }
