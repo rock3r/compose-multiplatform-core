@@ -23,14 +23,14 @@ import java.awt.Dimension
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.event.FocusEvent
+import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import javax.accessibility.AccessibleContext
 import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.SkiaLayerAnalytics
 import org.jetbrains.skiko.SkiaLayerProperties
 import org.jetbrains.skiko.SkikoRenderDelegate
-import org.jetbrains.skiko.jbr.JbrSkiaCommandFrame
-import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
 /**
@@ -59,26 +59,10 @@ internal class SwingSkiaLayerComponent(
         skiaLayerAnalytics: SkiaLayerAnalytics,
     ): SkiaSwingLayer {
         if (ComposeFeatureFlags.useJbrSkiaInteropInComposePanel.value) {
-            val delegateWithDensityRefresh = object : SkikoRenderDelegate, JbrSkiaCommandRenderDelegate {
-                override fun onRender(canvas: org.jetbrains.skia.Canvas, width: Int, height: Int, nanoTime: Long) {
-                    mediator.onChangeDensity()
-                    renderDelegate.onRender(canvas, width, height, nanoTime)
-                }
-
-                override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
-                    return renderJbrSkiaCommandFrameInfo(width, height, nanoTime)?.commands
-                }
-
-                override fun renderJbrSkiaCommandFrameInfo(
-                    width: Int,
-                    height: Int,
-                    nanoTime: Long
-                ): JbrSkiaCommandFrame? {
-                    mediator.onChangeDensity()
-                    return (mediator as? JbrSkiaCommandRenderDelegate)
-                        ?.renderJbrSkiaCommandFrameInfo(width, height, nanoTime)
-                }
-            }
+            val delegateWithDensityRefresh = JbrSkiaInteropRuntime.createCommandRenderDelegateOrNull(
+                mediator = mediator,
+                renderDelegate = renderDelegate,
+            ) ?: createDensityRefreshingRenderDelegate(mediator, renderDelegate)
             JbrSkiaInteropRuntime.createSwingLayerOrNull(
                 renderDelegate = delegateWithDensityRefresh,
                 analytics = skiaLayerAnalytics,
@@ -87,6 +71,16 @@ internal class SwingSkiaLayerComponent(
         }
 
         return createDefaultHierarchyRoot(mediator, renderDelegate, skiaLayerAnalytics)
+    }
+
+    private fun createDensityRefreshingRenderDelegate(
+        mediator: ComposeSceneMediator,
+        renderDelegate: SkikoRenderDelegate,
+    ): SkikoRenderDelegate = object : SkikoRenderDelegate {
+        override fun onRender(canvas: org.jetbrains.skia.Canvas, width: Int, height: Int, nanoTime: Long) {
+            mediator.onChangeDensity()
+            renderDelegate.onRender(canvas, width, height, nanoTime)
+        }
     }
 
     private fun createDefaultHierarchyRoot(
@@ -189,6 +183,9 @@ internal class SwingSkiaLayerComponent(
 internal object JbrSkiaInteropRuntime {
     private const val CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaInterop"
     private const val SWING_LAYER_CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaSwingLayer"
+    private const val COMMAND_RENDER_DELEGATE_CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate"
+    private const val COMMAND_FRAME_CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaCommandFrame"
+    private const val COMMAND_FRAME_KIND_CLASS_NAME = "org.jetbrains.skiko.jbr.JbrSkiaCommandFrameKind"
     private const val METHOD_NAME = "acquireCanvasOrNull"
     private const val FALLBACK_MARKER = "SKIKO_JBR_INTEROP_FALLBACK"
 
@@ -205,7 +202,35 @@ internal object JbrSkiaInteropRuntime {
     private var swingLayerConstructor: java.lang.reflect.Constructor<*>? = null
 
     @Volatile
+    private var commandDelegateResolveAttempted = false
+
+    @Volatile
+    private var commandDelegateClass: Class<*>? = null
+
+    @Volatile
+    private var commandFrameConstructor: java.lang.reflect.Constructor<*>? = null
+
+    @Volatile
+    private var commandFrameKindClass: Class<out Enum<*>>? = null
+
+    @Volatile
     private var fallbackLogged = false
+
+    fun createCommandRenderDelegateOrNull(
+        mediator: ComposeSceneMediator,
+        renderDelegate: SkikoRenderDelegate,
+    ): SkikoRenderDelegate? {
+        val commandInterface = commandDelegateClass ?: resolveCommandDelegateClass() ?: return null
+        return runCatching {
+            Proxy.newProxyInstance(
+                SkikoRenderDelegate::class.java.classLoader,
+                arrayOf(SkikoRenderDelegate::class.java, commandInterface),
+                CommandRenderDelegateInvocationHandler(mediator, renderDelegate)
+            ) as? SkikoRenderDelegate
+        }.onFailure {
+            logFallbackOnce("skiko-jbr-command-delegate-proxy-error")
+        }.getOrNull()
+    }
 
     fun createSwingLayerOrNull(
         renderDelegate: SkikoRenderDelegate,
@@ -244,6 +269,22 @@ internal object JbrSkiaInteropRuntime {
         return acquireCanvasMethod
     }
 
+    private fun resolveCommandDelegateClass(): Class<*>? {
+        if (commandDelegateResolveAttempted) return commandDelegateClass
+        commandDelegateResolveAttempted = true
+        runCatching {
+            commandDelegateClass = Class.forName(COMMAND_RENDER_DELEGATE_CLASS_NAME)
+            val frameKindRaw = Class.forName(COMMAND_FRAME_KIND_CLASS_NAME)
+            @Suppress("UNCHECKED_CAST")
+            commandFrameKindClass = frameKindRaw.asSubclass(Enum::class.java) as Class<out Enum<*>>
+            commandFrameConstructor = Class.forName(COMMAND_FRAME_CLASS_NAME)
+                .getConstructor(IntArray::class.java, frameKindRaw)
+        }.onFailure {
+            logFallbackOnce("skiko-jbr-command-delegate-missing")
+        }
+        return commandDelegateClass
+    }
+
     private fun resolveSwingLayerConstructor(): java.lang.reflect.Constructor<*>? {
         if (layerResolveAttempted) return swingLayerConstructor
         layerResolveAttempted = true
@@ -264,6 +305,57 @@ internal object JbrSkiaInteropRuntime {
         if (!fallbackLogged) {
             fallbackLogged = true
             System.err.println("$FALLBACK_MARKER reason=$reason")
+        }
+    }
+
+    private class CommandRenderDelegateInvocationHandler(
+        private val mediator: ComposeSceneMediator,
+        private val renderDelegate: SkikoRenderDelegate,
+    ) : InvocationHandler {
+        override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? {
+            return when (method.name) {
+                "onRender" -> {
+                    mediator.onChangeDensity()
+                    renderDelegate.onRender(
+                        args?.get(0) as org.jetbrains.skia.Canvas,
+                        args[1] as Int,
+                        args[2] as Int,
+                        args[3] as Long,
+                    )
+                    Unit
+                }
+                "renderJbrSkiaCommandFrame" -> {
+                    mediator.onChangeDensity()
+                    mediator.renderJbrSkiaCommandFrame(
+                        args?.get(0) as Int,
+                        args[1] as Int,
+                        args[2] as Long,
+                    )
+                }
+                "renderJbrSkiaCommandFrameInfo" -> {
+                    mediator.onChangeDensity()
+                    mediator.renderJbrSkiaCommandFrameData(
+                        args?.get(0) as Int,
+                        args[1] as Int,
+                        args[2] as Long,
+                    )?.toSkikoCommandFrame()
+                }
+                "toString" -> "JbrSkiaCommandRenderDelegateProxy($renderDelegate)"
+                "hashCode" -> System.identityHashCode(proxy)
+                "equals" -> proxy === args?.firstOrNull()
+                else -> method.invoke(renderDelegate, *(args ?: emptyArray()))
+            }
+        }
+
+        private fun androidx.compose.ui.scene.JbrSkiaCommandFrameData.toSkikoCommandFrame(): Any? {
+            val frameConstructor = commandFrameConstructor ?: return null
+            val kindClass = commandFrameKindClass ?: return null
+            val kind = enumValueOf(kindClass, kind.name)
+            return frameConstructor.newInstance(commands, kind)
+        }
+
+        private fun enumValueOf(enumClass: Class<out Enum<*>>, name: String): Enum<*> {
+            return java.lang.Enum.valueOf(enumClass.asSubclass(Enum::class.java), name)
         }
     }
 }
