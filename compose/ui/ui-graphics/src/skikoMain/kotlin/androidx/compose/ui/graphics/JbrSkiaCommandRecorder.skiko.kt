@@ -162,6 +162,14 @@ object JbrSkiaCommandRecorder {
         active.get()?.unsupportedDraw(reason)
     }
 
+    internal fun drawPointLines(points: List<Offset>, paint: Paint, stepBy: Int) {
+        active.get()?.drawPointLines(points, paint, stepBy)
+    }
+
+    internal fun drawRawPointLines(points: FloatArray, paint: Paint, stepBy: Int) {
+        active.get()?.drawRawPointLines(points, paint, stepBy)
+    }
+
     internal fun replayRecordedLayer(
         recording: JbrSkiaCommandRecording,
         left: Float,
@@ -1013,6 +1021,28 @@ object JbrSkiaCommandRecorder {
                 paint.strokeJoin.commandValue(),
                 paint.strokeMiter1000(),
             )
+        }
+
+        fun drawPointLines(points: List<Offset>, paint: Paint, stepBy: Int) {
+            if (points.size < 2) return
+            var i = 0
+            while (i < points.size - 1) {
+                drawLine(points[i], points[i + 1], paint)
+                i += stepBy
+            }
+        }
+
+        fun drawRawPointLines(points: FloatArray, paint: Paint, stepBy: Int) {
+            if (points.size < 4 || points.size % 2 != 0) return
+            var i = 0
+            while (i < points.size - 3) {
+                drawLine(
+                    p1 = Offset(points[i], points[i + 1]),
+                    p2 = Offset(points[i + 2], points[i + 3]),
+                    paint = paint,
+                )
+                i += stepBy * 2
+            }
         }
 
         private fun addDashedLine(

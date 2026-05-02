@@ -346,17 +346,25 @@ internal class SkiaBackedCanvas(
     }
 
     override fun drawPoints(pointMode: PointMode, points: List<Offset>, paint: Paint) {
-        JbrSkiaCommandRecorder.unsupportedDraw("points")
         when (pointMode) {
             // Draw a line between each pair of points, each point has at most one line
             // If the number of points is odd, then the last point is ignored.
-            PointMode.Lines -> drawLines(points, paint, 2)
+            PointMode.Lines -> {
+                JbrSkiaCommandRecorder.drawPointLines(points, paint, 2)
+                drawLines(points, paint, 2)
+            }
 
             // Connect each adjacent point with a line
-            PointMode.Polygon -> drawLines(points, paint, 1)
+            PointMode.Polygon -> {
+                JbrSkiaCommandRecorder.drawPointLines(points, paint, 1)
+                drawLines(points, paint, 1)
+            }
 
             // Draw a point at each provided coordinate
-            PointMode.Points -> drawPoints(points, paint)
+            PointMode.Points -> {
+                JbrSkiaCommandRecorder.unsupportedDraw("points")
+                drawPoints(points, paint)
+            }
         }
     }
 
@@ -404,14 +412,22 @@ internal class SkiaBackedCanvas(
      * @throws IllegalArgumentException if a non even number of points is provided
      */
     override fun drawRawPoints(pointMode: PointMode, points: FloatArray, paint: Paint) {
-        JbrSkiaCommandRecorder.unsupportedDraw("rawPoints")
         if (points.size % 2 != 0) {
             throw IllegalArgumentException("points must have an even number of values")
         }
         when (pointMode) {
-            PointMode.Lines -> drawRawLines(points, paint, 2)
-            PointMode.Polygon -> drawRawLines(points, paint, 1)
-            PointMode.Points -> drawRawPoints(points, paint, 2)
+            PointMode.Lines -> {
+                JbrSkiaCommandRecorder.drawRawPointLines(points, paint, 2)
+                drawRawLines(points, paint, 2)
+            }
+            PointMode.Polygon -> {
+                JbrSkiaCommandRecorder.drawRawPointLines(points, paint, 1)
+                drawRawLines(points, paint, 1)
+            }
+            PointMode.Points -> {
+                JbrSkiaCommandRecorder.unsupportedDraw("rawPoints")
+                drawRawPoints(points, paint, 2)
+            }
         }
     }
 
