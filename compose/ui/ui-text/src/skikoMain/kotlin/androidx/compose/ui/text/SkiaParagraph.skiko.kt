@@ -40,6 +40,9 @@ import androidx.compose.ui.graphics.toComposeRect
 import androidx.compose.ui.text.internal.requirePrecondition
 import androidx.compose.ui.text.platform.SkiaParagraphIntrinsics
 import androidx.compose.ui.text.platform.cursorHorizontalPosition
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.GenericFontFamily
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextAlign
@@ -733,16 +736,16 @@ internal class SkiaParagraph(
         if (!fontSize.isFinite() || fontSize <= 0f) {
             return false
         }
-        val fontStyle = defaultFont.typeface?.fontStyle ?: org.jetbrains.skia.FontStyle.NORMAL
+        val fontMetadata = jbrSkiaFontMetadata()
         return JbrSkiaCommandRecorder.drawTextUtf16(
             text = text,
             x = 0f,
             baseline = firstBaseline,
             fontSize = fontSize,
-            fontFamily = defaultFont.typeface?.familyName,
-            fontWeight = fontStyle.weight.coerceIn(1, 1000),
-            fontWidth = fontStyle.width.coerceIn(1, 9),
-            fontSlant = fontStyle.slant.ordinal.coerceIn(0, 2),
+            fontFamily = fontMetadata.familyName,
+            fontWeight = fontMetadata.weight,
+            fontWidth = fontMetadata.width,
+            fontSlant = fontMetadata.slant,
             color = color.toArgb(),
             antiAlias = true,
         )
@@ -758,18 +761,18 @@ internal class SkiaParagraph(
         if (!fontSize.isFinite() || fontSize <= 0f || !width.isFinite() || width <= 0f) {
             return false
         }
-        val fontStyle = defaultFont.typeface?.fontStyle ?: org.jetbrains.skia.FontStyle.NORMAL
+        val fontMetadata = jbrSkiaFontMetadata()
         return JbrSkiaCommandRecorder.drawParagraphUtf16(
             text = text,
             x = 0f,
             y = 0f,
             width = width,
             fontSize = fontSize,
-            fontFamily = defaultFont.typeface?.familyName,
+            fontFamily = fontMetadata.familyName,
             color = color.toArgb(),
-            fontWeight = fontStyle.weight.coerceIn(1, 1000),
-            fontWidth = fontStyle.width.coerceIn(1, 9),
-            fontSlant = fontStyle.slant.ordinal.coerceIn(0, 2),
+            fontWeight = fontMetadata.weight,
+            fontWidth = fontMetadata.width,
+            fontSlant = fontMetadata.slant,
             textAlign = layouter.textStyle.textAlign.jbrSkiaParagraphAlign(),
             textDirection = paragraphIntrinsics.textDirection.jbrSkiaParagraphDirection(),
             lineHeightMultiplier1000 = jbrSkiaParagraphLineHeightMultiplier1000(fontSize),
@@ -780,6 +783,34 @@ internal class SkiaParagraph(
             backgroundSpecified = if (layouter.textStyle.background.isSpecified) 1 else 0,
             backgroundArgb = layouter.textStyle.background.toArgb(),
             antiAlias = true,
+        )
+    }
+
+    private data class JbrSkiaFontMetadata(
+        val familyName: String?,
+        val weight: Int,
+        val width: Int,
+        val slant: Int,
+    )
+
+    private fun jbrSkiaFontMetadata(): JbrSkiaFontMetadata {
+        val textStyle = layouter.textStyle
+        val genericFamily = (textStyle.fontFamily as? GenericFontFamily)?.name
+        val needsResolvedTypeface =
+            genericFamily == null ||
+                textStyle.fontWeight == null ||
+                textStyle.fontStyle == null
+        val resolvedTypeface = if (needsResolvedTypeface) defaultFont.typeface else null
+        val resolvedStyle = resolvedTypeface?.fontStyle
+        return JbrSkiaFontMetadata(
+            familyName = genericFamily ?: resolvedTypeface?.familyName,
+            weight = (textStyle.fontWeight?.weight ?: resolvedStyle?.weight ?: FontWeight.Normal.weight)
+                .coerceIn(1, 1000),
+            width = (resolvedStyle?.width ?: 5).coerceIn(1, 9),
+            slant = when (textStyle.fontStyle) {
+                FontStyle.Italic -> 1
+                else -> resolvedStyle?.slant?.ordinal ?: 0
+            }.coerceIn(0, 2),
         )
     }
 
