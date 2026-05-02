@@ -675,6 +675,76 @@ class DesktopParagraphTest {
     }
 
     @Test
+    fun paint_withGenericFontStyle_recordsJbrSkiaSimpleTextMetadata() {
+        val paragraph = simpleParagraph(
+            text = "Hi",
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontStyle = FontStyle.Italic,
+            ),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
+        }!!
+
+        val recordStart = commandRecordStart(commands, 17)
+        val argsStart = recordStart + 3
+        val familyCount = commands[argsStart + 7]
+
+        assertThat(commands[argsStart + 4]).isEqualTo(FontWeight.Bold.weight)
+        assertThat(commands[argsStart + 5]).isEqualTo(5)
+        assertThat(commands[argsStart + 6]).isEqualTo(1)
+        assertThat(commandString(commands, argsStart + 8, familyCount)).isEqualTo(FontFamily.Monospace.name)
+        assertThat(commands.toList()).doesNotContain(16)
+    }
+
+    @Test
+    fun paint_withGenericFontStyle_recordsJbrSkiaParagraphTextMetadata() {
+        val paragraph = simpleParagraph(
+            text = "Hi \uD83D\uDE80",
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.SemiBold,
+                fontStyle = FontStyle.Italic,
+            ),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
+        }!!
+
+        val recordStart = commandRecordStart(commands, 19)
+        val argsStart = recordStart + 3
+        val familyCount = commands[argsStart + 8]
+
+        assertThat(commands[argsStart + 5]).isEqualTo(FontWeight.SemiBold.weight)
+        assertThat(commands[argsStart + 6]).isEqualTo(5)
+        assertThat(commands[argsStart + 7]).isEqualTo(1)
+        assertThat(commandString(commands, argsStart + 9, familyCount)).isEqualTo(FontFamily.Serif.name)
+        assertThat(commands.toList()).doesNotContain(16)
+    }
+
+    @Test
     fun paint_withLatin1Text_recordsJbrSkiaSimpleText() {
         val paragraph = simpleParagraph(
             text = "Caf\u00e9",
@@ -831,6 +901,17 @@ class DesktopParagraphTest {
             constraints = Constraints(maxWidth = width.ceilToInt()),
             maxLines = maxLines,
         )
+    }
+
+    private fun commandString(commands: IntArray, start: Int, length: Int): String =
+        commands.sliceArray(start until start + length)
+            .map { it.toChar() }
+            .joinToString("")
+
+    private fun commandRecordStart(commands: IntArray, op: Int): Int {
+        val index = commands.indexOf(op)
+        assertThat(index).isAtLeast(0)
+        return index
     }
 
     private fun <T> withNativeJbrSkiaText(block: () -> T): T {
