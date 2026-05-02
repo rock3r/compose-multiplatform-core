@@ -1810,6 +1810,64 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesPointLineRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPointLines(
+                points = listOf(
+                    Offset(1f, 2f),
+                    Offset(11f, 12f),
+                    Offset(21f, 22f),
+                    Offset(31f, 32f),
+                    Offset(41f, 42f),
+                ),
+                paint = Paint().apply {
+                    color = Color.White
+                    strokeWidth = 3f
+                    strokeCap = StrokeCap.Round
+                    strokeJoin = StrokeJoin.Bevel
+                    strokeMiterLimit = 4.5f
+                },
+                stepBy = 2,
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 99, 0, 24, 1, 1,
+                3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
+                3, 48, 1, Color.White.toArgb(), 21, 22, 31, 32, 3, 1, 2, 4500,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesRawPointPolygonRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRawPointLines(
+                points = floatArrayOf(1f, 2f, 11f, 12f, 21f, 22f),
+                paint = Paint().apply {
+                    color = Color.White
+                    strokeWidth = 3f
+                    strokeCap = StrokeCap.Round
+                    strokeJoin = StrokeJoin.Bevel
+                    strokeMiterLimit = 4.5f
+                },
+                stepBy = 1,
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 99, 0, 24, 1, 1,
+                3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
+                3, 48, 1, Color.White.toArgb(), 11, 12, 21, 22, 3, 1, 2, 4500,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun writesBasicTransformRecords() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
