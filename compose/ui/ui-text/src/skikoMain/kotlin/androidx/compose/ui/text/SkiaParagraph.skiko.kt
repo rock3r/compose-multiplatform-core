@@ -733,12 +733,16 @@ internal class SkiaParagraph(
         if (!fontSize.isFinite() || fontSize <= 0f) {
             return false
         }
+        val fontStyle = defaultFont.typeface?.fontStyle ?: org.jetbrains.skia.FontStyle.NORMAL
         return JbrSkiaCommandRecorder.drawTextUtf16(
             text = text,
             x = 0f,
             baseline = firstBaseline,
             fontSize = fontSize,
             fontFamily = defaultFont.typeface?.familyName,
+            fontWeight = fontStyle.weight.coerceIn(1, 1000),
+            fontWidth = fontStyle.width.coerceIn(1, 9),
+            fontSlant = fontStyle.slant.ordinal.coerceIn(0, 2),
             color = color.toArgb(),
             antiAlias = true,
         )
