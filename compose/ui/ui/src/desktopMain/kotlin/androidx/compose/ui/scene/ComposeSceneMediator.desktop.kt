@@ -106,12 +106,19 @@ import org.jetbrains.skiko.ExperimentalSkikoApi
 import org.jetbrains.skiko.GraphicsApi
 import org.jetbrains.skiko.SkikoRenderDelegate
 import org.jetbrains.skiko.hostOs
-import org.jetbrains.skiko.jbr.JbrSkiaCommandFrame
-import org.jetbrains.skiko.jbr.JbrSkiaCommandFrameKind
-import org.jetbrains.skiko.jbr.JbrSkiaCommandRenderDelegate
 import org.jetbrains.skiko.swing.SkiaSwingLayer
 
 private const val INTEROP_ONLY_COMMAND_WORD_THRESHOLD = 64
+
+internal data class JbrSkiaCommandFrameData(
+    val commands: IntArray,
+    val kind: JbrSkiaCommandFrameKindData,
+)
+
+internal enum class JbrSkiaCommandFrameKindData {
+    FullScene,
+    InteropOnly,
+}
 
 /**
  * Provides a mediator for integrating a Compose scene with an AWT/Swing Component.
@@ -140,7 +147,7 @@ internal class ComposeSceneMediator(
 
     skiaLayerComponentFactory: (ComposeSceneMediator) -> SkiaLayerComponent,
     composeSceneFactory: (ComposeSceneMediator) -> ComposeScene,
-) : SkikoRenderDelegate, JbrSkiaCommandRenderDelegate {
+) : SkikoRenderDelegate {
     private var isDisposed = false
     private var isComponentAttached = false
     private val invisibleComponent = InvisibleComponent()
@@ -707,11 +714,11 @@ internal class ComposeSceneMediator(
         }
     }
 
-    override fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
-        return renderJbrSkiaCommandFrameInfo(width, height, nanoTime)?.commands
+    fun renderJbrSkiaCommandFrame(width: Int, height: Int, nanoTime: Long): IntArray? {
+        return renderJbrSkiaCommandFrameData(width, height, nanoTime)?.commands
     }
 
-    override fun renderJbrSkiaCommandFrameInfo(width: Int, height: Int, nanoTime: Long): JbrSkiaCommandFrame? {
+    fun renderJbrSkiaCommandFrameData(width: Int, height: Int, nanoTime: Long): JbrSkiaCommandFrameData? {
         return try {
             val recorder = PictureRecorder()
             try {
@@ -727,14 +734,14 @@ internal class ComposeSceneMediator(
                 }
                 val commands = recording.commands ?: return null
                 val kind = if (recording.isInteropOnlyFrame) {
-                    JbrSkiaCommandFrameKind.InteropOnly
+                    JbrSkiaCommandFrameKindData.InteropOnly
                 } else {
-                    JbrSkiaCommandFrameKind.FullScene
+                    JbrSkiaCommandFrameKindData.FullScene
                 }
                 System.err.println(
                     "CMP_JBR_COMMAND_FRAME_KIND kind=${kind.name} commands=${recording.commandWordCount}"
                 )
-                JbrSkiaCommandFrame(commands, kind)
+                JbrSkiaCommandFrameData(commands, kind)
             } finally {
                 recorder.finishRecordingAsPicture().close()
                 recorder.close()
