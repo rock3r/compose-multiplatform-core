@@ -346,10 +346,15 @@ object JbrSkiaCommandRecorder {
         baseline: Float,
         fontSize: Float,
         fontFamily: String?,
+        fontWeight: Int,
+        fontWidth: Int,
+        fontSlant: Int,
         color: Int,
         antiAlias: Boolean,
     ): Boolean =
-        active.get()?.drawTextUtf16(text, x, baseline, fontSize, fontFamily, color, antiAlias) ?: false
+        active.get()
+            ?.drawTextUtf16(text, x, baseline, fontSize, fontFamily, fontWeight, fontWidth, fontSlant, color, antiAlias)
+            ?: false
 
     fun drawParagraphUtf16(
         text: String,
@@ -2475,6 +2480,9 @@ object JbrSkiaCommandRecorder {
             baseline: Float,
             fontSize: Float,
             fontFamily: String?,
+            fontWeight: Int,
+            fontWidth: Int,
+            fontSlant: Int,
             color: Int,
             antiAlias: Boolean,
         ): Boolean {
@@ -2482,7 +2490,10 @@ object JbrSkiaCommandRecorder {
             if (
                 text.isEmpty() || text.length > 4096 ||
                 encodedFontFamily.length > 256 ||
-                !fontSize.isFinite() || fontSize <= 0f
+                !fontSize.isFinite() || fontSize <= 0f ||
+                fontWeight !in 1..1000 ||
+                fontWidth !in 1..9 ||
+                fontSlant !in 0..2
             ) {
                 return false
             }
@@ -2494,6 +2505,9 @@ object JbrSkiaCommandRecorder {
                 baseline.fixed1000(),
                 fontSize.fixed1000(),
                 color,
+                fontWeight,
+                fontWidth,
+                fontSlant,
                 encodedFontFamily.length,
                 *IntArray(encodedFontFamily.length) { encodedFontFamily[it].code },
                 text.length,
@@ -3830,7 +3844,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 100
+    private const val COMMAND_STREAM_ABI_ID = 101
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
