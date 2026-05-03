@@ -34,12 +34,23 @@ actual class Shader internal constructor(
     internal val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
     internal val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
     internal val jbrSkiaTransformedShader: JbrSkiaTransformedShader? = null,
+    internal val jbrSkiaColorShader: JbrSkiaColorShader? = null,
 )
 
 /**
  * Convert the [org.jetbrains.skia.Shader] instance into a Compose-compatible Shader
  */
 fun SkShader.asComposeShader(): Shader = Shader(internalSkiaShader = this)
+
+fun ColorShader(color: Color): Shader =
+    Shader(
+        internalSkiaShader = SkShader.makeColor(color.toArgb()),
+        jbrSkiaColorShader = JbrSkiaColorShader(color),
+    )
+
+internal data class JbrSkiaColorShader(
+    val color: Color,
+)
 
 internal data class JbrSkiaLinearGradientShader(
     val from: Offset,
@@ -301,7 +312,9 @@ private val Shader.hasJbrSkiaShaderMetadata: Boolean
         jbrSkiaSweepGradient != null ||
         jbrSkiaImageShader != null ||
         jbrSkiaCompositeShader != null ||
-        jbrSkiaRuntimeEffectShader != null
+        jbrSkiaRuntimeEffectShader != null ||
+        jbrSkiaTransformedShader != null ||
+        jbrSkiaColorShader != null
 
 internal fun FloatArray.toUniformData(): Data {
     if (isEmpty()) return Data.makeEmpty()
