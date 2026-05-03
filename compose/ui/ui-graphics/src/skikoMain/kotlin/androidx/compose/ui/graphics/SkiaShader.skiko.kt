@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import org.jetbrains.skia.Color4f
 import org.jetbrains.skia.Data
 import org.jetbrains.skia.Gradient
+import org.jetbrains.skia.ISize
 import org.jetbrains.skia.Matrix33
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.impl.use
@@ -35,6 +36,7 @@ actual class Shader internal constructor(
     internal val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
     internal val jbrSkiaTransformedShader: JbrSkiaTransformedShader? = null,
     internal val jbrSkiaColorShader: JbrSkiaColorShader? = null,
+    internal val jbrSkiaPerlinNoiseShader: JbrSkiaPerlinNoiseShader? = null,
 )
 
 /**
@@ -48,8 +50,69 @@ fun ColorShader(color: Color): Shader =
         jbrSkiaColorShader = JbrSkiaColorShader(color),
     )
 
+fun FractalNoiseShader(
+    baseFrequencyX: Float,
+    baseFrequencyY: Float,
+    numOctaves: Int,
+    seed: Float,
+    tileWidth: Int = 0,
+    tileHeight: Int = 0,
+): Shader {
+    val tileSize = ISize.make(tileWidth, tileHeight)
+    return Shader(
+        internalSkiaShader = SkShader.makeFractalNoise(baseFrequencyX, baseFrequencyY, numOctaves, seed, tileSize),
+        jbrSkiaPerlinNoiseShader = JbrSkiaPerlinNoiseShader(
+            kind = JbrSkiaPerlinNoiseKind.FractalNoise,
+            baseFrequencyX = baseFrequencyX,
+            baseFrequencyY = baseFrequencyY,
+            numOctaves = numOctaves,
+            seed = seed,
+            tileWidth = tileWidth,
+            tileHeight = tileHeight,
+        ),
+    )
+}
+
+fun TurbulenceShader(
+    baseFrequencyX: Float,
+    baseFrequencyY: Float,
+    numOctaves: Int,
+    seed: Float,
+    tileWidth: Int = 0,
+    tileHeight: Int = 0,
+): Shader {
+    val tileSize = ISize.make(tileWidth, tileHeight)
+    return Shader(
+        internalSkiaShader = SkShader.makeTurbulence(baseFrequencyX, baseFrequencyY, numOctaves, seed, tileSize),
+        jbrSkiaPerlinNoiseShader = JbrSkiaPerlinNoiseShader(
+            kind = JbrSkiaPerlinNoiseKind.Turbulence,
+            baseFrequencyX = baseFrequencyX,
+            baseFrequencyY = baseFrequencyY,
+            numOctaves = numOctaves,
+            seed = seed,
+            tileWidth = tileWidth,
+            tileHeight = tileHeight,
+        ),
+    )
+}
+
 internal data class JbrSkiaColorShader(
     val color: Color,
+)
+
+internal enum class JbrSkiaPerlinNoiseKind(val commandValue: Int) {
+    FractalNoise(0),
+    Turbulence(1),
+}
+
+internal data class JbrSkiaPerlinNoiseShader(
+    val kind: JbrSkiaPerlinNoiseKind,
+    val baseFrequencyX: Float,
+    val baseFrequencyY: Float,
+    val numOctaves: Int,
+    val seed: Float,
+    val tileWidth: Int,
+    val tileHeight: Int,
 )
 
 internal data class JbrSkiaLinearGradientShader(

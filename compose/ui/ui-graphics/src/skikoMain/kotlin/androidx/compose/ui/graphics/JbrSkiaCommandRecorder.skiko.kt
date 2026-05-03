@@ -297,6 +297,7 @@ object JbrSkiaCommandRecorder {
         data class RuntimeEffect(val shader: JbrSkiaRuntimeEffectShader) : ShaderDescriptor()
         data class Transformed(val shader: JbrSkiaTransformedShader) : ShaderDescriptor()
         data class Color(val shader: JbrSkiaColorShader) : ShaderDescriptor()
+        data class PerlinNoise(val shader: JbrSkiaPerlinNoiseShader) : ShaderDescriptor()
         data class ColorFiltered(val shader: ShaderDescriptor, val colorFilter: ColorFilter) : ShaderDescriptor()
     }
 
@@ -310,6 +311,7 @@ object JbrSkiaCommandRecorder {
         shader.jbrSkiaRuntimeEffectShader?.let { return ShaderDescriptor.RuntimeEffect(it) }
         shader.jbrSkiaTransformedShader?.let { return ShaderDescriptor.Transformed(it) }
         shader.jbrSkiaColorShader?.let { return ShaderDescriptor.Color(it) }
+        shader.jbrSkiaPerlinNoiseShader?.let { return ShaderDescriptor.PerlinNoise(it) }
         return null
     }
 
@@ -1167,7 +1169,8 @@ object JbrSkiaCommandRecorder {
             if (descriptor is ShaderDescriptor.Composite ||
                 descriptor is ShaderDescriptor.RuntimeEffect ||
                 descriptor is ShaderDescriptor.Transformed ||
-                descriptor is ShaderDescriptor.Color
+                descriptor is ShaderDescriptor.Color ||
+                descriptor is ShaderDescriptor.PerlinNoise
             ) {
                 addShaderDescriptorRect(left, top, right, bottom, paint, descriptor)
                 return
@@ -2755,6 +2758,9 @@ object JbrSkiaCommandRecorder {
         private fun Float.fixed1000(): Int =
             (this * 1000f).roundToInt()
 
+        private fun Float.fixed1000000(): Int =
+            (this * 1_000_000f).roundToInt()
+
         private fun Path.commandData(): IntArray? {
             val data = ArrayList<Int>(64)
             val points = FloatArray(8)
@@ -2913,6 +2919,7 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.SweepGradient -> shader.shader.sweepGradientDescriptorPayload()
                 is ShaderDescriptor.Image -> shader.shader.imageShaderDescriptorPayload()
                 is ShaderDescriptor.Color -> intArrayOf(shader.shader.color.toArgb())
+                is ShaderDescriptor.PerlinNoise -> shader.shader.perlinNoiseDescriptorPayload()
                 is ShaderDescriptor.RuntimeEffect -> shader.shader.runtimeEffectDescriptorPayload()
                 is ShaderDescriptor.Transformed -> {
                     val childHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.shader) ?: return null) ?: return null
@@ -2989,6 +2996,7 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.RuntimeEffect -> COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT
                 is ShaderDescriptor.Transformed -> COMMAND_SHADER_DESCRIPTOR_TRANSFORM
                 is ShaderDescriptor.Color -> COMMAND_SHADER_DESCRIPTOR_COLOR
+                is ShaderDescriptor.PerlinNoise -> COMMAND_SHADER_DESCRIPTOR_PERLIN_NOISE
                 is ShaderDescriptor.ColorFiltered -> COMMAND_SHADER_DESCRIPTOR_COLOR_FILTER
             }
 
@@ -3055,6 +3063,29 @@ object JbrSkiaCommandRecorder {
             ).plus(colors.flatMapIndexed { index, color ->
                 listOf(color.toArgb(), stops[index].fixed1000())
             }).toIntArray()
+        }
+
+        private fun JbrSkiaPerlinNoiseShader.perlinNoiseDescriptorPayload(): IntArray? {
+            if (!baseFrequencyX.isFinite() ||
+                !baseFrequencyY.isFinite() ||
+                !seed.isFinite() ||
+                baseFrequencyX <= 0f ||
+                baseFrequencyY <= 0f ||
+                numOctaves !in 1..16 ||
+                tileWidth < 0 ||
+                tileHeight < 0 ||
+                tileWidth > 4096 ||
+                tileHeight > 4096
+            ) return null
+            return intArrayOf(
+                kind.commandValue,
+                baseFrequencyX.fixed1000000(),
+                baseFrequencyY.fixed1000000(),
+                numOctaves,
+                seed.fixed1000(),
+                tileWidth,
+                tileHeight,
+            )
         }
 
         private fun JbrSkiaTransformedShader.transformDescriptorPayload(childHandle: Long): IntArray? {
@@ -3875,6 +3906,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SHADER_DESCRIPTOR_COLOR_FILTER = 7
     private const val COMMAND_SHADER_DESCRIPTOR_TRANSFORM = 8
     private const val COMMAND_SHADER_DESCRIPTOR_COLOR = 9
+    private const val COMMAND_SHADER_DESCRIPTOR_PERLIN_NOISE = 10
     private const val COMMAND_SHADER_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -3895,7 +3927,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 104
+    private const val COMMAND_STREAM_ABI_ID = 105
     private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
