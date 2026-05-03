@@ -55,7 +55,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 18, 1, 1,
+                1246972723, 105, 0, 18, 1, 1,
                 2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
                 2, 36, 0, Color.Blue.toArgb(), 3, 4, 10, 20, 0,
             ),
@@ -108,7 +108,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 10, 1, 1,
+                1246972723, 105, 0, 10, 1, 1,
                 66, 40, 0, 0x12345678, 0x0abcdef0, 4, 0, 1, 254, 255,
             ),
             commands,
@@ -1185,7 +1185,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 1, 1, 2, 10, 20,
             ),
             commands,
@@ -1210,7 +1210,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 3, 1, 2, 10, 20,
             ),
             commands,
@@ -1235,7 +1235,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 4, 1, 2, 10, 20,
             ),
             commands,
@@ -1260,7 +1260,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 5, 1, 2, 10, 20,
             ),
             commands,
@@ -1285,7 +1285,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 6, 1, 2, 10, 20,
             ),
             commands,
@@ -1310,7 +1310,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 7, 1, 2, 10, 20,
             ),
             commands,
@@ -1335,7 +1335,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 8, 1, 2, 10, 20,
             ),
             commands,
@@ -1360,7 +1360,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 9, 1, 2, 10, 20,
             ),
             commands,
@@ -1385,7 +1385,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 10, 1, 2, 10, 20,
             ),
             commands,
@@ -1410,7 +1410,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 11, 1, 2, 10, 20,
             ),
             commands,
@@ -1435,7 +1435,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 12, 1, 2, 10, 20,
             ),
             commands,
@@ -1460,7 +1460,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 13, 1, 2, 10, 20,
             ),
             commands,
@@ -1485,7 +1485,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 14, 1, 2, 10, 20,
             ),
             commands,
@@ -1510,7 +1510,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 15, 1, 2, 10, 20,
             ),
             commands,
@@ -1535,7 +1535,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 16, 1, 2, 10, 20,
             ),
             commands,
@@ -1560,7 +1560,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 9, 1, 1,
+                1246972723, 105, 0, 9, 1, 1,
                 41, 36, 1, Color.Red.copy(alpha = 0.25f).toArgb(), 17, 1, 2, 10, 20,
             ),
             commands,
@@ -1584,7 +1584,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 10, 1, 1,
+                1246972723, 105, 0, 10, 1, 1,
                 42, 40, 1, Color.Magenta.toArgb(), Color.Cyan.toArgb(), 2, 3, 4, 10, 20,
             ),
             commands,
@@ -1610,7 +1610,7 @@ class JbrSkiaCommandRecorderTest {
 
             assertArrayEquals(
                 intArrayOf(
-                    1246972723, 104, 0, 20, 1, 1,
+                    1246972723, 105, 0, 20, 1, 1,
                     49, 40, 0, Color.Cyan.toArgb(), 2, 1, 1, 2, Color.Cyan.toArgb(), 2,
                     47, 40, 1, Color.Magenta.toArgb(), Color.Cyan.toArgb(), 2, 3, 4, 10, 20,
                 ),
@@ -1640,7 +1640,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(44, commands.size)
         assertArrayEquals(
-            intArrayOf(1246972723, 104, 0, 38, 1, 1, 49, 112, 0),
+            intArrayOf(1246972723, 105, 0, 38, 1, 1, 49, 112, 0),
             commands.copyOfRange(0, 9),
         )
         assertEquals(2, commands[11])
@@ -1678,7 +1678,7 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(26, commands.size)
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 20, 1, 1,
+                1246972723, 105, 0, 20, 1, 1,
                 49, 40, 0, commands[9], commands[10], 3, 1, 2, 0xFFB0D0FF.toInt(), 0xFF101820.toInt(),
                 47, 40, 1, Color.Magenta.toArgb(), commands[9], commands[10], 3, 4, 10, 20,
             ),
@@ -1718,7 +1718,7 @@ class JbrSkiaCommandRecorderTest {
 
             assertArrayEquals(
                 intArrayOf(
-                    1246972723, 104, 0, 10, 1, 1,
+                    1246972723, 105, 0, 10, 1, 1,
                     47, 40, 1, Color.Magenta.toArgb(), Color.Cyan.toArgb(), 2, 5, 6, 10, 20,
                 ),
                 commands,
@@ -1778,7 +1778,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 43, 64, 1, Color.White.toArgb(), 1, 2, 11, 12, 8, 0, 1, 0, 3000, 2, 16000, 10000,
             ),
             commands,
@@ -1804,7 +1804,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 59, 64, 1, Color.White.toArgb(), 1, 2, 20, 30, 8, 0, 1, 0, 3000, 2, 16000, 10000,
             ),
             commands,
@@ -1832,7 +1832,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 18, 1, 1,
+                1246972723, 105, 0, 18, 1, 1,
                 60, 72, 1, Color.White.toArgb(), 1000, 2000, 21000, 32000, 4000, 5000,
                 8, 0, 1, 0, 3000, 2, 16000, 10000,
             ),
@@ -1858,7 +1858,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 12, 1, 1,
+                1246972723, 105, 0, 12, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
             ),
             commands,
@@ -1889,7 +1889,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 24, 1, 1,
+                1246972723, 105, 0, 24, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
                 3, 48, 1, Color.White.toArgb(), 21, 22, 31, 32, 3, 1, 2, 4500,
             ),
@@ -1915,7 +1915,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 24, 1, 1,
+                1246972723, 105, 0, 24, 1, 1,
                 3, 48, 1, Color.White.toArgb(), 1, 2, 11, 12, 3, 1, 2, 4500,
                 3, 48, 1, Color.White.toArgb(), 11, 12, 21, 22, 3, 1, 2, 4500,
             ),
@@ -1943,7 +1943,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 13, 1, 1,
+                1246972723, 105, 0, 13, 1, 1,
                 65, 52, 1, Color.White.toArgb(), 4, 1, 2, 4500, 2, 1, 3, 12, 12,
             ),
             commands,
@@ -1969,7 +1969,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 29, 1, 1,
+                1246972723, 105, 0, 29, 1, 1,
                 7, 12, 0,
                 10, 20, 0, 1250, 2500,
                 11, 20, 0, 1500, 500,
@@ -2000,7 +2000,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 12, 1, 1,
+                1246972723, 105, 0, 12, 1, 1,
                 63, 48, 0,
                 1.25f.toRawBits(),
                 0.5f.toRawBits(),
@@ -2025,7 +2025,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 9, 32, 1, 1, 2, 10, 10, 0,
                 9, 32, 1, 3, 4, 10, 10, 1,
             ),
@@ -2048,7 +2048,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 19, 1, 1,
+                1246972723, 105, 0, 19, 1, 1,
                 20, 76, 1, 0, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
@@ -2090,7 +2090,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 24, 1, 1,
+                1246972723, 105, 0, 24, 1, 1,
                 21, 96, 1, 0, Color.Green.toArgb(), 0, 0, 0, 0, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
@@ -2125,7 +2125,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 27, 1, 1,
+                1246972723, 105, 0, 27, 1, 1,
                 61, 108, 1, Color.Green.toArgb(), 8, 0, 1, 0, 3000, 2, 16000, 10000, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
@@ -2161,7 +2161,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(41, commands.size)
         assertArrayEquals(
-            intArrayOf(1246972723, 104, 0, 35, 1, 1, 49, 36, 0),
+            intArrayOf(1246972723, 105, 0, 35, 1, 1, 49, 36, 0),
             commands.copyOfRange(0, 9),
         )
         assertEquals(9, commands[11])
@@ -2211,7 +2211,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(58, commands.size)
         assertArrayEquals(
-            intArrayOf(1246972723, 104, 0, 52, 1, 1, 49, 104, 0),
+            intArrayOf(1246972723, 105, 0, 52, 1, 1, 49, 104, 0),
             commands.copyOfRange(0, 9),
         )
         assertEquals(10, commands[11])
@@ -2273,7 +2273,7 @@ class JbrSkiaCommandRecorderTest {
         }!!
 
         assertEquals(79, commands.size)
-        assertArrayEquals(intArrayOf(1246972723, 104, 0, 73, 1, 1), commands.copyOfRange(0, 6))
+        assertArrayEquals(intArrayOf(1246972723, 105, 0, 73, 1, 1), commands.copyOfRange(0, 6))
         assertArrayEquals(intArrayOf(49, 36, 0), commands.copyOfRange(6, 9))
         assertEquals(9, commands[11])
         assertArrayEquals(intArrayOf(49, 104, 0), commands.copyOfRange(15, 18))
@@ -2317,7 +2317,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 28, 1, 1,
+                1246972723, 105, 0, 28, 1, 1,
                 28, 112, 1, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
@@ -2359,7 +2359,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 27, 1, 1,
+                1246972723, 105, 0, 27, 1, 1,
                 29, 108, 1, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
@@ -2399,7 +2399,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 25, 1, 1,
+                1246972723, 105, 0, 25, 1, 1,
                 32, 100, 1, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
@@ -2431,7 +2431,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 22, 64, 1, 0, Color.Red.toArgb(), 1000, 2000, 11000, 12000, 45000, 90000, 1, 0, 0, 0, 0,
             ),
             commands,
@@ -2458,7 +2458,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 15, 1, 1,
+                1246972723, 105, 0, 15, 1, 1,
                 23, 60, 1, 1, Color.Blue.toArgb(), 1000, 2000, 11000, 12000, 3000, 4000, 2, 0, 1, 0,
             ),
             commands,
@@ -2488,7 +2488,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 17, 1, 1,
+                1246972723, 105, 0, 17, 1, 1,
                 24, 68, 1, 1000, 2000, 11000, 12000, 1000, 2000, 11000, 12000, 2, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -2522,7 +2522,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 21, 1, 1,
+                1246972723, 105, 0, 21, 1, 1,
                 35, 84, 1, 1000, 2000, 11000, 12000, 12000, 0, 1, 0,
                 1000, 2000, 11000, 12000, 2, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
@@ -2559,7 +2559,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 23, 1, 1,
+                1246972723, 105, 0, 23, 1, 1,
                 36, 92, 1, 1000, 2000, 11000, 12000, 3000, 4000, 12000, 0, 1, 0,
                 1000, 2000, 11000, 12000, 2, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
@@ -2594,7 +2594,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 19, 1, 1,
+                1246972723, 105, 0, 19, 1, 1,
                 25, 76, 1, 1000, 2000, 11000, 12000, 3000, 4000, 1000, 2000, 11000, 12000, 2, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -2626,7 +2626,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 26, 64, 1, 1000, 2000, 11000, 12000, 6000, 7000, 8000, 1, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -2656,7 +2656,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 14, 1, 1,
+                1246972723, 105, 0, 14, 1, 1,
                 30, 56, 1, 1000, 2000, 11000, 12000, 6000, 7000, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -2688,7 +2688,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 18, 1, 1,
+                1246972723, 105, 0, 18, 1, 1,
                 39, 72, 1, 1000, 2000, 11000, 12000, 12000, 0, 1, 0,
                 6000, 7000, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
@@ -2721,7 +2721,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 31, 64, 1, 1000, 2000, 11000, 12000, 3000, 4000, 6000, 7000, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -2755,7 +2755,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 20, 1, 1,
+                1246972723, 105, 0, 20, 1, 1,
                 40, 80, 1, 1000, 2000, 11000, 12000, 3000, 4000, 12000, 0, 1, 0,
                 6000, 7000, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
@@ -2790,7 +2790,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 20, 1, 1,
+                1246972723, 105, 0, 20, 1, 1,
                 37, 80, 1, 1000, 2000, 11000, 12000, 12000, 0, 1, 0,
                 6000, 7000, 8000, 1, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
@@ -2825,7 +2825,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 18, 1, 1,
+                1246972723, 105, 0, 18, 1, 1,
                 27, 72, 1, 1000, 2000, 11000, 12000, 3000, 4000, 6000, 7000, 8000, 1, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
                 Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
@@ -2861,7 +2861,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 22, 1, 1,
+                1246972723, 105, 0, 22, 1, 1,
                 38, 88, 1, 1000, 2000, 11000, 12000, 3000, 4000, 12000, 0, 1, 0,
                 6000, 7000, 8000, 1, 2,
                 Color.Red.copy(alpha = 0.5f).toArgb(), 250,
@@ -2914,6 +2914,44 @@ class JbrSkiaCommandRecorderTest {
             assertEquals(1, descriptor[6])
             assertEquals(1, descriptor[7])
             assertEquals(Color.Red.toArgb(), descriptor[8])
+        }
+    }
+
+    @Test
+    fun writesPerlinNoiseShaderDescriptorRectInStrictMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        shader = TurbulenceShader(
+                            baseFrequencyX = 0.035f,
+                            baseFrequencyY = 0.055f,
+                            numOctaves = 3,
+                            seed = 7.25f,
+                        )
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+            val descriptor = commands.commandRecords().single { it[0] == 56 }
+            assertEquals(10, descriptor[5])
+            assertEquals(1, descriptor[6])
+            assertEquals(7, descriptor[7])
+            assertEquals(1, descriptor[8])
+            assertEquals(35000, descriptor[9])
+            assertEquals(55000, descriptor[10])
+            assertEquals(3, descriptor[11])
+            assertEquals(7250, descriptor[12])
+            assertEquals(0, descriptor[13])
+            assertEquals(0, descriptor[14])
         }
     }
 
@@ -3782,7 +3820,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 11, 1, 1,
+                1246972723, 105, 0, 11, 1, 1,
                 13, 32, 0, 1, 2, 10, 10, 360,
                 8, 12, 0,
             ),
@@ -3805,7 +3843,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 13, 1, 1,
+                1246972723, 105, 0, 13, 1, 1,
                 44, 40, 0, 1, 2, 10, 10, 360, Color.Cyan.toArgb(), 2,
                 8, 12, 0,
             ),
@@ -3858,7 +3896,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 12, 1, 1,
+                1246972723, 105, 0, 12, 1, 1,
                 50, 36, 0, 1, 2, 10, 10, 360, 1,
                 8, 12, 0,
             ),
@@ -3908,7 +3946,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 29, 1, 1,
+                1246972723, 105, 0, 29, 1, 1,
                 15, 48, 0, -1599677274, -472603669, 2, 2, 4,
                 Color.Red.toArgb(), Color.Green.toArgb(), Color.Blue.toArgb(), Color.White.toArgb(),
                 16, 68, 1,
@@ -3951,7 +3989,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 31, 1, 1,
+                1246972723, 105, 0, 31, 1, 1,
                 15, 48, 0, -1599677274, -472603669, 2, 2, 4,
                 Color.Red.toArgb(), Color.Green.toArgb(), Color.Blue.toArgb(), Color.White.toArgb(),
                 45, 76, 1,
@@ -3997,7 +4035,7 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(65, commands.size)
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 59, 1, 1,
+                1246972723, 105, 0, 59, 1, 1,
                 15, 48, 0, -1599677274, -472603669, 2, 2, 4,
                 Color.Red.toArgb(), Color.Green.toArgb(), Color.Blue.toArgb(), Color.White.toArgb(),
                 49, 112, 0,
@@ -4151,7 +4189,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 19, 1, 1,
+                1246972723, 105, 0, 19, 1, 1,
                 17, 76, 1, 1250, 18500, 13000, Color.White.toArgb(), 700, 5, 1, 5,
                 'I'.code, 'n'.code, 't'.code, 'e'.code, 'r'.code, 2, 'H'.code, 'i'.code,
             ),
@@ -4178,7 +4216,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 16, 1, 1,
+                1246972723, 105, 0, 16, 1, 1,
                 17, 64, 1, 1250, 18500, 13000, Color.White.toArgb(), 400, 5, 0, 0, 4,
                 'C'.code, 'a'.code, 'f'.code, '\u00e9'.code,
             ),
@@ -4215,7 +4253,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertArrayEquals(
             intArrayOf(
-                1246972723, 104, 0, 32, 1, 1,
+                1246972723, 105, 0, 32, 1, 1,
                 19, 128, 1, 1250, 2500, 120000, 13000, Color.White.toArgb(), 700, 5, 1,
                 5, 'I'.code, 'n'.code, 't'.code, 'e'.code, 'r'.code,
                 2, 1, 1500, 1, 1, 3, 2500, 1, Color.Red.toArgb(), 5,

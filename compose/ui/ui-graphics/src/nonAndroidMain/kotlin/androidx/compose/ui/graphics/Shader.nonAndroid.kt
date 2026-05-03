@@ -31,6 +31,23 @@ data class JbrSkiaColorShader(
 )
 
 @InternalComposeUiApi
+enum class JbrSkiaPerlinNoiseKind(val commandValue: Int) {
+    FractalNoise(0),
+    Turbulence(1),
+}
+
+@InternalComposeUiApi
+data class JbrSkiaPerlinNoiseShader(
+    val kind: JbrSkiaPerlinNoiseKind,
+    val baseFrequencyX: Float,
+    val baseFrequencyY: Float,
+    val numOctaves: Int,
+    val seed: Float,
+    val tileWidth: Int,
+    val tileHeight: Int,
+)
+
+@InternalComposeUiApi
 data class JbrSkiaLinearGradientShader(
     val from: Offset,
     val to: Offset,
@@ -149,6 +166,10 @@ internal val Shader.jbrSkiaTransformedShader: JbrSkiaTransformedShader?
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaColorShader: JbrSkiaColorShader?
     get() = platformShader.jbrSkiaColorShader
+
+@OptIn(InternalComposeUiApi::class)
+internal val Shader.jbrSkiaPerlinNoiseShader: JbrSkiaPerlinNoiseShader?
+    get() = platformShader.jbrSkiaPerlinNoiseShader
 
 @OptIn(InternalComposeUiApi::class)
 internal actual class TransformShader {

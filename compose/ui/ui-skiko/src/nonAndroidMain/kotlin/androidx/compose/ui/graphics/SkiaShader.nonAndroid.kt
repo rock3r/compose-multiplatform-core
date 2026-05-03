@@ -23,6 +23,7 @@ import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.graphics.platform.PlatformShader
 import kotlin.jvm.JvmName
 import org.jetbrains.skia.Data
+import org.jetbrains.skia.ISize
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.impl.use
 import org.jetbrains.skia.Shader as SkShader
@@ -37,6 +38,7 @@ internal class SkikoShader(
     override val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
     override val jbrSkiaTransformedShader: JbrSkiaTransformedShader? = null,
     override val jbrSkiaColorShader: JbrSkiaColorShader? = null,
+    override val jbrSkiaPerlinNoiseShader: JbrSkiaPerlinNoiseShader? = null,
 ) : PlatformShader
 
 fun ColorShader(color: Color): Shader =
@@ -46,6 +48,56 @@ fun ColorShader(color: Color): Shader =
             jbrSkiaColorShader = JbrSkiaColorShader(color),
         ),
     )
+
+fun FractalNoiseShader(
+    baseFrequencyX: Float,
+    baseFrequencyY: Float,
+    numOctaves: Int,
+    seed: Float,
+    tileWidth: Int = 0,
+    tileHeight: Int = 0,
+): Shader {
+    val tileSize = ISize.make(tileWidth, tileHeight)
+    return Shader(
+        SkikoShader(
+            skiaShader = SkShader.makeFractalNoise(baseFrequencyX, baseFrequencyY, numOctaves, seed, tileSize),
+            jbrSkiaPerlinNoiseShader = JbrSkiaPerlinNoiseShader(
+                kind = JbrSkiaPerlinNoiseKind.FractalNoise,
+                baseFrequencyX = baseFrequencyX,
+                baseFrequencyY = baseFrequencyY,
+                numOctaves = numOctaves,
+                seed = seed,
+                tileWidth = tileWidth,
+                tileHeight = tileHeight,
+            ),
+        ),
+    )
+}
+
+fun TurbulenceShader(
+    baseFrequencyX: Float,
+    baseFrequencyY: Float,
+    numOctaves: Int,
+    seed: Float,
+    tileWidth: Int = 0,
+    tileHeight: Int = 0,
+): Shader {
+    val tileSize = ISize.make(tileWidth, tileHeight)
+    return Shader(
+        SkikoShader(
+            skiaShader = SkShader.makeTurbulence(baseFrequencyX, baseFrequencyY, numOctaves, seed, tileSize),
+            jbrSkiaPerlinNoiseShader = JbrSkiaPerlinNoiseShader(
+                kind = JbrSkiaPerlinNoiseKind.Turbulence,
+                baseFrequencyX = baseFrequencyX,
+                baseFrequencyY = baseFrequencyY,
+                numOctaves = numOctaves,
+                seed = seed,
+                tileWidth = tileWidth,
+                tileHeight = tileHeight,
+            ),
+        ),
+    )
+}
 
 @ExperimentalGraphicsApi
 fun RuntimeEffectShader(
@@ -114,7 +166,8 @@ internal fun transformSkikoShader(shader: Shader, matrix: Matrix): Shader {
         shader.jbrSkiaCompositeShader != null ||
         shader.jbrSkiaRuntimeEffectShader != null ||
         shader.jbrSkiaTransformedShader != null ||
-        shader.jbrSkiaColorShader != null
+        shader.jbrSkiaColorShader != null ||
+        shader.jbrSkiaPerlinNoiseShader != null
     return Shader(
         SkikoShader(
             skiaShader = shader.skiaShader.makeWithLocalMatrix(localMatrix),
