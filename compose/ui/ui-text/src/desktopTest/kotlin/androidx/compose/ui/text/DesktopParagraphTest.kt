@@ -62,6 +62,22 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
                 style = FontStyle.Normal
             )
         )
+    private val loadedFontFamilyMeasureFont by lazy {
+        val bytes = Thread
+            .currentThread()
+            .contextClassLoader
+            .getResourceAsStream("font_desktop/sample_font.ttf")!!
+            .readAllBytes()
+
+        FontFamily(
+            Font(
+                "font_desktop/sample_font.ttf-loaded",
+                bytes,
+                weight = FontWeight.Normal,
+                style = FontStyle.Normal
+            )
+        )
+    }
 
     @Test
     fun getBoundingBox_basic() {
@@ -649,7 +665,7 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
         }
 
         assertThat(commands!!.toList()).contains(16)
-        assertThat(commands.toList()).doesNotContain(17)
+        assertThat(commands.hasCommand(17)).isFalse()
     }
 
     @Test
@@ -672,7 +688,7 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
         }
 
         assertThat(commands!!.toList()).contains(17)
-        assertThat(commands.toList()).doesNotContain(16)
+        assertThat(commands.hasCommand(16)).isFalse()
     }
 
     @Test
@@ -707,7 +723,7 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
         assertThat(commands[argsStart + 5]).isEqualTo(5)
         assertThat(commands[argsStart + 6]).isEqualTo(1)
         assertThat(commandString(commands, argsStart + 8, familyCount)).isEqualTo(FontFamily.Monospace.name)
-        assertThat(commands.toList()).doesNotContain(16)
+        assertThat(commands.hasCommand(16)).isFalse()
     }
 
     @Test
@@ -742,7 +758,40 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
         assertThat(commands[argsStart + 6]).isEqualTo(5)
         assertThat(commands[argsStart + 7]).isEqualTo(1)
         assertThat(commandString(commands, argsStart + 9, familyCount)).isEqualTo(FontFamily.Serif.name)
-        assertThat(commands.toList()).doesNotContain(16)
+        assertThat(commands.hasCommand(16)).isFalse()
+    }
+
+    @Test
+    fun paint_withLoadedFontFamily_recordsFontDataSimpleTextWhenNativeTextIsEnabled() {
+        val paragraph = simpleParagraph(
+            text = "Hi",
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontFamily = loadedFontFamilyMeasureFont,
+            ),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
+        }!!
+
+        val defineRecordStart = commandRecordStart(commands, 66)
+        val drawTextRecordStart = commandRecordStart(commands, 17)
+        val drawTextArgsStart = drawTextRecordStart + 3
+        val familyCount = commands[drawTextArgsStart + 7]
+
+        assertThat(defineRecordStart).isAtLeast(0)
+        assertThat(commandString(commands, drawTextArgsStart + 8, familyCount)).startsWith("jbr-font-data:")
+        assertThat(commands.hasCommand(16)).isFalse()
+        assertThat(commands.hasCommand(19)).isFalse()
     }
 
     @Test
@@ -767,9 +816,10 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
             }
         }!!
 
-        assertThat(commands.toList()).contains(16)
-        assertThat(commands.toList()).doesNotContain(17)
-        assertThat(commands.toList()).doesNotContain(19)
+        assertThat(commandRecordStart(commands, 16)).isAtLeast(0)
+        assertThat(commands.hasCommand(17)).isFalse()
+        assertThat(commands.hasCommand(19)).isFalse()
+        assertThat(commands.hasCommand(66)).isFalse()
     }
 
     @Test
@@ -793,7 +843,7 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
 
         assertThat(commands!!.toList()).contains(17)
         assertThat(commands.toList()).contains(0x00e9)
-        assertThat(commands.toList()).doesNotContain(16)
+        assertThat(commands.hasCommand(16)).isFalse()
     }
 
     @Test
@@ -937,9 +987,21 @@ class DesktopParagraphTest : SkikoComposeTestBase() {
             .joinToString("")
 
     private fun commandRecordStart(commands: IntArray, op: Int): Int {
-        val index = commands.indexOf(op)
+        val index = commands.commandRecordIndex(op)
         assertThat(index).isAtLeast(0)
         return index
+    }
+
+    private fun IntArray.hasCommand(op: Int): Boolean =
+        commandRecordIndex(op) >= 0
+
+    private fun IntArray.commandRecordIndex(op: Int): Int {
+        var index = 6
+        while (index < size) {
+            if (this[index] == op) return index
+            index += this[index + 1] / Int.SIZE_BYTES
+        }
+        return -1
     }
 
     private fun <T> withNativeJbrSkiaText(block: () -> T): T {

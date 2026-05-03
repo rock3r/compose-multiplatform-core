@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeRect
 import androidx.compose.ui.text.PlatformParagraph
 import androidx.compose.ui.text.platform.SkikoParagraphIntrinsics
+import androidx.compose.ui.text.platform.LoadedFont
 import androidx.compose.ui.text.platform.SystemFont
 import androidx.compose.ui.text.platform.cursorHorizontalPosition
 import androidx.compose.ui.text.font.FontFamily
@@ -699,6 +700,11 @@ internal class SkikoParagraph(
             return false
         }
         val fontMetadata = jbrSkiaFontMetadata() ?: return false
+        if (fontMetadata.fontData != null &&
+            !JbrSkiaCommandRecorder.defineFontData(fontMetadata.fontDataHandle, fontMetadata.fontData)
+        ) {
+            return false
+        }
         return JbrSkiaCommandRecorder.drawTextUtf16(
             text = text,
             x = 0f,
@@ -724,6 +730,9 @@ internal class SkikoParagraph(
             return false
         }
         val fontMetadata = jbrSkiaFontMetadata() ?: return false
+        if (fontMetadata.fontData != null) {
+            return false
+        }
         return JbrSkiaCommandRecorder.drawParagraphUtf16(
             text = text,
             x = 0f,
@@ -750,6 +759,8 @@ internal class SkikoParagraph(
 
     private data class JbrSkiaFontMetadata(
         val familyName: String?,
+        val fontDataHandle: Long,
+        val fontData: ByteArray?,
         val weight: Int,
         val width: Int,
         val slant: Int,
@@ -767,6 +778,8 @@ internal class SkikoParagraph(
         val resolvedStyle = resolvedTypeface?.fontStyle
         return JbrSkiaFontMetadata(
             familyName = commandFamily.familyName ?: resolvedTypeface?.familyName,
+            fontDataHandle = commandFamily.fontDataHandle,
+            fontData = commandFamily.fontData,
             weight = (textStyle.fontWeight?.weight ?: resolvedStyle?.weight ?: FontWeight.Normal.weight)
                 .coerceIn(1, 1000),
             width = (resolvedStyle?.width ?: 5).coerceIn(1, 9),
@@ -779,6 +792,8 @@ internal class SkikoParagraph(
 
     private data class JbrSkiaCommandFontFamily(
         val familyName: String?,
+        val fontDataHandle: Long = 0L,
+        val fontData: ByteArray? = null,
     )
 
     @OptIn(ExperimentalTextApi::class)
@@ -788,17 +803,42 @@ internal class SkikoParagraph(
             FontFamily.Default -> JbrSkiaCommandFontFamily(null)
             is GenericFontFamily -> JbrSkiaCommandFontFamily(fontFamily.name)
             is FontListFontFamily -> {
-                val systemFamilyNames = fontFamily.fonts.map { font ->
-                    (font as? SystemFont)?.identity ?: return null
-                }.distinct()
-                if (systemFamilyNames.size == 1) {
-                    JbrSkiaCommandFontFamily(systemFamilyNames.single())
+                val loadedFonts = fontFamily.fonts.filterIsInstance<LoadedFont>()
+                if (loadedFonts.size == 1 && fontFamily.fonts.size == 1) {
+                    val font = loadedFonts.single()
+                    val data = font.data
+                    val handle = jbrSkiaFontDataHandle(data)
+                    JbrSkiaCommandFontFamily(
+                        familyName = "jbr-font-data:${handle.highInt()}:${handle.lowInt()}",
+                        fontDataHandle = handle,
+                        fontData = data,
+                    )
                 } else {
-                    null
+                    val systemFamilyNames = fontFamily.fonts.map { font ->
+                        (font as? SystemFont)?.identity ?: return null
+                    }.distinct()
+                    if (systemFamilyNames.size == 1) {
+                        JbrSkiaCommandFontFamily(systemFamilyNames.single())
+                    } else {
+                        null
+                    }
                 }
             }
             else -> null
         }
+
+    private fun jbrSkiaFontDataHandle(data: ByteArray): Long {
+        var hash = -0x340d631b7bdddcdbL
+        data.forEach { byte ->
+            hash = hash xor (byte.toLong() and 0xffL)
+            hash *= 0x100000001b3L
+        }
+        return if (hash == 0L) 1L else hash
+    }
+
+    private fun Long.highInt(): Int = (this ushr 32).toInt()
+
+    private fun Long.lowInt(): Int = this.toInt()
 
     private fun Int.jbrSkiaParagraphMaxLines(): Int =
         if (this == Int.MAX_VALUE) 0 else coerceIn(1, 4096)
