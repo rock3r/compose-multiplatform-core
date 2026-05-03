@@ -33,6 +33,7 @@ actual class Shader internal constructor(
     internal val jbrSkiaImageShader: JbrSkiaImageShader? = null,
     internal val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
     internal val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
+    internal val jbrSkiaTransformedShader: JbrSkiaTransformedShader? = null,
 )
 
 /**
@@ -73,6 +74,18 @@ internal data class JbrSkiaCompositeShader(
     val src: Shader,
     val blendMode: BlendMode,
 )
+
+internal data class JbrSkiaTransformedShader(
+    val shader: Shader,
+    val matrix: FloatArray,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is JbrSkiaTransformedShader &&
+            shader == other.shader &&
+            matrix.contentEquals(other.matrix)
+
+    override fun hashCode(): Int = 31 * shader.hashCode() + matrix.contentHashCode()
+}
 
 @OptIn(ExperimentalGraphicsApi::class)
 internal data class JbrSkiaRuntimeEffectShader(
@@ -158,10 +171,12 @@ internal actual class TransformShader {
         get() {
             val matrix = _matrix ?: return _shader
             if (_wrapper == null) {
-                _wrapper = _shader
-                    ?.skiaShader
-                    ?.makeWithLocalMatrix(matrix)
-                    ?.asComposeShader()
+                _wrapper = _shader?.let { shader ->
+                    Shader(
+                        internalSkiaShader = shader.skiaShader.makeWithLocalMatrix(matrix),
+                        jbrSkiaTransformedShader = JbrSkiaTransformedShader(shader, matrix.mat.copyOf()),
+                    )
+                }
             }
             return _wrapper
         }

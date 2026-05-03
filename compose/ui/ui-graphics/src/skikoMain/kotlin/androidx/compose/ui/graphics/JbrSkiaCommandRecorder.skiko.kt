@@ -292,6 +292,7 @@ object JbrSkiaCommandRecorder {
         data class Image(val shader: JbrSkiaImageShader) : ShaderDescriptor()
         data class Composite(val shader: JbrSkiaCompositeShader) : ShaderDescriptor()
         data class RuntimeEffect(val shader: JbrSkiaRuntimeEffectShader) : ShaderDescriptor()
+        data class Transformed(val shader: JbrSkiaTransformedShader) : ShaderDescriptor()
         data class ColorFiltered(val shader: ShaderDescriptor, val colorFilter: ColorFilter) : ShaderDescriptor()
     }
 
@@ -303,6 +304,7 @@ object JbrSkiaCommandRecorder {
         shader.jbrSkiaImageShader?.let { return ShaderDescriptor.Image(it) }
         shader.jbrSkiaCompositeShader?.let { return ShaderDescriptor.Composite(it) }
         shader.jbrSkiaRuntimeEffectShader?.let { return ShaderDescriptor.RuntimeEffect(it) }
+        shader.jbrSkiaTransformedShader?.let { return ShaderDescriptor.Transformed(it) }
         return null
     }
 
@@ -1151,7 +1153,10 @@ object JbrSkiaCommandRecorder {
                 addShaderDescriptorRect(left, top, right, bottom, paint, ShaderDescriptor.ColorFiltered(descriptor, shaderColorFilter))
                 return
             }
-            if (descriptor is ShaderDescriptor.Composite || descriptor is ShaderDescriptor.RuntimeEffect) {
+            if (descriptor is ShaderDescriptor.Composite ||
+                descriptor is ShaderDescriptor.RuntimeEffect ||
+                descriptor is ShaderDescriptor.Transformed
+            ) {
                 addShaderDescriptorRect(left, top, right, bottom, paint, descriptor)
                 return
             }
@@ -2865,6 +2870,10 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.SweepGradient -> shader.shader.sweepGradientDescriptorPayload()
                 is ShaderDescriptor.Image -> shader.shader.imageShaderDescriptorPayload()
                 is ShaderDescriptor.RuntimeEffect -> shader.shader.runtimeEffectDescriptorPayload()
+                is ShaderDescriptor.Transformed -> {
+                    val childHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.shader) ?: return null) ?: return null
+                    shader.shader.transformDescriptorPayload(childHandle)
+                }
                 is ShaderDescriptor.Composite -> {
                     val dstHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.dst) ?: return null) ?: return null
                     val srcHandle = defineShaderIfNeeded(shaderDescriptorOrNull(shader.shader.src) ?: return null) ?: return null
@@ -2934,6 +2943,7 @@ object JbrSkiaCommandRecorder {
                 is ShaderDescriptor.Image -> COMMAND_SHADER_DESCRIPTOR_IMAGE
                 is ShaderDescriptor.Composite -> COMMAND_SHADER_DESCRIPTOR_COMPOSITE
                 is ShaderDescriptor.RuntimeEffect -> COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT
+                is ShaderDescriptor.Transformed -> COMMAND_SHADER_DESCRIPTOR_TRANSFORM
                 is ShaderDescriptor.ColorFiltered -> COMMAND_SHADER_DESCRIPTOR_COLOR_FILTER
             }
 
@@ -3000,6 +3010,12 @@ object JbrSkiaCommandRecorder {
             ).plus(colors.flatMapIndexed { index, color ->
                 listOf(color.toArgb(), stops[index].fixed1000())
             }).toIntArray()
+        }
+
+        private fun JbrSkiaTransformedShader.transformDescriptorPayload(childHandle: Long): IntArray? {
+            if (matrix.size != 9 || matrix.any { !it.isFinite() }) return null
+            return intArrayOf(childHandle.highInt(), childHandle.lowInt()) +
+                matrix.map { it.fixed1000() }.toIntArray()
         }
 
         private fun JbrSkiaImageShader.imageShaderDescriptorPayload(): IntArray? {
@@ -3811,6 +3827,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SHADER_DESCRIPTOR_COMPOSITE = 5
     private const val COMMAND_SHADER_DESCRIPTOR_RUNTIME_EFFECT = 6
     private const val COMMAND_SHADER_DESCRIPTOR_COLOR_FILTER = 7
+    private const val COMMAND_SHADER_DESCRIPTOR_TRANSFORM = 8
     private const val COMMAND_SHADER_DESCRIPTOR_VERSION_1 = 1
     private const val COMMAND_BLEND_MODE_PLUS = 1
     private const val COMMAND_BLEND_MODE_SRC_IN = 2
@@ -3831,7 +3848,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 101
+    private const val COMMAND_STREAM_ABI_ID = 102
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
