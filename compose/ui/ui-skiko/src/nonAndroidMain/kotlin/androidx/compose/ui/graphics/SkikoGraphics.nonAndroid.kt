@@ -357,7 +357,8 @@ private val Shader.hasJbrSkiaShaderMetadata: Boolean
         jbrSkiaImageShader != null ||
         jbrSkiaCompositeShader != null ||
         jbrSkiaRuntimeEffectShader != null ||
-        jbrSkiaTransformedShader != null
+        jbrSkiaTransformedShader != null ||
+        jbrSkiaColorShader != null
 
 private fun ImageBitmapConfig.toSkiaColorType() = when (this) {
     ImageBitmapConfig.Argb8888 -> ColorType.N32

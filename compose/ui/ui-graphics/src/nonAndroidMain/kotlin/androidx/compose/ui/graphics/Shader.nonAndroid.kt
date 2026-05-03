@@ -26,6 +26,11 @@ actual class Shader @InternalComposeUiApi constructor(
 )
 
 @InternalComposeUiApi
+data class JbrSkiaColorShader(
+    val color: Color,
+)
+
+@InternalComposeUiApi
 data class JbrSkiaLinearGradientShader(
     val from: Offset,
     val to: Offset,
@@ -140,6 +145,10 @@ internal val Shader.jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader?
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaTransformedShader: JbrSkiaTransformedShader?
     get() = platformShader.jbrSkiaTransformedShader
+
+@OptIn(InternalComposeUiApi::class)
+internal val Shader.jbrSkiaColorShader: JbrSkiaColorShader?
+    get() = platformShader.jbrSkiaColorShader
 
 @OptIn(InternalComposeUiApi::class)
 internal actual class TransformShader {

@@ -36,7 +36,16 @@ internal class SkikoShader(
     override val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
     override val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
     override val jbrSkiaTransformedShader: JbrSkiaTransformedShader? = null,
+    override val jbrSkiaColorShader: JbrSkiaColorShader? = null,
 ) : PlatformShader
+
+fun ColorShader(color: Color): Shader =
+    Shader(
+        SkikoShader(
+            skiaShader = SkShader.makeColor(color.toArgb()),
+            jbrSkiaColorShader = JbrSkiaColorShader(color),
+        ),
+    )
 
 @ExperimentalGraphicsApi
 fun RuntimeEffectShader(
@@ -104,7 +113,8 @@ internal fun transformSkikoShader(shader: Shader, matrix: Matrix): Shader {
         shader.jbrSkiaImageShader != null ||
         shader.jbrSkiaCompositeShader != null ||
         shader.jbrSkiaRuntimeEffectShader != null ||
-        shader.jbrSkiaTransformedShader != null
+        shader.jbrSkiaTransformedShader != null ||
+        shader.jbrSkiaColorShader != null
     return Shader(
         SkikoShader(
             skiaShader = shader.skiaShader.makeWithLocalMatrix(localMatrix),
