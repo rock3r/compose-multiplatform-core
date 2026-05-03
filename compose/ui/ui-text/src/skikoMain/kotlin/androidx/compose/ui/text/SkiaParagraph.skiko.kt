@@ -39,7 +39,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toComposeRect
 import androidx.compose.ui.text.internal.requirePrecondition
 import androidx.compose.ui.text.platform.SkiaParagraphIntrinsics
+import androidx.compose.ui.text.platform.SystemFont
 import androidx.compose.ui.text.platform.cursorHorizontalPosition
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontListFontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.GenericFontFamily
@@ -736,7 +739,7 @@ internal class SkiaParagraph(
         if (!fontSize.isFinite() || fontSize <= 0f) {
             return false
         }
-        val fontMetadata = jbrSkiaFontMetadata()
+        val fontMetadata = jbrSkiaFontMetadata() ?: return false
         return JbrSkiaCommandRecorder.drawTextUtf16(
             text = text,
             x = 0f,
@@ -761,7 +764,7 @@ internal class SkiaParagraph(
         if (!fontSize.isFinite() || fontSize <= 0f || !width.isFinite() || width <= 0f) {
             return false
         }
-        val fontMetadata = jbrSkiaFontMetadata()
+        val fontMetadata = jbrSkiaFontMetadata() ?: return false
         return JbrSkiaCommandRecorder.drawParagraphUtf16(
             text = text,
             x = 0f,
@@ -793,17 +796,18 @@ internal class SkiaParagraph(
         val slant: Int,
     )
 
-    private fun jbrSkiaFontMetadata(): JbrSkiaFontMetadata {
+    @OptIn(ExperimentalTextApi::class)
+    private fun jbrSkiaFontMetadata(): JbrSkiaFontMetadata? {
         val textStyle = layouter.textStyle
-        val genericFamily = (textStyle.fontFamily as? GenericFontFamily)?.name
+        val commandFamily = jbrSkiaCommandFontFamily(textStyle.fontFamily) ?: return null
         val needsResolvedTypeface =
-            genericFamily == null ||
+            commandFamily.familyName == null ||
                 textStyle.fontWeight == null ||
                 textStyle.fontStyle == null
         val resolvedTypeface = if (needsResolvedTypeface) defaultFont.typeface else null
         val resolvedStyle = resolvedTypeface?.fontStyle
         return JbrSkiaFontMetadata(
-            familyName = genericFamily ?: resolvedTypeface?.familyName,
+            familyName = commandFamily.familyName ?: resolvedTypeface?.familyName,
             weight = (textStyle.fontWeight?.weight ?: resolvedStyle?.weight ?: FontWeight.Normal.weight)
                 .coerceIn(1, 1000),
             width = (resolvedStyle?.width ?: 5).coerceIn(1, 9),
@@ -813,6 +817,29 @@ internal class SkiaParagraph(
             }.coerceIn(0, 2),
         )
     }
+
+    private data class JbrSkiaCommandFontFamily(
+        val familyName: String?,
+    )
+
+    @OptIn(ExperimentalTextApi::class)
+    private fun jbrSkiaCommandFontFamily(fontFamily: FontFamily?): JbrSkiaCommandFontFamily? =
+        when (fontFamily) {
+            null,
+            FontFamily.Default -> JbrSkiaCommandFontFamily(null)
+            is GenericFontFamily -> JbrSkiaCommandFontFamily(fontFamily.name)
+            is FontListFontFamily -> {
+                val systemFamilyNames = fontFamily.fonts.map { font ->
+                    (font as? SystemFont)?.identity ?: return null
+                }.distinct()
+                if (systemFamilyNames.size == 1) {
+                    JbrSkiaCommandFontFamily(systemFamilyNames.single())
+                } else {
+                    null
+                }
+            }
+            else -> null
+        }
 
     private fun Int.jbrSkiaParagraphMaxLines(): Int =
         if (this == Int.MAX_VALUE) 0 else coerceIn(1, 4096)

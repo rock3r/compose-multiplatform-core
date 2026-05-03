@@ -745,6 +745,33 @@ class DesktopParagraphTest {
     }
 
     @Test
+    fun paint_withFileBackedFontFamily_recordsTextImageWhenNativeTextIsEnabled() {
+        val paragraph = simpleParagraph(
+            text = "Hi",
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontFamily = fontFamilyMeasureFont,
+            ),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
+        }!!
+
+        assertThat(commands.toList()).contains(16)
+        assertThat(commands.toList()).doesNotContain(17)
+        assertThat(commands.toList()).doesNotContain(19)
+    }
+
+    @Test
     fun paint_withLatin1Text_recordsJbrSkiaSimpleText() {
         val paragraph = simpleParagraph(
             text = "Caf\u00e9",
