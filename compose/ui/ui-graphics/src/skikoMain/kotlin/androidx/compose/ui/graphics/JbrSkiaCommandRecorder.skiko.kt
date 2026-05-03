@@ -459,6 +459,9 @@ object JbrSkiaCommandRecorder {
         active.get()?.drawImageRect(image, srcLeft, srcTop, srcRight, srcBottom, dstLeft, dstTop, dstRight, dstBottom, paint)
             ?: false
 
+    fun defineFontData(handle: Long, data: ByteArray): Boolean =
+        active.get()?.defineFontData(handle, data) ?: false
+
     private class Recorder(val shadowContext: JbrSkiaCommandShadowContext) {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
@@ -2508,6 +2511,21 @@ object JbrSkiaCommandRecorder {
             return true
         }
 
+        fun defineFontData(handle: Long, data: ByteArray): Boolean {
+            if (handle == 0L || data.isEmpty() || data.size > MAX_FONT_DATA_BYTES) {
+                return false
+            }
+            commands.addCommand(
+                COMMAND_DEFINE_FONT_DATA,
+                COMMAND_RECORD_FLAGS_NONE,
+                handle.highInt(),
+                handle.lowInt(),
+                data.size,
+                *IntArray(data.size) { data[it].toInt() and 0xff },
+            )
+            return true
+        }
+
         private val Paint.isSupportedSolidColor: Boolean
             get() {
                 var supported = true
@@ -3808,6 +3826,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_CONCAT_MATRIX33 = 63
     private const val COMMAND_DRAW_SHADOW_PATH = 64
     private const val COMMAND_DRAW_POINTS = 65
+    private const val COMMAND_DEFINE_FONT_DATA = 66
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -3848,7 +3867,8 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 102
+    private const val COMMAND_STREAM_ABI_ID = 103
+    private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
     private const val COMMAND_COORDINATE_SPACE_SWING_USER = 1
