@@ -137,6 +137,22 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun evictsOldestFontDataHandleBeforeRedefiningAfterThreshold() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+
+        val commands = JbrSkiaCommandRecorder.record {
+            assertTrue(JbrSkiaCommandRecorder.defineFontData(1L, byteArrayOf(1)))
+            assertTrue(JbrSkiaCommandRecorder.defineFontData(1L, byteArrayOf(1)))
+            for (handle in 2L..1025L) {
+                assertTrue(JbrSkiaCommandRecorder.defineFontData(handle, byteArrayOf(handle.toByte())))
+            }
+            assertTrue(JbrSkiaCommandRecorder.defineFontData(1L, byteArrayOf(1)))
+        }!!
+
+        assertEquals(1026, commands.countCommand(66))
+    }
+
+    @Test
     fun nestedRecordingReplaysAtLayerDrawSite() {
         val recording = JbrSkiaCommandRecorder.recordFrame {
             val nested = JbrSkiaCommandRecorder.recordNested {
