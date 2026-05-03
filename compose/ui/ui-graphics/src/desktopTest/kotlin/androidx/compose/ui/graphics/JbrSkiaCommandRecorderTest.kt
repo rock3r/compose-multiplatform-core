@@ -101,6 +101,7 @@ class JbrSkiaCommandRecorderTest {
 
     @Test
     fun writesFontDataRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val commands = JbrSkiaCommandRecorder.record {
             assertTrue(JbrSkiaCommandRecorder.defineFontData(0x123456780abcdef0L, byteArrayOf(0, 1, -2, -1)))
         }
@@ -112,6 +113,27 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun deduplicatesFontDataRecordsUntilCacheClear() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val first = JbrSkiaCommandRecorder.record {
+            assertTrue(JbrSkiaCommandRecorder.defineFontData(0x123456780abcdef0L, byteArrayOf(0, 1, -2, -1)))
+        }
+        val second = JbrSkiaCommandRecorder.record {
+            assertTrue(JbrSkiaCommandRecorder.defineFontData(0x123456780abcdef0L, byteArrayOf(0, 1, -2, -1)))
+        }
+
+        assertTrue(first!!.contains(66))
+        assertFalse(second!!.contains(66))
+
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val afterClear = JbrSkiaCommandRecorder.record {
+            assertTrue(JbrSkiaCommandRecorder.defineFontData(0x123456780abcdef0L, byteArrayOf(0, 1, -2, -1)))
+        }
+
+        assertTrue(afterClear!!.contains(66))
     }
 
     @Test
