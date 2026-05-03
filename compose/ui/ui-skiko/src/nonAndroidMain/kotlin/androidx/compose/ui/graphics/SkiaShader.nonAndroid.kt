@@ -35,6 +35,7 @@ internal class SkikoShader(
     override val jbrSkiaImageShader: JbrSkiaImageShader? = null,
     override val jbrSkiaCompositeShader: JbrSkiaCompositeShader? = null,
     override val jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader? = null,
+    override val jbrSkiaTransformedShader: JbrSkiaTransformedShader? = null,
 ) : PlatformShader
 
 @ExperimentalGraphicsApi
@@ -95,7 +96,23 @@ val Shader.skiaShader: SkShader
         return platform.skiaShader
     }
 
-internal fun transformSkikoShader(shader: Shader, matrix: Matrix): Shader =
-    shader.skiaShader
-        .makeWithLocalMatrix(identityMatrix33().apply { setFrom(matrix) })
-        .asComposeShader()
+internal fun transformSkikoShader(shader: Shader, matrix: Matrix): Shader {
+    val localMatrix = identityMatrix33().apply { setFrom(matrix) }
+    val hasMetadata = shader.jbrSkiaLinearGradient != null ||
+        shader.jbrSkiaRadialGradient != null ||
+        shader.jbrSkiaSweepGradient != null ||
+        shader.jbrSkiaImageShader != null ||
+        shader.jbrSkiaCompositeShader != null ||
+        shader.jbrSkiaRuntimeEffectShader != null ||
+        shader.jbrSkiaTransformedShader != null
+    return Shader(
+        SkikoShader(
+            skiaShader = shader.skiaShader.makeWithLocalMatrix(localMatrix),
+            jbrSkiaTransformedShader = if (hasMetadata) {
+                JbrSkiaTransformedShader(shader, localMatrix.mat.copyOf())
+            } else {
+                null
+            },
+        ),
+    )
+}

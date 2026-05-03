@@ -65,6 +65,19 @@ data class JbrSkiaCompositeShader(
 )
 
 @InternalComposeUiApi
+data class JbrSkiaTransformedShader(
+    val shader: Shader,
+    val matrix: FloatArray,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is JbrSkiaTransformedShader &&
+            shader == other.shader &&
+            matrix.contentEquals(other.matrix)
+
+    override fun hashCode(): Int = 31 * shader.hashCode() + matrix.contentHashCode()
+}
+
+@InternalComposeUiApi
 @OptIn(ExperimentalGraphicsApi::class)
 data class JbrSkiaRuntimeEffectShader(
     val sksl: String,
@@ -123,6 +136,10 @@ internal val Shader.jbrSkiaCompositeShader: JbrSkiaCompositeShader?
 @OptIn(InternalComposeUiApi::class)
 internal val Shader.jbrSkiaRuntimeEffectShader: JbrSkiaRuntimeEffectShader?
     get() = platformShader.jbrSkiaRuntimeEffectShader
+
+@OptIn(InternalComposeUiApi::class)
+internal val Shader.jbrSkiaTransformedShader: JbrSkiaTransformedShader?
+    get() = platformShader.jbrSkiaTransformedShader
 
 @OptIn(InternalComposeUiApi::class)
 internal actual class TransformShader {
