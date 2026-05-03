@@ -80,6 +80,7 @@ object JbrSkiaCommandRecorder {
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
     private const val MAX_DEFINED_SHADER_HANDLES = 1024
+    private const val MAX_DEFINED_FONT_DATA_HANDLES = 1024
     private val active = ThreadLocal<Recorder?>()
     private val imageCacheLock = Any()
     private val definedImageKeys = LinkedHashMap<Long, Unit>(MAX_DEFINED_IMAGE_KEYS, 0.75f, true)
@@ -87,6 +88,8 @@ object JbrSkiaCommandRecorder {
     private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
     private val shaderHandleLock = Any()
     private val definedShaderHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_SHADER_HANDLES, 0.75f, true)
+    private val fontDataHandleLock = Any()
+    private val definedFontDataHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_FONT_DATA_HANDLES, 0.75f, true)
 
     fun record(block: () -> Unit): IntArray? {
         return recordFrame(block = block).commands
@@ -324,6 +327,9 @@ object JbrSkiaCommandRecorder {
         }
         synchronized(shaderHandleLock) {
             definedShaderHandles.clear()
+        }
+        synchronized(fontDataHandleLock) {
+            definedFontDataHandles.clear()
         }
     }
 
@@ -2517,6 +2523,22 @@ object JbrSkiaCommandRecorder {
         fun defineFontData(handle: Long, data: ByteArray): Boolean {
             if (handle == 0L || data.isEmpty() || data.size > MAX_FONT_DATA_BYTES) {
                 return false
+            }
+            val shouldDefine = synchronized(fontDataHandleLock) {
+                if (definedFontDataHandles.containsKey(handle)) {
+                    definedFontDataHandles[handle] = Unit
+                    false
+                } else {
+                    if (definedFontDataHandles.size >= MAX_DEFINED_FONT_DATA_HANDLES) {
+                        val eldest = definedFontDataHandles.keys.first()
+                        definedFontDataHandles.remove(eldest)
+                    }
+                    definedFontDataHandles[handle] = Unit
+                    true
+                }
+            }
+            if (!shouldDefine) {
+                return true
             }
             commands.addCommand(
                 COMMAND_DEFINE_FONT_DATA,
