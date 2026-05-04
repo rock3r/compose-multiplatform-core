@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.toComposeRect
 import androidx.compose.ui.text.PlatformParagraph
 import androidx.compose.ui.text.platform.SkikoParagraphIntrinsics
 import androidx.compose.ui.text.platform.LoadedFont
+import androidx.compose.ui.text.platform.PlatformFont
 import androidx.compose.ui.text.platform.SystemFont
 import androidx.compose.ui.text.platform.cursorHorizontalPosition
 import androidx.compose.ui.text.font.FontFamily
@@ -57,6 +58,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.isUnspecified
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -69,6 +71,7 @@ import org.jetbrains.skia.paragraph.RectHeightMode
 import org.jetbrains.skia.paragraph.RectWidthMode
 import org.jetbrains.skia.paragraph.TextBox
 import org.jetbrains.skia.paragraph.Paragraph as SkParagraph
+import java.util.concurrent.ConcurrentHashMap
 
 internal class SkikoParagraph(
     private val paragraphIntrinsics: SkikoParagraphIntrinsics,
@@ -78,6 +81,8 @@ internal class SkikoParagraph(
 ) : PlatformParagraph {
     private companion object {
         private const val NativeJbrSkiaTextProperty = "compose.jbr.skia.command.nativeText"
+        private const val ResourceFontClassSimpleName = "ResourceFont"
+        private val jbrSkiaResourceFontDataCache = ConcurrentHashMap<String, ByteArray>()
     }
 
     private val layouter = paragraphIntrinsics.layouter().apply {
@@ -804,9 +809,20 @@ internal class SkikoParagraph(
             is GenericFontFamily -> JbrSkiaCommandFontFamily(fontFamily.name)
             is FontListFontFamily -> {
                 val loadedFonts = fontFamily.fonts.filterIsInstance<LoadedFont>()
+                val resourceFonts = fontFamily.fonts.filter {
+                    it is PlatformFont && it.isJbrSkiaResourceFont()
+                }
                 if (loadedFonts.size == 1 && fontFamily.fonts.size == 1) {
-                    val font = loadedFonts.single()
-                    val data = font.data
+                    val data = loadedFonts.single().data
+                    val handle = jbrSkiaFontDataHandle(data)
+                    JbrSkiaCommandFontFamily(
+                        familyName = "jbr-font-data:${handle.highInt()}:${handle.lowInt()}",
+                        fontDataHandle = handle,
+                        fontData = data,
+                    )
+                } else if (resourceFonts.size == 1 && fontFamily.fonts.size == 1) {
+                    val font = resourceFonts.single() as PlatformFont
+                    val data = jbrSkiaResourceFontData(font.identity) ?: return null
                     val handle = jbrSkiaFontDataHandle(data)
                     JbrSkiaCommandFontFamily(
                         familyName = "jbr-font-data:${handle.highInt()}:${handle.lowInt()}",
@@ -826,6 +842,20 @@ internal class SkikoParagraph(
             }
             else -> null
         }
+
+    private fun PlatformFont.isJbrSkiaResourceFont(): Boolean =
+        this::class.simpleName == ResourceFontClassSimpleName
+
+    private fun jbrSkiaResourceFontData(resourceName: String): ByteArray? {
+        jbrSkiaResourceFontDataCache[resourceName]?.let { return it }
+        val data = (
+            Thread.currentThread().contextClassLoader?.getResourceAsStream(resourceName)
+                ?: SkikoParagraph::class.java.classLoader?.getResourceAsStream(resourceName)
+                ?: ClassLoader.getSystemResourceAsStream(resourceName)
+            )?.use { it.readBytes() } ?: return null
+        jbrSkiaResourceFontDataCache[resourceName] = data
+        return data
+    }
 
     private fun jbrSkiaFontDataHandle(data: ByteArray): Long {
         var hash = -0x340d631b7bdddcdbL
