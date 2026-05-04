@@ -377,7 +377,8 @@ private val Shader.hasJbrSkiaShaderMetadata: Boolean
         jbrSkiaCompositeShader != null ||
         jbrSkiaRuntimeEffectShader != null ||
         jbrSkiaTransformedShader != null ||
-        jbrSkiaColorShader != null
+        jbrSkiaColorShader != null ||
+        jbrSkiaPerlinNoiseShader != null
 
 internal fun FloatArray.toUniformData(): Data {
     if (isEmpty()) return Data.makeEmpty()
