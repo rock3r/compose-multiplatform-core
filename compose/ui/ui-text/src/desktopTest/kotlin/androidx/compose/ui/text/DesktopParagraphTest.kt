@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
 import com.google.common.truth.FloatSubject
 import com.google.common.truth.Truth.assertThat
+import java.io.File
 import kotlin.math.roundToInt
 import org.junit.Rule
 import org.junit.Test
@@ -762,6 +763,7 @@ class DesktopParagraphTest {
 
     @Test
     fun paint_withLoadedFontFamily_recordsFontDataSimpleTextWhenNativeTextIsEnabled() {
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
         val paragraph = simpleParagraph(
             text = "Hi",
             style = TextStyle(
@@ -794,12 +796,63 @@ class DesktopParagraphTest {
     }
 
     @Test
-    fun paint_withFileBackedFontFamily_recordsTextImageWhenNativeTextIsEnabled() {
+    fun paint_withResourceFontFamily_recordsFontDataSimpleTextWhenNativeTextIsEnabled() {
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
         val paragraph = simpleParagraph(
             text = "Hi",
             style = TextStyle(
                 fontSize = 20.sp,
                 fontFamily = fontFamilyMeasureFont,
+            ),
+            maxLines = 1,
+            width = 200f,
+        )
+
+        val commands = withNativeJbrSkiaText {
+            JbrSkiaCommandRecorder.record {
+                paragraph.paint(
+                    canvas = Canvas(ImageBitmap(200, 100)),
+                    color = Color.Black,
+                    drawStyle = Fill,
+                )
+            }
+        }!!
+
+        val defineRecordStart = commandRecordStart(commands, 66)
+        val drawTextRecordStart = commandRecordStart(commands, 17)
+        val drawTextArgsStart = drawTextRecordStart + 3
+        val familyCount = commands[drawTextArgsStart + 7]
+
+        assertThat(defineRecordStart).isAtLeast(0)
+        assertThat(commandString(commands, drawTextArgsStart + 8, familyCount)).startsWith("jbr-font-data:")
+        assertThat(commands.hasCommand(16)).isFalse()
+        assertThat(commands.hasCommand(19)).isFalse()
+    }
+
+    @Test
+    fun paint_withFileBackedFontFamily_recordsTextImageWhenNativeTextIsEnabled() {
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+        val fontFile = File.createTempFile("compose-jbr-skia-sample-font", ".ttf")
+        fontFile.writeBytes(
+            Thread
+                .currentThread()
+                .contextClassLoader
+                .getResourceAsStream("font_desktop/sample_font.ttf")!!
+                .readAllBytes()
+        )
+        fontFile.deleteOnExit()
+        val fileFontFamily = FontFamily(
+            Font(
+                fontFile,
+                weight = FontWeight.Normal,
+                style = FontStyle.Normal
+            )
+        )
+        val paragraph = simpleParagraph(
+            text = "Hi",
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontFamily = fileFontFamily,
             ),
             maxLines = 1,
             width = 200f,
