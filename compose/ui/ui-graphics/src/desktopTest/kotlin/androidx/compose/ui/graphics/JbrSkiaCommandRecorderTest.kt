@@ -3120,6 +3120,80 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compositeShaderKeepsJbrSkiaMetadataForPerlinNoiseChildren() {
+        val shader = CompositeShader(
+            dst = FractalNoiseShader(
+                baseFrequencyX = 0.03f,
+                baseFrequencyY = 0.04f,
+                numOctaves = 2,
+                seed = 7f,
+                tileWidth = 64,
+                tileHeight = 64,
+            ),
+            src = TurbulenceShader(
+                baseFrequencyX = 0.05f,
+                baseFrequencyY = 0.06f,
+                numOctaves = 3,
+                seed = 11f,
+                tileWidth = 32,
+                tileHeight = 32,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        val composite = shader.jbrSkiaCompositeShader
+        assertEquals(BlendMode.SrcOver, composite?.blendMode)
+        assertTrue(composite?.dst?.jbrSkiaPerlinNoiseShader != null)
+        assertTrue(composite?.src?.jbrSkiaPerlinNoiseShader != null)
+    }
+
+    @Test
+    fun writesCompositePerlinNoiseShaderDescriptorRectInStrictMode() {
+        val shader = CompositeShader(
+            dst = FractalNoiseShader(
+                baseFrequencyX = 0.03f,
+                baseFrequencyY = 0.04f,
+                numOctaves = 2,
+                seed = 7f,
+                tileWidth = 64,
+                tileHeight = 64,
+            ),
+            src = TurbulenceShader(
+                baseFrequencyX = 0.05f,
+                baseFrequencyY = 0.06f,
+                numOctaves = 3,
+                seed = 11f,
+                tileWidth = 32,
+                tileHeight = 32,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                    },
+                )
+            }
+
+            assertNotNull(commands)
+            commands!!
+            assertEquals(3, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+            val shaderDescriptors = commands.commandRecords().filter { it[0] == 56 }
+            assertEquals(10, shaderDescriptors[0][5])
+            assertEquals(10, shaderDescriptors[1][5])
+            assertEquals(5, shaderDescriptors[2][5])
+        }
+    }
+
+    @Test
     fun writesLinearGradientShaderWithColorFilterDescriptorRectInStrictMode() {
         val shader = LinearGradientShader(
             from = Offset(1f, 2f),
