@@ -2738,12 +2738,30 @@ object JbrSkiaCommandRecorder {
             get() = commandBlendModeOrNull(blendMode)
 
         private val Paint.isSupportedImagePaint: Boolean
-            get() =
-                state.supported &&
-                    blendMode == BlendMode.SrcOver &&
-                    shader == null &&
-                    (colorFilter == null || tintSrcInColorFilter != null || descriptorColorFilterOrNull(colorFilter) != null) &&
-                    pathEffect == null
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null && tintSrcInColorFilter == null && descriptorColorFilterOrNull(colorFilter) == null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
 
         private val Paint.isSupportedImageShaderPaint: Boolean
             get() {

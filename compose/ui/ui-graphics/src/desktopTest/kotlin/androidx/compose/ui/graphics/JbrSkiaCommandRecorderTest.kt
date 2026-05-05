@@ -4220,6 +4220,33 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsImagePathEffectInStrictMode() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x44)
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawImageRect(
+                    image = image,
+                    srcLeft = 0f,
+                    srcTop = 0f,
+                    srcRight = 1f,
+                    srcBottom = 1f,
+                    dstLeft = 10f,
+                    dstTop = 20f,
+                    dstRight = 30f,
+                    dstBottom = 40f,
+                    paint = Paint().apply {
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 1f), 0f)
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesImageTintColorFilterRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(2, 2)
