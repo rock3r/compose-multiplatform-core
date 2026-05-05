@@ -157,6 +157,10 @@ object JbrSkiaCommandRecorder {
         active.get()?.rotate(degrees)
     }
 
+    internal fun skew(sx: Float, sy: Float) {
+        active.get()?.skew(sx, sy)
+    }
+
     internal fun concat(matrix: Matrix) {
         active.get()?.concat(matrix)
     }
@@ -642,6 +646,14 @@ object JbrSkiaCommandRecorder {
             if (degrees != 0f) {
                 commands.addCommand(COMMAND_ROTATE, COMMAND_RECORD_FLAGS_NONE, degrees.fixed1000())
             }
+        }
+
+        fun skew(sx: Float, sy: Float) {
+            if (sx == 0f && sy == 0f) return
+            concat(Matrix().apply {
+                values[Matrix.SkewX] = sx
+                values[Matrix.SkewY] = sy
+            })
         }
 
         fun concat(matrix: Matrix) {

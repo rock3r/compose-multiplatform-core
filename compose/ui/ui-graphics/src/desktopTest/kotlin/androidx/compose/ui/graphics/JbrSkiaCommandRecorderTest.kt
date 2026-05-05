@@ -2017,6 +2017,54 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesSkewAsConcatMatrix33Record() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.skew(0.5f, -0.25f)
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 105, 0, 12, 1, 1,
+                63, 48, 0,
+                1f.toRawBits(),
+                0.5f.toRawBits(),
+                0f.toRawBits(),
+                (-0.25f).toRawBits(),
+                1f.toRawBits(),
+                0f.toRawBits(),
+                0f.toRawBits(),
+                0f.toRawBits(),
+                1f.toRawBits(),
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun recordsCanvasSkewTransform() {
+        val commands = JbrSkiaCommandRecorder.record {
+            Canvas(ImageBitmap(1, 1)).skew(0.5f, -0.25f)
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 105, 0, 12, 1, 1,
+                63, 48, 0,
+                1f.toRawBits(),
+                0.5f.toRawBits(),
+                0f.toRawBits(),
+                (-0.25f).toRawBits(),
+                1f.toRawBits(),
+                0f.toRawBits(),
+                0f.toRawBits(),
+                0f.toRawBits(),
+                1f.toRawBits(),
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun writesClipRectOp() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.clipRect(1f, 2f, 11f, 12f, ClipOp.Intersect)
