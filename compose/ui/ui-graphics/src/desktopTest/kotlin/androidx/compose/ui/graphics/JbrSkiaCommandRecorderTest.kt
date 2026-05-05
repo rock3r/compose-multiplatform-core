@@ -2297,6 +2297,33 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsPathEffectDescriptorColorFilterInStrictMode() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawPath(
+                    path,
+                    Paint().apply {
+                        color = Color.Green
+                        style = PaintingStyle.Stroke
+                        strokeWidth = 8f
+                        colorFilter = ColorFilter.tint(Color.Cyan, BlendMode.SrcIn)
+                        pathEffect = PathEffect.cornerPathEffect(6f)
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesStampedPathEffectDescriptorPathRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val stamp = Path().apply {
