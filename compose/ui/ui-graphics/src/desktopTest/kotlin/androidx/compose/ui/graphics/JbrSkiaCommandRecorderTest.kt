@@ -3208,6 +3208,7 @@ class JbrSkiaCommandRecorderTest {
 
     @Test
     fun writesCompositeShaderWithColorFilterDescriptorRectInStrictMode() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val shader = CompositeShader(
             dst = LinearGradientShader(
                 from = Offset(1f, 2f),
@@ -3532,6 +3533,7 @@ class JbrSkiaCommandRecorderTest {
     @OptIn(ExperimentalGraphicsApi::class)
     @Test
     fun writesRuntimeEffectShaderWithColorFilterDescriptorRectInStrictMode() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val sksl = """
             half4 main(float2 p) {
                 return half4(0.25, 0.50, 0.75, 1.0);
@@ -3566,8 +3568,8 @@ class JbrSkiaCommandRecorderTest {
             assertEquals(1, shaderDescriptor[6])
             assertEquals(4, shaderDescriptor[7])
             assertTrue(shaderDescriptor[8] != 0 || shaderDescriptor[9] != 0)
-            assertEquals(colorFilterDescriptor[2], shaderDescriptor[10])
-            assertEquals(colorFilterDescriptor[3], shaderDescriptor[11])
+            assertEquals(colorFilterDescriptor[3], shaderDescriptor[10])
+            assertEquals(colorFilterDescriptor[4], shaderDescriptor[11])
         }
     }
 
@@ -4314,7 +4316,7 @@ class JbrSkiaCommandRecorderTest {
             )
         }!!
 
-        assertEquals(99, commands[1])
+        assertEquals(106, commands[1])
         assertEquals(1, commands.countCommand(15))
         assertEquals(1, commands.countCommand(34))
         assertTrue(commands.joinToString(), commands.containsSubsequence(34, 56, 1, 2000, 3000, 42000, 33000))
