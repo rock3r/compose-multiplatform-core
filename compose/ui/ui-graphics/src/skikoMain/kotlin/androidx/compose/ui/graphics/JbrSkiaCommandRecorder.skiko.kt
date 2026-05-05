@@ -262,6 +262,14 @@ object JbrSkiaCommandRecorder {
     internal fun commandShaderBlendModeOrNull(blendMode: BlendMode): Int? =
         if (blendMode == BlendMode.SrcOver) COMMAND_BLEND_MODE_SRC_OVER else commandBlendModeOrNull(blendMode)
 
+    internal fun VertexMode.commandValue(): Int =
+        when (this) {
+            VertexMode.Triangles -> 0
+            VertexMode.TriangleStrip -> 1
+            VertexMode.TriangleFan -> 2
+            else -> -1
+        }
+
     internal fun tintSrcInColorFilterOrNull(colorFilter: ColorFilter?): BlendModeColorFilter? =
         (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
@@ -457,6 +465,9 @@ object JbrSkiaCommandRecorder {
     internal fun drawPath(path: Path, paint: Paint) {
         active.get()?.drawPath(path, paint)
     }
+
+    internal fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint): Boolean =
+        active.get()?.drawVertices(vertices, blendMode, paint) ?: false
 
     fun drawImageRect(
         image: ImageBitmap,
@@ -1130,6 +1141,56 @@ object JbrSkiaCommandRecorder {
                 pointCount,
                 *payload,
             )
+        }
+
+        fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint): Boolean {
+            if (!paint.isSupportedSolidColor) return false
+            val commandBlendMode = commandShaderBlendModeOrNull(blendMode) ?: run {
+                countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                return false
+            }
+            val commandVertexMode = vertices.vertexMode.commandValue()
+            if (commandVertexMode < 0) return false
+            val vertexCount = vertices.positions.size / 2
+            val indexCount = vertices.indices.size
+            if (vertexCount < 3 || vertexCount > 4096 || indexCount > 8192) return false
+            val payload = IntArray(vertexCount * 5 + indexCount)
+            var payloadIndex = 0
+            var pointIndex = 0
+            while (pointIndex < vertices.positions.size - 1) {
+                val x = vertices.positions[pointIndex]
+                val y = vertices.positions[pointIndex + 1]
+                if (!x.isFinite() || !y.isFinite()) return false
+                payload[payloadIndex++] = state.x(x)
+                payload[payloadIndex++] = state.y(y)
+                pointIndex += 2
+            }
+            pointIndex = 0
+            while (pointIndex < vertices.textureCoordinates.size - 1) {
+                val x = vertices.textureCoordinates[pointIndex]
+                val y = vertices.textureCoordinates[pointIndex + 1]
+                if (!x.isFinite() || !y.isFinite()) return false
+                payload[payloadIndex++] = x.toRawBits()
+                payload[payloadIndex++] = y.toRawBits()
+                pointIndex += 2
+            }
+            for (color in vertices.colors) {
+                payload[payloadIndex++] = color
+            }
+            for (index in vertices.indices) {
+                payload[payloadIndex++] = index.toInt() and 0xffff
+            }
+            commands.addCommand(
+                COMMAND_DRAW_VERTICES,
+                paint.recordFlags(),
+                commandVertexMode,
+                commandBlendMode,
+                paint.color.toArgb(),
+                vertexCount,
+                indexCount,
+                *payload,
+            )
+            return true
         }
 
         private fun addDashedLine(
@@ -3897,6 +3958,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_SHADOW_PATH = 64
     private const val COMMAND_DRAW_POINTS = 65
     private const val COMMAND_DEFINE_FONT_DATA = 66
+    private const val COMMAND_DRAW_VERTICES = 67
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
@@ -3939,7 +4001,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 105
+    private const val COMMAND_STREAM_ABI_ID = 106
     private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0

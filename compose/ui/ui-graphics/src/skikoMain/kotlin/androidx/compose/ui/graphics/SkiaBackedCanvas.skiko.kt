@@ -475,7 +475,9 @@ internal class SkiaBackedCanvas(
     }
 
     override fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint) {
-        JbrSkiaCommandRecorder.unsupportedDraw("vertices")
+        if (!JbrSkiaCommandRecorder.drawVertices(vertices, blendMode, paint)) {
+            JbrSkiaCommandRecorder.unsupportedDraw("vertices")
+        }
         internalSkiaCanvas.drawVertices(
             vertexMode = vertices.vertexMode.toSkiaVertexMode(),
             positions = vertices.positions,
