@@ -134,7 +134,7 @@ internal class SkiaBackedCanvas(
     }
 
     override fun skew(sx: Float, sy: Float) {
-        if (sx != 0f || sy != 0f) JbrSkiaCommandRecorder.unsupportedTransform()
+        JbrSkiaCommandRecorder.skew(sx, sy)
         internalSkiaCanvas.skew(sx, sy)
     }
 
