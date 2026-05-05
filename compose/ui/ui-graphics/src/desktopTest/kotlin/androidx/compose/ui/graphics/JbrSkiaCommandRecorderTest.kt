@@ -3006,6 +3006,49 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsShaderDescriptorStrokeRectInStrictMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        style = PaintingStyle.Stroke
+                        strokeWidth = 2f
+                        shader = ColorShader(Color.Red)
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
+    fun rejectsImageShaderStrokeRectInStrictMode() {
+        withStrictCommandRecording {
+            val image = onePixelImage(0x22)
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        style = PaintingStyle.Stroke
+                        strokeWidth = 2f
+                        shader = ImageShader(image, TileMode.Repeated, TileMode.Mirror)
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesColorShaderDescriptorRectInStrictMode() {
         withStrictCommandRecording {
             val commands = JbrSkiaCommandRecorder.record {

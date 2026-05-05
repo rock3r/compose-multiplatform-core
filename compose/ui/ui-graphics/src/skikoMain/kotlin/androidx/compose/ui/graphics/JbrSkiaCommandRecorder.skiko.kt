@@ -2425,14 +2425,22 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addImageShaderRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
-            val imageShader = paint.shader?.jbrSkiaImageShader ?: return
+            val imageShader = paint.shader?.jbrSkiaImageShader ?: run {
+                countUnsupported("shader")
+                return
+            }
             if (!paint.isSupportedImageShaderPaint ||
-                paint.style != PaintingStyle.Fill ||
-                imageShader.image.width <= 0 ||
+                paint.style != PaintingStyle.Fill
+            ) {
+                if (paint.style != PaintingStyle.Fill) countUnsupported("paintStyle")
+                return
+            }
+            if (imageShader.image.width <= 0 ||
                 imageShader.image.height <= 0 ||
                 imageShader.image.width > 2048 ||
                 imageShader.image.height > 2048
             ) {
+                countUnsupported("imageShaderImage")
                 return
             }
             val cacheKey = defineImageIfNeeded(imageShader.image) ?: return
@@ -2462,8 +2470,12 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             descriptor: ShaderDescriptor? = shaderDescriptorOrNull(paint.shader),
         ) {
-            descriptor ?: return
+            descriptor ?: run {
+                countUnsupported("shader")
+                return
+            }
             if (!paint.isSupportedShaderDescriptorPaint(descriptor) || paint.style != PaintingStyle.Fill) {
+                if (paint.style != PaintingStyle.Fill) countUnsupported("paintStyle")
                 return
             }
             val handle = defineShaderIfNeeded(descriptor) ?: run {
