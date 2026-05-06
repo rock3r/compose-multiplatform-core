@@ -430,6 +430,35 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun saveLayerRejectsRawColorFilter() {
+        val rawColorFilter = org.jetbrains.skia.ColorFilter.makeBlend(
+            Color.Cyan.toArgb(),
+            org.jetbrains.skia.BlendMode.SRC_IN,
+        ).asComposeColorFilter()
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.saveLayer(
+                Rect(10f, 20f, 110f, 120f),
+                Paint().apply {
+                    color = Color.White
+                    colorFilter = rawColorFilter
+                },
+            )
+            JbrSkiaCommandRecorder.drawRect(
+                left = 20f,
+                top = 30f,
+                right = 80f,
+                bottom = 90f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(2, recording.unsupportedCount)
+    }
+
+    @Test
     fun nestedRecordingReplaysLayerColorMatrixFilterHandle() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val matrix = ColorMatrix().also { it[0, 4] = 64f }
