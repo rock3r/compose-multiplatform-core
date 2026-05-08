@@ -3588,6 +3588,77 @@ class JbrSkiaCommandRecorderTest {
 
     @OptIn(ExperimentalGraphicsApi::class)
     @Test
+    fun rejectsInvalidRuntimeEffectColorFilterUniformSchemaInStrictMode() {
+        val sksl = """
+            uniform float phase;
+            half4 main(half4 inColor) {
+                return half4(inColor.r * phase, inColor.g, inColor.b, inColor.a);
+            }
+        """.trimIndent()
+
+        withStrictCommandRecording {
+            listOf(
+                RuntimeEffectUniform("1phase", 0, 1),
+                RuntimeEffectUniform("phase", Int.MAX_VALUE, 1),
+                RuntimeEffectUniform("phase", 1, 1),
+            ).forEach { uniform ->
+                val colorFilter = RuntimeEffectColorFilter(
+                    sksl = sksl,
+                    uniforms = floatArrayOf(0.5f),
+                    uniformSchema = listOf(uniform),
+                )
+                assertNull(
+                    JbrSkiaCommandRecorder.record {
+                        JbrSkiaCommandRecorder.drawRect(
+                            left = 1f,
+                            top = 2f,
+                            right = 11f,
+                            bottom = 12f,
+                            paint = Paint().apply {
+                                this.colorFilter = colorFilter
+                            },
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
+    fun rejectsInvalidRuntimeEffectColorFilterNamedChildSchemaInStrictMode() {
+        val sksl = """
+            uniform colorFilter content;
+            half4 main(half4 inColor) {
+                return content.eval(inColor).bgra;
+            }
+        """.trimIndent()
+
+        withStrictCommandRecording {
+            val colorFilter = RuntimeEffectColorFilter(
+                sksl = sksl,
+                namedChildren = listOf(
+                    RuntimeEffectColorFilterChild("1content", ColorFilter.tint(Color.Red))
+                ),
+            )
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 1f,
+                        top = 2f,
+                        right = 11f,
+                        bottom = 12f,
+                        paint = Paint().apply {
+                            this.colorFilter = colorFilter
+                        },
+                    )
+                }
+            )
+        }
+    }
+
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
     fun writesRuntimeEffectShaderWithColorFilterDescriptorRectInStrictMode() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val sksl = """
