@@ -4000,6 +4000,48 @@ class JbrSkiaCommandRecorderTest {
         }
     }
 
+    @OptIn(ExperimentalGraphicsApi::class)
+    @Test
+    fun rejectsInvalidNestedRuntimeEffectShaderChildInStrictMode() {
+        val childSksl = """
+            uniform float phase;
+            half4 main(float2 p) {
+                return half4(phase, 0.25, 0.75, 1.0);
+            }
+        """.trimIndent()
+        val parentSksl = """
+            uniform shader content;
+            half4 main(float2 p) {
+                return content.eval(p);
+            }
+        """.trimIndent()
+
+        withStrictCommandRecording {
+            val child = RuntimeEffectShader(
+                sksl = childSksl,
+                uniforms = floatArrayOf(0.5f),
+                uniformSchema = listOf(RuntimeEffectUniform("1phase", 0, 1)),
+            )
+            val shader = RuntimeEffectShader(
+                sksl = parentSksl,
+                namedChildren = listOf(RuntimeEffectChild("content", child)),
+            )
+            assertNull(
+                JbrSkiaCommandRecorder.record {
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 1f,
+                        top = 2f,
+                        right = 11f,
+                        bottom = 12f,
+                        paint = Paint().apply {
+                            this.shader = shader
+                        },
+                    )
+                }
+            )
+        }
+    }
+
     @Test
     fun rejectsGradientStrokePaintInStrictMode() {
         withStrictCommandRecording {
