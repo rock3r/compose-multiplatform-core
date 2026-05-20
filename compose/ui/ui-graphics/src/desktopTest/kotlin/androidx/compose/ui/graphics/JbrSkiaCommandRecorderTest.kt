@@ -4643,6 +4643,28 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun emitsImageCacheClearForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(7)
+
+        val firstFrame = JbrSkiaCommandRecorder.record {
+            drawOnePixelImage(image)
+        }!!
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+        val afterClear = JbrSkiaCommandRecorder.recordFrame {
+            drawOnePixelImage(image)
+        }
+
+        assertEquals(1, firstFrame.countCommand(15))
+        assertEquals(0, firstFrame.countCommand(18))
+        assertEquals(1, afterClear.imageCacheClearCount)
+        assertEquals(1, afterClear.imageDefineCount)
+        assertEquals(1, afterClear.commands!!.countCommand(18))
+        assertEquals(1, afterClear.commands.countCommand(15))
+        assertArrayEquals(intArrayOf(18, 12, 0), afterClear.commands.commandRecords().first())
+    }
+
+    @Test
     fun writesSimpleTextRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawTextUtf16(
