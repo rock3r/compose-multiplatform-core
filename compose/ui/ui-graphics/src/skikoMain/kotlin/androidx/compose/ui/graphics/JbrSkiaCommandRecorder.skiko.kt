@@ -19,6 +19,7 @@ package androidx.compose.ui.graphics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import java.util.LinkedHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
 
@@ -90,6 +91,7 @@ object JbrSkiaCommandRecorder {
     private val definedShaderHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_SHADER_HANDLES, 0.75f, true)
     private val fontDataHandleLock = Any()
     private val definedFontDataHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_FONT_DATA_HANDLES, 0.75f, true)
+    private val pendingImageCacheClear = AtomicBoolean(false)
 
     fun record(block: () -> Unit): IntArray? {
         return recordFrame(block = block).commands
@@ -100,7 +102,10 @@ object JbrSkiaCommandRecorder {
         block: () -> Unit,
     ): JbrSkiaCommandRecording {
         val previous = active.get()
-        val recorder = Recorder(shadowContext)
+        val recorder = Recorder(
+            shadowContext = shadowContext,
+            emitPendingImageCacheClear = pendingImageCacheClear.getAndSet(false),
+        )
         active.set(recorder)
         try {
             block()
@@ -115,7 +120,10 @@ object JbrSkiaCommandRecorder {
 
     internal fun recordNested(block: () -> Unit): JbrSkiaCommandRecording {
         val previous = active.get()
-        val recorder = Recorder(previous?.shadowContext ?: JbrSkiaCommandShadowContext())
+        val recorder = Recorder(
+            shadowContext = previous?.shadowContext ?: JbrSkiaCommandShadowContext(),
+            emitPendingImageCacheClear = false,
+        )
         active.set(recorder)
         try {
             block()
@@ -333,6 +341,11 @@ object JbrSkiaCommandRecorder {
 
     @JvmStatic
     fun clearInteropCachesForSurfaceChange() {
+        clearInteropCaches()
+        pendingImageCacheClear.set(true)
+    }
+
+    private fun clearInteropCaches() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
         }
@@ -348,7 +361,8 @@ object JbrSkiaCommandRecorder {
     }
 
     internal fun clearImageCacheForTesting() {
-        clearInteropCachesForSurfaceChange()
+        clearInteropCaches()
+        pendingImageCacheClear.set(false)
     }
 
     fun drawTextUtf16(
@@ -487,7 +501,10 @@ object JbrSkiaCommandRecorder {
     fun defineFontData(handle: Long, data: ByteArray): Boolean =
         active.get()?.defineFontData(handle, data) ?: false
 
-    private class Recorder(val shadowContext: JbrSkiaCommandShadowContext) {
+    private class Recorder(
+        val shadowContext: JbrSkiaCommandShadowContext,
+        emitPendingImageCacheClear: Boolean,
+    ) {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
         private val unsupportedReasons = linkedMapOf<String, Int>()
@@ -498,6 +515,13 @@ object JbrSkiaCommandRecorder {
         private var imageCacheClearCount = 0
         private var imageCacheEvictCount = 0
         private var state = State()
+
+        init {
+            if (emitPendingImageCacheClear) {
+                commands.addCommand(COMMAND_CLEAR_IMAGE_CACHE)
+                imageCacheClearCount++
+            }
+        }
 
         fun toCommandArray(): IntArray? =
             if (java.lang.Boolean.getBoolean(STRICT_PROPERTY) && unsupportedCount > 0) {
