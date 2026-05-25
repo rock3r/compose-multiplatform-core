@@ -40,5 +40,12 @@ SWIFT
 
 echo "window=${WINDOW_METADATA}" >&2
 WINDOW_ID="$(printf '%s\n' "${WINDOW_METADATA}" | sed -n 's/^id=\([^ ]*\).*/\1/p')"
-screencapture -x -o -l"${WINDOW_ID}" "${OUTPUT}"
+if ! screencapture -x -o -l"${WINDOW_ID}" "${OUTPUT}"; then
+  WINDOW_X="$(printf '%s\n' "${WINDOW_METADATA}" | sed -n 's/.* x=\([^ ]*\).*/\1/p')"
+  WINDOW_Y="$(printf '%s\n' "${WINDOW_METADATA}" | sed -n 's/.* y=\([^ ]*\).*/\1/p')"
+  WINDOW_WIDTH="$(printf '%s\n' "${WINDOW_METADATA}" | sed -n 's/.* width=\([^ ]*\).*/\1/p')"
+  WINDOW_HEIGHT="$(printf '%s\n' "${WINDOW_METADATA}" | sed -n 's/.* height=\([^ ]*\).*/\1/p')"
+  echo "window capture by id failed; retrying region=${WINDOW_X},${WINDOW_Y},${WINDOW_WIDTH},${WINDOW_HEIGHT}" >&2
+  screencapture -x -R"${WINDOW_X},${WINDOW_Y},${WINDOW_WIDTH},${WINDOW_HEIGHT}" "${OUTPUT}"
+fi
 echo "${OUTPUT}"
