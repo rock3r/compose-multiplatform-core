@@ -3168,6 +3168,78 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun reusesColorShaderHandleAcrossFrames() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val shader = ColorShader(Color.Red)
+
+        withStrictCommandRecording {
+            JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                    },
+                )
+            }
+
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 3f,
+                    top = 4f,
+                    right = 13f,
+                    bottom = 14f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                    },
+                )
+            }!!
+
+            assertEquals(0, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+        }
+    }
+
+    @Test
+    fun clearsColorShaderHandleCacheForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val shader = ColorShader(Color.Red)
+
+        withStrictCommandRecording {
+            JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                    },
+                )
+            }
+
+            JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 3f,
+                    top = 4f,
+                    right = 13f,
+                    bottom = 14f,
+                    paint = Paint().apply {
+                        this.shader = shader
+                    },
+                )
+            }!!
+
+            assertEquals(1, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(58))
+        }
+    }
+
+    @Test
     fun writesPerlinNoiseShaderDescriptorRectInStrictMode() {
         withStrictCommandRecording {
             val commands = JbrSkiaCommandRecorder.record {
