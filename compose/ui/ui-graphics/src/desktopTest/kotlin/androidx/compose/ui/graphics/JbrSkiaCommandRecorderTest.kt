@@ -682,6 +682,49 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun reusesLayerImageFilterHandleAcrossFrames() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val blur = JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(
+            sigmaX = 2f,
+            sigmaY = 3f,
+            tileMode = 0,
+        )
+
+        JbrSkiaCommandRecorder.recordFrame {
+            replayRedLayerWithImageFilter(blur)
+        }
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            replayRedLayerWithImageFilter(blur)
+        }
+
+        assertEquals(0, recording.commands!!.countCommand(49))
+        assertEquals(1, recording.commands.countCommand(55))
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
+    fun clearsLayerImageFilterHandleCacheForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val blur = JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(
+            sigmaX = 2f,
+            sigmaY = 3f,
+            tileMode = 0,
+        )
+
+        JbrSkiaCommandRecorder.recordFrame {
+            replayRedLayerWithImageFilter(blur)
+        }
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            replayRedLayerWithImageFilter(blur)
+        }
+
+        assertEquals(1, recording.commands!!.countCommand(49))
+        assertEquals(1, recording.commands.countCommand(55))
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun nestedRecordingReplaysLayerImageFilterThenColorFilter() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val blur = JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(
@@ -4999,6 +5042,41 @@ class JbrSkiaCommandRecorderTest {
             dstRight = 1f,
             dstBottom = 1f,
             paint = Paint(),
+        )
+    }
+
+    private fun replayRedLayerWithImageFilter(imageFilter: JbrSkiaCommandRecorder.ImageFilterDescriptor) {
+        val nested = JbrSkiaCommandRecorder.recordNested {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+        }
+        assertTrue(
+            JbrSkiaCommandRecorder.replayRecordedLayer(
+                recording = nested,
+                left = 100f,
+                top = 200f,
+                width = 30f,
+                height = 40f,
+                pivotX = 15f,
+                pivotY = 20f,
+                alpha = 0.5f,
+                scaleX = 1f,
+                scaleY = 1f,
+                rotationZ = 0f,
+                translationX = 0f,
+                translationY = 0f,
+                clipRect = null,
+                clipPath = null,
+                blendMode = null,
+                imageFilter = imageFilter,
+            )
         )
     }
 
