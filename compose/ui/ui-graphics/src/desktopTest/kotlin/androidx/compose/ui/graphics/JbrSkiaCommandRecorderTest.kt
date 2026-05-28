@@ -1792,6 +1792,42 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun evictsOldestColorFilterHandleBeforeRedefiningAfterThreshold() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        withColorFilterHandles {
+            val firstColor = Color(0xff000000.toInt())
+
+            val commands = JbrSkiaCommandRecorder.record {
+                repeat(1025) { index ->
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 3f,
+                        top = 4f,
+                        right = 13f,
+                        bottom = 24f,
+                        paint = Paint().apply {
+                            color = Color.Magenta
+                            colorFilter = ColorFilter.tint(Color(0xff000000.toInt() or index))
+                        },
+                    )
+                }
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 5f,
+                    top = 6f,
+                    right = 15f,
+                    bottom = 26f,
+                    paint = Paint().apply {
+                        color = Color.Magenta
+                        colorFilter = ColorFilter.tint(firstColor)
+                    },
+                )
+            }!!
+
+            assertEquals(1026, commands.countCommand(49))
+            assertEquals(2, commands.countCommand(48))
+        }
+    }
+
+    @Test
     fun writesDashedStrokeLineRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawLine(
@@ -4591,6 +4627,40 @@ class JbrSkiaCommandRecorderTest {
             val shaderDescriptors = commands.commandRecords().filter { it[0] == 56 }
             assertEquals(4, shaderDescriptors.first()[5])
             assertEquals(7, shaderDescriptors.last()[5])
+        }
+    }
+
+    @Test
+    fun evictsOldestShaderHandleBeforeRedefiningAfterThreshold() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val firstShader = ColorShader(Color(0xff000000.toInt()))
+
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                repeat(1025) { index ->
+                    JbrSkiaCommandRecorder.drawRect(
+                        left = 2f,
+                        top = 3f,
+                        right = 42f,
+                        bottom = 33f,
+                        paint = Paint().apply {
+                            shader = ColorShader(Color(0xff000000.toInt() or index))
+                        },
+                    )
+                }
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 2f,
+                    top = 3f,
+                    right = 42f,
+                    bottom = 33f,
+                    paint = Paint().apply {
+                        shader = firstShader
+                    },
+                )
+            }!!
+
+            assertEquals(1026, commands.countCommand(56))
+            assertEquals(2, commands.countCommand(57))
         }
     }
 
