@@ -2496,14 +2496,17 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("linearGradientPath")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_PATH_LINEAR_GRADIENT,
-                paint.recordFlags(),
-                path.fillType.commandValue(),
-                pathData.size,
-                *pathData,
-                *gradientPayload,
-            )
+            val bounds = path.getBounds()
+            withSolidColorBlendLayer(bounds.left, bounds.top, bounds.right, bounds.bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_PATH_LINEAR_GRADIENT,
+                    paint.recordFlags(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addRadialGradientPath(path: Path, paint: Paint) {
@@ -2516,14 +2519,17 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("radialGradientPath")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_PATH_RADIAL_GRADIENT,
-                paint.recordFlags(),
-                path.fillType.commandValue(),
-                pathData.size,
-                *pathData,
-                *gradientPayload,
-            )
+            val bounds = path.getBounds()
+            withSolidColorBlendLayer(bounds.left, bounds.top, bounds.right, bounds.bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_PATH_RADIAL_GRADIENT,
+                    paint.recordFlags(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addSweepGradientPath(path: Path, paint: Paint) {
@@ -2536,14 +2542,17 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("sweepGradientPath")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_PATH_SWEEP_GRADIENT,
-                paint.recordFlags(),
-                path.fillType.commandValue(),
-                pathData.size,
-                *pathData,
-                *gradientPayload,
-            )
+            val bounds = path.getBounds()
+            withSolidColorBlendLayer(bounds.left, bounds.top, bounds.right, bounds.bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_PATH_SWEEP_GRADIENT,
+                    paint.recordFlags(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                    *gradientPayload,
+                )
+            }
         }
 
         fun drawImageRect(
@@ -3152,14 +3161,14 @@ object JbrSkiaCommandRecorder {
             return supported
         }
 
-        private val Paint.isSupportedLinearGradient: Boolean
+        private val Paint.isSupportedGradientForBlendLayer: Boolean
             get() {
                 var supported = true
                 if (!state.supported) {
                     countUnsupported("unsupportedScope")
                     supported = false
                 }
-                if (blendMode != BlendMode.SrcOver) {
+                if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
                     countUnsupported("blendMode_${blendMode.toReasonToken()}")
                     supported = false
                 }
@@ -3778,15 +3787,17 @@ object JbrSkiaCommandRecorder {
                 return
             }
             val gradientPayload = paint.linearGradientPayload() ?: return
-            commands.addCommand(
-                COMMAND_FILL_RECT_LINEAR_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                *gradientPayload,
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_LINEAR_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addLinearGradientStrokeRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -3795,19 +3806,22 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("linearGradientStrokeWidth")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_RECT_LINEAR_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                paint.strokeWidth.fixed1000(),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                *gradientPayload,
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_RECT_LINEAR_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addRadialGradientRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -3816,15 +3830,17 @@ object JbrSkiaCommandRecorder {
                 return
             }
             val gradientPayload = paint.radialGradientPayload() ?: return
-            commands.addCommand(
-                COMMAND_FILL_RECT_RADIAL_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                *gradientPayload,
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_RADIAL_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addRadialGradientStrokeRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -3833,19 +3849,22 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("radialGradientStrokeWidth")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_RECT_RADIAL_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                paint.strokeWidth.fixed1000(),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                *gradientPayload,
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_RECT_RADIAL_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addSweepGradientRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -3854,15 +3873,17 @@ object JbrSkiaCommandRecorder {
                 return
             }
             val gradientPayload = paint.sweepGradientPayload() ?: return
-            commands.addCommand(
-                COMMAND_FILL_RECT_SWEEP_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                *gradientPayload,
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_SWEEP_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addSweepGradientStrokeRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -3871,19 +3892,22 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("sweepGradientStrokeWidth")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_RECT_SWEEP_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                paint.strokeWidth.fixed1000(),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                *gradientPayload,
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_RECT_SWEEP_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addSweepGradientRoundRect(
@@ -3904,17 +3928,19 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("sweepGradientRoundRectRadius")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                *gradientPayload,
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addSweepGradientStrokeRoundRect(
@@ -3935,21 +3961,24 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("sweepGradientStrokeWidth")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                paint.strokeWidth.fixed1000(),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                *gradientPayload,
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addRadialGradientRoundRect(
@@ -3970,17 +3999,19 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("radialGradientRoundRectRadius")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_ROUND_RECT_RADIAL_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                *gradientPayload,
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_ROUND_RECT_RADIAL_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addRadialGradientStrokeRoundRect(
@@ -4001,21 +4032,24 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("radialGradientStrokeWidth")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                paint.strokeWidth.fixed1000(),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                *gradientPayload,
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addLinearGradientRoundRect(
@@ -4036,17 +4070,19 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("linearGradientRoundRectRadius")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                *gradientPayload,
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun addLinearGradientStrokeRoundRect(
@@ -4067,26 +4103,29 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("linearGradientStrokeWidth")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_ROUND_RECT_LINEAR_GRADIENT,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                paint.strokeWidth.fixed1000(),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                *gradientPayload,
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_ROUND_RECT_LINEAR_GRADIENT,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    *gradientPayload,
+                )
+            }
         }
 
         private fun Paint.linearGradientPayload(requiredStyle: PaintingStyle = PaintingStyle.Fill): IntArray? {
             val gradient = shader?.jbrSkiaLinearGradient ?: return null
-            if (!isSupportedLinearGradient || style != requiredStyle) {
+            if (!isSupportedGradientForBlendLayer || style != requiredStyle) {
                 countUnsupported("linearGradientPaint")
                 return null
             }
@@ -4123,7 +4162,7 @@ object JbrSkiaCommandRecorder {
 
         private fun Paint.radialGradientPayload(requiredStyle: PaintingStyle = PaintingStyle.Fill): IntArray? {
             val gradient = shader?.jbrSkiaRadialGradient ?: return null
-            if (!isSupportedLinearGradient || style != requiredStyle) {
+            if (!isSupportedGradientForBlendLayer || style != requiredStyle) {
                 countUnsupported("radialGradientPaint")
                 return null
             }
@@ -4159,7 +4198,7 @@ object JbrSkiaCommandRecorder {
 
         private fun Paint.sweepGradientPayload(requiredStyle: PaintingStyle = PaintingStyle.Fill): IntArray? {
             val gradient = shader?.jbrSkiaSweepGradient ?: return null
-            if (!isSupportedLinearGradient || style != requiredStyle) {
+            if (!isSupportedGradientForBlendLayer || style != requiredStyle) {
                 countUnsupported("sweepGradientPaint")
                 return null
             }
