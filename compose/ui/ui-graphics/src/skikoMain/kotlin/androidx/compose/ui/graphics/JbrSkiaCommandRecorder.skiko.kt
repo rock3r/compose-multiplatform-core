@@ -2572,7 +2572,12 @@ object JbrSkiaCommandRecorder {
             dstBottom: Float,
             paint: Paint,
         ): Boolean {
-            if (!paint.isSupportedImagePaint || image.width <= 0 || image.height <= 0 || image.width > 2048 || image.height > 2048) {
+            if (!paint.isSupportedImagePaintForBlendLayer ||
+                image.width <= 0 ||
+                image.height <= 0 ||
+                image.width > 2048 ||
+                image.height > 2048
+            ) {
                 return false
             }
             val cacheKey = defineImageIfNeeded(image) ?: return false
@@ -2583,33 +2588,35 @@ object JbrSkiaCommandRecorder {
                 if (descriptorColorFilter != null) return false
                 null
             }
-            commands.addCommand(
-                when {
-                    tintColorFilter != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER
-                    descriptorHandle != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF
-                    else -> COMMAND_DRAW_IMAGE_REF
-                },
-                paint.recordFlags(),
-                srcLeft.fixed1000(),
-                srcTop.fixed1000(),
-                srcRight.fixed1000(),
-                srcBottom.fixed1000(),
-                dstLeft.fixed1000(),
-                dstTop.fixed1000(),
-                dstRight.fixed1000(),
-                dstBottom.fixed1000(),
-                cacheKey.highInt(),
-                cacheKey.lowInt(),
-                image.width,
-                image.height,
-                paint.imageAlpha1000(),
-                paint.filterQuality.value,
-                *when {
-                    tintColorFilter != null -> intArrayOf(tintColorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
-                    descriptorHandle != null -> intArrayOf(descriptorHandle.highInt(), descriptorHandle.lowInt())
-                    else -> IntArray(0)
-                },
-            )
+            withSolidColorBlendLayer(dstLeft, dstTop, dstRight, dstBottom, paint) {
+                commands.addCommand(
+                    when {
+                        tintColorFilter != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER
+                        descriptorHandle != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF
+                        else -> COMMAND_DRAW_IMAGE_REF
+                    },
+                    paint.recordFlags(),
+                    srcLeft.fixed1000(),
+                    srcTop.fixed1000(),
+                    srcRight.fixed1000(),
+                    srcBottom.fixed1000(),
+                    dstLeft.fixed1000(),
+                    dstTop.fixed1000(),
+                    dstRight.fixed1000(),
+                    dstBottom.fixed1000(),
+                    cacheKey.highInt(),
+                    cacheKey.lowInt(),
+                    image.width,
+                    image.height,
+                    paint.imageAlpha1000(),
+                    paint.filterQuality.value,
+                    *when {
+                        tintColorFilter != null -> intArrayOf(tintColorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
+                        descriptorHandle != null -> intArrayOf(descriptorHandle.highInt(), descriptorHandle.lowInt())
+                        else -> IntArray(0)
+                    },
+                )
+            }
             return true
         }
 
@@ -2618,7 +2625,7 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("shader")
                 return
             }
-            if (!paint.isSupportedImageShaderPaint ||
+            if (!paint.isSupportedImageShaderPaintForBlendLayer ||
                 paint.style != PaintingStyle.Fill
             ) {
                 if (paint.style != PaintingStyle.Fill) countUnsupported("paintStyle")
@@ -2634,21 +2641,23 @@ object JbrSkiaCommandRecorder {
             }
             val cacheKey = defineImageIfNeeded(imageShader.image) ?: return
             imageRefCount++
-            commands.addCommand(
-                COMMAND_FILL_RECT_IMAGE_SHADER,
-                paint.recordFlags(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                cacheKey.highInt(),
-                cacheKey.lowInt(),
-                imageShader.image.width,
-                imageShader.image.height,
-                imageShader.tileModeX.commandValue(),
-                imageShader.tileModeY.commandValue(),
-                paint.imageAlpha1000(),
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_IMAGE_SHADER,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    cacheKey.highInt(),
+                    cacheKey.lowInt(),
+                    imageShader.image.width,
+                    imageShader.image.height,
+                    imageShader.tileModeX.commandValue(),
+                    imageShader.tileModeY.commandValue(),
+                    paint.imageAlpha1000(),
+                )
+            }
         }
 
         private fun addShaderDescriptorRect(
@@ -2663,7 +2672,7 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("shader")
                 return
             }
-            if (!paint.isSupportedShaderDescriptorPaint(descriptor) || paint.style != PaintingStyle.Fill) {
+            if (!paint.isSupportedShaderDescriptorPaintForBlendLayer(descriptor) || paint.style != PaintingStyle.Fill) {
                 if (paint.style != PaintingStyle.Fill) countUnsupported("paintStyle")
                 return
             }
@@ -2671,17 +2680,19 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("shaderDescriptor")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_RECT_SHADER_REF,
-                paint.recordFlags(),
-                handle.highInt(),
-                handle.lowInt(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                paint.imageAlpha1000(),
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_SHADER_REF,
+                    paint.recordFlags(),
+                    handle.highInt(),
+                    handle.lowInt(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    paint.imageAlpha1000(),
+                )
+            }
         }
 
         fun drawParagraphUtf16(
@@ -3027,6 +3038,32 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
+        private val Paint.isSupportedImagePaintForBlendLayer: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null && tintSrcInColorFilter == null && descriptorColorFilterOrNull(colorFilter) == null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
+
         private val Paint.isSupportedImageShaderPaint: Boolean
             get() {
                 var supported = true
@@ -3053,6 +3090,32 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
+        private val Paint.isSupportedImageShaderPaintForBlendLayer: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader?.jbrSkiaImageShader == null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
+
         private fun Paint.isSupportedShaderDescriptorPaint(descriptor: ShaderDescriptor): Boolean {
             var supported = true
             if (!state.supported) {
@@ -3060,6 +3123,31 @@ object JbrSkiaCommandRecorder {
                 supported = false
             }
             if (blendMode != BlendMode.SrcOver) {
+                countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                supported = false
+            }
+            if (shaderDescriptorOrNull(shader) == null) {
+                countUnsupported("shader")
+                supported = false
+            }
+            if (colorFilter != null && descriptor !is ShaderDescriptor.ColorFiltered) {
+                countUnsupported("colorFilter")
+                supported = false
+            }
+            if (pathEffect != null) {
+                countUnsupported("pathEffect")
+                supported = false
+            }
+            return supported
+        }
+
+        private fun Paint.isSupportedShaderDescriptorPaintForBlendLayer(descriptor: ShaderDescriptor): Boolean {
+            var supported = true
+            if (!state.supported) {
+                countUnsupported("unsupportedScope")
+                supported = false
+            }
+            if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
                 countUnsupported("blendMode_${blendMode.toReasonToken()}")
                 supported = false
             }
