@@ -585,20 +585,25 @@ object JbrSkiaCommandRecorder {
                 state = state.copy(supported = false)
                 return
             }
+            val blendMode = paint.commandBlendMode
             paint.tintSrcInColorFilter?.let {
+                if (blendMode != null) {
+                    saveLayerWithBlendTintSrcInColorFilter(bounds, paint, blendMode, it)
+                    return
+                }
                 saveLayerWithTintSrcInColorFilter(bounds, paint, it)
                 return
             }
-            paint.colorMatrixColorFilter?.let {
-                if (saveLayerWithColorFilterHandle(bounds, paint, it)) {
+            descriptorColorFilterOrNull(paint.colorFilter)?.let {
+                if (blendMode != null) {
+                    if (saveLayerWithBlendColorFilterHandle(bounds, paint, blendMode, it)) {
+                        return
+                    }
+                } else if (saveLayerWithColorFilterHandle(bounds, paint, it)) {
                     return
                 }
             }
-            paint.lightingColorFilter?.let {
-                saveLayerWithColorFilterHandle(bounds, paint, it)
-                return
-            }
-            paint.commandBlendMode?.let {
+            blendMode?.let {
                 saveLayerWithBlendMode(bounds, paint, it)
                 return
             }
@@ -622,6 +627,26 @@ object JbrSkiaCommandRecorder {
                 state.width(bounds.width),
                 state.height(bounds.height),
                 paint.layerAlpha1000(),
+                colorFilter.color.toArgb(),
+                COMMAND_BLEND_MODE_SRC_IN,
+            )
+        }
+
+        fun saveLayerWithBlendTintSrcInColorFilter(
+            bounds: Rect,
+            paint: Paint,
+            blendMode: Int,
+            colorFilter: BlendModeColorFilter,
+        ) {
+            commands.addCommand(
+                COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
+                COMMAND_RECORD_FLAGS_NONE,
+                state.x(bounds.left),
+                state.y(bounds.top),
+                state.width(bounds.width),
+                state.height(bounds.height),
+                paint.layerAlpha1000(),
+                blendMode,
                 colorFilter.color.toArgb(),
                 COMMAND_BLEND_MODE_SRC_IN,
             )
@@ -693,6 +718,28 @@ object JbrSkiaCommandRecorder {
                 state.width(bounds.width),
                 state.height(bounds.height),
                 paint.layerAlpha1000(),
+                handle.highInt(),
+                handle.lowInt(),
+            )
+            return true
+        }
+
+        private fun saveLayerWithBlendColorFilterHandle(
+            bounds: Rect,
+            paint: Paint,
+            blendMode: Int,
+            colorFilter: ColorFilter,
+        ): Boolean {
+            val handle = defineDescriptorColorFilterIfNeeded(colorFilter) ?: return false
+            commands.addCommand(
+                COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF,
+                COMMAND_RECORD_FLAGS_NONE,
+                state.x(bounds.left),
+                state.y(bounds.top),
+                state.width(bounds.width),
+                state.height(bounds.height),
+                paint.layerAlpha1000(),
+                blendMode,
                 handle.highInt(),
                 handle.lowInt(),
             )
