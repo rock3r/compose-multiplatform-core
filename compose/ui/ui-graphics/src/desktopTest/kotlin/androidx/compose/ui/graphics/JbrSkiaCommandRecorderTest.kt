@@ -3432,6 +3432,29 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsShaderDescriptorPaintBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    shader = ColorShader(Color(0xff123456))
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(56, records[0][0])
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 10, 10, 1000, 1), records[1])
+        assertEquals(58, records[2][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[3])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun reusesColorShaderHandleAcrossFrames() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val shader = ColorShader(Color.Red)
@@ -4776,6 +4799,39 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsImagePaintBlendModeInLayerRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            assertTrue(
+                JbrSkiaCommandRecorder.drawImageRect(
+                    image = image,
+                    srcLeft = 0f,
+                    srcTop = 0f,
+                    srcRight = 1f,
+                    srcBottom = 1f,
+                    dstLeft = 10f,
+                    dstTop = 20f,
+                    dstRight = 30f,
+                    dstBottom = 40f,
+                    paint = Paint().apply {
+                        color = Color.White
+                        blendMode = BlendMode.Plus
+                    },
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(15, records[0][0])
+        assertArrayEquals(intArrayOf(50, 36, 0, 10, 20, 20, 20, 1000, 1), records[1])
+        assertEquals(16, records[2][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[3])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun rejectsImagePathEffectInStrictMode() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x44)
@@ -4931,6 +4987,32 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(1, commands.countCommand(34))
         assertTrue(commands.joinToString(), commands.containsSubsequence(34, 56, 1, 2000, 3000, 42000, 33000))
         assertTrue(commands.joinToString(), commands.containsSubsequence(1, 1, 1, 2, 749))
+    }
+
+    @Test
+    fun wrapsImageShaderPaintBlendModeInLayerRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x66)
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 2f,
+                top = 3f,
+                right = 42f,
+                bottom = 33f,
+                paint = Paint().apply {
+                    shader = ImageShader(image, TileMode.Repeated, TileMode.Mirror)
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(15, records[0][0])
+        assertArrayEquals(intArrayOf(50, 36, 0, 2, 3, 40, 30, 1000, 1), records[1])
+        assertEquals(34, records[2][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[3])
+        assertEquals(0, recording.unsupportedCount)
     }
 
     @Test
