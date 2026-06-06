@@ -2804,6 +2804,36 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsLinearGradientPathBlendModeInLayerRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    shader = LinearGradientShader(
+                        from = Offset(1f, 2f),
+                        to = Offset(21f, 12f),
+                        colors = listOf(Color.Red, Color.Blue),
+                    )
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 20, 10, 1000, 1), records[0])
+        assertEquals(28, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesRadialGradientPathRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)
@@ -2969,6 +2999,32 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsLinearGradientRectBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    shader = LinearGradientShader(
+                        from = Offset(1f, 2f),
+                        to = Offset(11f, 12f),
+                        colors = listOf(Color.Red, Color.Blue),
+                    )
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 10, 10, 1000, 1), records[0])
+        assertEquals(24, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesLinearGradientStrokeRectRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
@@ -3001,6 +3057,34 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun wrapsRadialGradientStrokeRectBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 12f
+                    shader = RadialGradientShader(
+                        center = Offset(6f, 7f),
+                        radius = 8f,
+                        colors = listOf(Color.Red, Color.Blue),
+                    )
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, -6, -5, 24, 24, 1000, 1), records[0])
+        assertEquals(37, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
     }
 
     @Test
@@ -3038,6 +3122,33 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun wrapsSweepGradientRoundRectBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    shader = SweepGradientShader(
+                        center = Offset(6f, 7f),
+                        colors = listOf(Color.Red, Color.Blue),
+                    )
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 10, 10, 1000, 1), records[0])
+        assertEquals(31, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
     }
 
     @Test
