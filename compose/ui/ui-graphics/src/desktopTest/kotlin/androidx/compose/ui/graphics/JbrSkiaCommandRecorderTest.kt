@@ -4909,6 +4909,62 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesSaveLayerBlendModeAndTintColorFilterRecord() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.saveLayer(
+                bounds = Rect(1f, 2f, 11f, 12f),
+                paint = Paint().apply {
+                    color = Color.White.copy(alpha = 0.6f)
+                    blendMode = BlendMode.Plus
+                    colorFilter = ColorFilter.tint(Color.Cyan)
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 106, 0, 14, 1, 1,
+                51, 44, 0, 1, 2, 10, 10, 360, 1, Color.Cyan.toArgb(), 2,
+                8, 12, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesSaveLayerBlendModeAndColorMatrixFilterHandleRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val matrix = ColorMatrix().also { it[0, 4] = 64f }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.saveLayer(
+                bounds = Rect(1f, 2f, 11f, 12f),
+                paint = Paint().apply {
+                    color = Color.White.copy(alpha = 0.6f)
+                    blendMode = BlendMode.Plus
+                    colorFilter = ColorFilter.colorMatrix(matrix)
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }!!
+
+        val records = commands.commandRecords()
+        assertEquals(49, records[0][0])
+        assertEquals(2, records[0][5])
+        assertEquals(54, records[1][0])
+        assertEquals(1, records[1][3])
+        assertEquals(2, records[1][4])
+        assertEquals(10, records[1][5])
+        assertEquals(10, records[1][6])
+        assertEquals(360, records[1][7])
+        assertEquals(1, records[1][8])
+        assertEquals(records[0][3], records[1][9])
+        assertEquals(records[0][4], records[1][10])
+        assertEquals(8, records[2][0])
+    }
+
+    @Test
     fun rejectsUnsupportedGraphicsLayerDraw() {
         withStrictCommandRecording {
             val commands = JbrSkiaCommandRecorder.record {
