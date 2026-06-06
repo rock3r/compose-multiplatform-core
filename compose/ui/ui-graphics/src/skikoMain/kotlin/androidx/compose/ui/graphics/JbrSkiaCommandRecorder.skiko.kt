@@ -1252,7 +1252,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun drawVertices(vertices: Vertices, blendMode: BlendMode, paint: Paint): Boolean {
-            if (!paint.isSupportedSolidColor) return false
+            if (!paint.isSupportedSolidColorForBlendLayer) return false
             val commandBlendMode = commandShaderBlendModeOrNull(blendMode) ?: run {
                 countUnsupported("blendMode_${blendMode.toReasonToken()}")
                 return false
@@ -1265,10 +1265,18 @@ object JbrSkiaCommandRecorder {
             val payload = IntArray(vertexCount * 5 + indexCount)
             var payloadIndex = 0
             var pointIndex = 0
+            var minX = Float.POSITIVE_INFINITY
+            var minY = Float.POSITIVE_INFINITY
+            var maxX = Float.NEGATIVE_INFINITY
+            var maxY = Float.NEGATIVE_INFINITY
             while (pointIndex < vertices.positions.size - 1) {
                 val x = vertices.positions[pointIndex]
                 val y = vertices.positions[pointIndex + 1]
                 if (!x.isFinite() || !y.isFinite()) return false
+                minX = minOf(minX, x)
+                minY = minOf(minY, y)
+                maxX = maxOf(maxX, x)
+                maxY = maxOf(maxY, y)
                 payload[payloadIndex++] = state.x(x)
                 payload[payloadIndex++] = state.y(y)
                 pointIndex += 2
@@ -1288,16 +1296,18 @@ object JbrSkiaCommandRecorder {
             for (index in vertices.indices) {
                 payload[payloadIndex++] = index.toInt() and 0xffff
             }
-            commands.addCommand(
-                COMMAND_DRAW_VERTICES,
-                paint.recordFlags(),
-                commandVertexMode,
-                commandBlendMode,
-                paint.color.toArgb(),
-                vertexCount,
-                indexCount,
-                *payload,
-            )
+            withSolidColorBlendLayer(minX, minY, maxX, maxY, paint) {
+                commands.addCommand(
+                    COMMAND_DRAW_VERTICES,
+                    paint.recordFlags(),
+                    commandVertexMode,
+                    commandBlendMode,
+                    paint.color.toArgb(),
+                    vertexCount,
+                    indexCount,
+                    *payload,
+                )
+            }
             return true
         }
 

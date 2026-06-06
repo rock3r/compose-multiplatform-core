@@ -2252,6 +2252,36 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsVerticesPaintBlendModeInLayerRecord() {
+        val vertices = Vertices(
+            vertexMode = VertexMode.Triangles,
+            positions = listOf(Offset(1f, 2f), Offset(11f, 12f), Offset(4f, 20f)),
+            textureCoordinates = listOf(Offset.Zero, Offset(1f, 0f), Offset(0f, 1f)),
+            colors = listOf(Color.Red, Color.Green, Color.Blue),
+            indices = listOf(0, 1, 2),
+        )
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            assertTrue(
+                JbrSkiaCommandRecorder.drawVertices(
+                    vertices = vertices,
+                    blendMode = BlendMode.SrcOver,
+                    paint = Paint().apply {
+                        color = Color.White
+                        blendMode = BlendMode.Plus
+                    },
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 10, 18, 1000, 1), records[0])
+        assertEquals(67, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun recordsCanvasDrawVertices() {
         val vertices = Vertices(
             vertexMode = VertexMode.Triangles,
