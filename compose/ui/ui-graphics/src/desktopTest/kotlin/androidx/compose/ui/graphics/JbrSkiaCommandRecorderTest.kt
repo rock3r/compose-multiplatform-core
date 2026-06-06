@@ -1802,6 +1802,29 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsTintColorFilterBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 3f,
+                top = 4f,
+                right = 13f,
+                bottom = 24f,
+                paint = Paint().apply {
+                    color = Color.Magenta
+                    colorFilter = ColorFilter.tint(Color.Cyan)
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 3, 4, 10, 20, 1000, 1), records[0])
+        assertEquals(42, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesFillRectTintColorFilterHandleRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         withColorFilterHandles {
@@ -1866,6 +1889,36 @@ class JbrSkiaCommandRecorderTest {
             intArrayOf(47, 40, 1, Color.Magenta.toArgb(), commands[9], commands[10], 3, 4, 10, 20),
             commands.copyOfRange(34, 44),
         )
+    }
+
+    @Test
+    fun wrapsColorMatrixFilterHandleBlendModeInLayerRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val matrix = ColorMatrix()
+        matrix[0, 4] = 64f
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 3f,
+                top = 4f,
+                right = 13f,
+                bottom = 24f,
+                paint = Paint().apply {
+                    color = Color.Magenta
+                    colorFilter = ColorFilter.colorMatrix(matrix)
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(49, records[0][0])
+        assertArrayEquals(intArrayOf(50, 36, 0, 3, 4, 10, 20, 1000, 1), records[1])
+        assertEquals(47, records[2][0])
+        assertEquals(records[0][3], records[2][4])
+        assertEquals(records[0][4], records[2][5])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[3])
+        assertEquals(0, recording.unsupportedCount)
     }
 
     @Test

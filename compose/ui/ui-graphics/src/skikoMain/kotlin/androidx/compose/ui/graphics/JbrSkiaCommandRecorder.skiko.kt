@@ -1391,7 +1391,7 @@ object JbrSkiaCommandRecorder {
                 addImageShaderRect(left, top, right, bottom, paint)
                 return
             }
-            if (paint.shader == null && paint.style == PaintingStyle.Fill) {
+            if (paint.shader == null && paint.colorFilter == null && paint.style == PaintingStyle.Fill) {
                 when (paint.blendMode) {
                     BlendMode.Plus -> {
                         addBlendModeFillRect(left, top, right, bottom, paint, COMMAND_BLEND_MODE_PLUS)
@@ -1592,29 +1592,20 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             colorFilter: BlendModeColorFilter,
         ) {
-            if (!state.supported) {
-                countUnsupported("unsupportedScope")
-                return
+            if (!paint.isSupportedFillRectColorFilterForBlendLayer) return
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_COLOR_FILTER,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    colorFilter.color.toArgb(),
+                    COMMAND_BLEND_MODE_SRC_IN,
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
             }
-            if (paint.blendMode != BlendMode.SrcOver) {
-                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
-                return
-            }
-            if (paint.pathEffect != null) {
-                countUnsupported("pathEffect")
-                return
-            }
-            commands.addCommand(
-                COMMAND_FILL_RECT_COLOR_FILTER,
-                paint.recordFlags(),
-                paint.commandColor(),
-                colorFilter.color.toArgb(),
-                COMMAND_BLEND_MODE_SRC_IN,
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-            )
         }
 
         private fun addTintColorFilterHandleFillRect(
@@ -1625,31 +1616,22 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             colorFilter: BlendModeColorFilter,
         ) {
-            if (!state.supported) {
-                countUnsupported("unsupportedScope")
-                return
-            }
-            if (paint.blendMode != BlendMode.SrcOver) {
-                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
-                return
-            }
-            if (paint.pathEffect != null) {
-                countUnsupported("pathEffect")
-                return
-            }
+            if (!paint.isSupportedFillRectColorFilterForBlendLayer) return
             val handle = colorFilter.handleKey()
             defineTintColorFilterIfNeeded(handle, colorFilter)
-            commands.addCommand(
-                COMMAND_FILL_RECT_COLOR_FILTER_REF,
-                paint.recordFlags(),
-                paint.commandColor(),
-                handle.highInt(),
-                handle.lowInt(),
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    handle.highInt(),
+                    handle.lowInt(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            }
         }
 
         private fun defineTintColorFilterIfNeeded(handle: Long, colorFilter: BlendModeColorFilter) {
@@ -1912,18 +1894,7 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             colorFilter: ColorMatrixColorFilter,
         ) {
-            if (!state.supported) {
-                countUnsupported("unsupportedScope")
-                return
-            }
-            if (paint.blendMode != BlendMode.SrcOver) {
-                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
-                return
-            }
-            if (paint.pathEffect != null) {
-                countUnsupported("pathEffect")
-                return
-            }
+            if (!paint.isSupportedFillRectColorFilterForBlendLayer) return
             val matrix = colorFilter.skiaColorMatrixValues()
             if (matrix.any { !java.lang.Float.isFinite(it) }) {
                 countUnsupported("colorMatrixNonfinite")
@@ -1931,17 +1902,19 @@ object JbrSkiaCommandRecorder {
             }
             val handle = matrix.colorMatrixHandleKey()
             defineColorMatrixFilterIfNeeded(handle, matrix)
-            commands.addCommand(
-                COMMAND_FILL_RECT_COLOR_FILTER_REF,
-                paint.recordFlags(),
-                paint.commandColor(),
-                handle.highInt(),
-                handle.lowInt(),
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    handle.highInt(),
+                    handle.lowInt(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            }
         }
 
         private fun defineColorMatrixFilterIfNeeded(handle: Long, matrix: FloatArray) {
@@ -1990,31 +1963,22 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             colorFilter: LightingColorFilter,
         ) {
-            if (!state.supported) {
-                countUnsupported("unsupportedScope")
-                return
-            }
-            if (paint.blendMode != BlendMode.SrcOver) {
-                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
-                return
-            }
-            if (paint.pathEffect != null) {
-                countUnsupported("pathEffect")
-                return
-            }
+            if (!paint.isSupportedFillRectColorFilterForBlendLayer) return
             val handle = colorFilter.lightingHandleKey()
             defineLightingFilterIfNeeded(handle, colorFilter)
-            commands.addCommand(
-                COMMAND_FILL_RECT_COLOR_FILTER_REF,
-                paint.recordFlags(),
-                paint.commandColor(),
-                handle.highInt(),
-                handle.lowInt(),
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    handle.highInt(),
+                    handle.lowInt(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            }
         }
 
         private fun defineLightingFilterIfNeeded(handle: Long, colorFilter: LightingColorFilter) {
@@ -2064,33 +2028,24 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             colorFilter: ColorFilter,
         ) {
-            if (!state.supported) {
-                countUnsupported("unsupportedScope")
-                return
-            }
-            if (paint.blendMode != BlendMode.SrcOver) {
-                countUnsupported("blendMode_${paint.blendMode.toReasonToken()}")
-                return
-            }
-            if (paint.pathEffect != null) {
-                countUnsupported("pathEffect")
-                return
-            }
+            if (!paint.isSupportedFillRectColorFilterForBlendLayer) return
             val handle = defineDescriptorColorFilterIfNeeded(colorFilter) ?: run {
                 countUnsupported("colorFilterDescriptor")
                 return
             }
-            commands.addCommand(
-                COMMAND_FILL_RECT_COLOR_FILTER_REF,
-                paint.recordFlags(),
-                paint.commandColor(),
-                handle.highInt(),
-                handle.lowInt(),
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-            )
+            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+                commands.addCommand(
+                    COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    handle.highInt(),
+                    handle.lowInt(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                )
+            }
         }
 
         fun drawRoundRect(
@@ -2890,6 +2845,24 @@ object JbrSkiaCommandRecorder {
             if (!forceStroke && style != PaintingStyle.Stroke) return 0f
             return (strokeWidth / 2f + 1f).takeIf { it.isFinite() }?.coerceAtLeast(1f) ?: 1f
         }
+
+        private val Paint.isSupportedFillRectColorFilterForBlendLayer: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (pathEffect != null) {
+                    countUnsupported("pathEffect")
+                    supported = false
+                }
+                return supported
+            }
 
         private val Paint.isSupportedDashedSolidColor: Boolean
             get() {
