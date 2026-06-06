@@ -1321,7 +1321,7 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             dashPathEffect: JbrSkiaDashPathEffect,
         ) {
-            if (!paint.isSupportedDashedSolidColor) return
+            if (!paint.isSupportedDashedSolidColorForBlendLayer) return
             val intervals = dashPathEffect.intervals
             if (
                 intervals.size !in 2..16 ||
@@ -1332,22 +1332,31 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("pathEffect")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_LINE_DASH_PATH_EFFECT,
-                paint.recordFlags(),
-                paint.commandColor(),
-                state.x(p1.x),
-                state.y(p1.y),
-                state.x(p2.x),
-                state.y(p2.y),
-                state.stroke(paint.strokeWidth),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                dashPathEffect.phase.fixed1000(),
-                intervals.size,
-                *IntArray(intervals.size) { intervals[it].fixed1000() },
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(
+                left = minOf(p1.x, p2.x) - outset,
+                top = minOf(p1.y, p2.y) - outset,
+                right = maxOf(p1.x, p2.x) + outset,
+                bottom = maxOf(p1.y, p2.y) + outset,
+                paint = paint,
+            ) {
+                commands.addCommand(
+                    COMMAND_STROKE_LINE_DASH_PATH_EFFECT,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    state.x(p1.x),
+                    state.y(p1.y),
+                    state.x(p2.x),
+                    state.y(p2.y),
+                    state.stroke(paint.strokeWidth),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    dashPathEffect.phase.fixed1000(),
+                    intervals.size,
+                    *IntArray(intervals.size) { intervals[it].fixed1000() },
+                )
+            }
         }
 
         fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -1489,7 +1498,8 @@ object JbrSkiaCommandRecorder {
             val y = state.y(top)
             val width = state.width(right - left)
             val height = state.height(bottom - top)
-            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+            val outset = paint.blendLayerOutset()
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
                 when (paint.style) {
                     PaintingStyle.Fill -> commands.addCommand(COMMAND_FILL_RECT, paint.recordFlags(), paint.commandColor(), x, y, width, height, 0)
                     PaintingStyle.Stroke -> {
@@ -1514,7 +1524,7 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             dashPathEffect: JbrSkiaDashPathEffect,
         ) {
-            if (!paint.isSupportedDashedSolidColor) return
+            if (!paint.isSupportedDashedSolidColorForBlendLayer) return
             val intervals = dashPathEffect.intervals
             if (
                 intervals.size !in 2..16 ||
@@ -1525,22 +1535,25 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("pathEffect")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_RECT_DASH_PATH_EFFECT,
-                paint.recordFlags(),
-                paint.commandColor(),
-                state.x(left),
-                state.y(top),
-                state.width(right - left),
-                state.height(bottom - top),
-                state.stroke(paint.strokeWidth),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                dashPathEffect.phase.fixed1000(),
-                intervals.size,
-                *IntArray(intervals.size) { intervals[it].fixed1000() },
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_RECT_DASH_PATH_EFFECT,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    state.x(left),
+                    state.y(top),
+                    state.width(right - left),
+                    state.height(bottom - top),
+                    state.stroke(paint.strokeWidth),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    dashPathEffect.phase.fixed1000(),
+                    intervals.size,
+                    *IntArray(intervals.size) { intervals[it].fixed1000() },
+                )
+            }
         }
 
         private fun addBlendModeFillRect(
@@ -2123,7 +2136,8 @@ object JbrSkiaCommandRecorder {
                     return
                 }
             }
-            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+            val outset = paint.blendLayerOutset()
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
                 commands.addCommand(
                     COMMAND_DRAW_ROUND_RECT,
                     paint.recordFlags(),
@@ -2153,7 +2167,7 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             dashPathEffect: JbrSkiaDashPathEffect,
         ) {
-            if (!paint.isSupportedDashedSolidColor) return
+            if (!paint.isSupportedDashedSolidColorForBlendLayer) return
             val intervals = dashPathEffect.intervals
             if (
                 intervals.size !in 2..16 ||
@@ -2166,24 +2180,27 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("pathEffect")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT,
-                paint.recordFlags(),
-                paint.commandColor(),
-                left.fixed1000(),
-                top.fixed1000(),
-                right.fixed1000(),
-                bottom.fixed1000(),
-                radiusX.fixed1000().coerceAtLeast(0),
-                radiusY.fixed1000().coerceAtLeast(0),
-                state.stroke(paint.strokeWidth),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                dashPathEffect.phase.fixed1000(),
-                intervals.size,
-                *IntArray(intervals.size) { intervals[it].fixed1000() },
-            )
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    radiusX.fixed1000().coerceAtLeast(0),
+                    radiusY.fixed1000().coerceAtLeast(0),
+                    state.stroke(paint.strokeWidth),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    dashPathEffect.phase.fixed1000(),
+                    intervals.size,
+                    *IntArray(intervals.size) { intervals[it].fixed1000() },
+                )
+            }
         }
 
         fun drawOval(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
@@ -2210,7 +2227,8 @@ object JbrSkiaCommandRecorder {
             } else {
                 intArrayOf()
             }
-            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+            val outset = paint.blendLayerOutset()
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
                 commands.addCommand(
                     op,
                     paint.recordFlags(),
@@ -2247,7 +2265,8 @@ object JbrSkiaCommandRecorder {
                     return
                 }
             }
-            withSolidColorBlendLayer(left, top, right, bottom, paint) {
+            val outset = paint.blendLayerOutset()
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
                 commands.addCommand(
                     COMMAND_DRAW_ARC,
                     paint.recordFlags(),
@@ -2334,7 +2353,7 @@ object JbrSkiaCommandRecorder {
             paint: Paint,
             descriptor: JbrSkiaPathEffectDescriptor,
         ) {
-            if (!paint.isSupportedPathEffectDescriptorSolidColor) return
+            if (!paint.isSupportedPathEffectDescriptorSolidColorForBlendLayer) return
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
                 PaintingStyle.Stroke -> COMMAND_PAINT_STYLE_STROKE
@@ -2348,25 +2367,35 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("path")
                 return
             }
-            commands.addCommand(
-                COMMAND_DRAW_PATH_PATH_EFFECT_REF,
-                paint.recordFlags(),
-                style,
-                paint.commandColor(),
-                if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
-                if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
-                if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
-                if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
-                handle.highInt(),
-                handle.lowInt(),
-                path.fillType.commandValue(),
-                pathData.size,
-                *pathData,
-            )
+            val bounds = path.getBounds()
+            val outset = paint.blendLayerOutset()
+            withSolidColorBlendLayer(
+                left = bounds.left - outset,
+                top = bounds.top - outset,
+                right = bounds.right + outset,
+                bottom = bounds.bottom + outset,
+                paint = paint,
+            ) {
+                commands.addCommand(
+                    COMMAND_DRAW_PATH_PATH_EFFECT_REF,
+                    paint.recordFlags(),
+                    style,
+                    paint.commandColor(),
+                    if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
+                    if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
+                    if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
+                    if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
+                    handle.highInt(),
+                    handle.lowInt(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                )
+            }
         }
 
         private fun addDashedPath(path: Path, paint: Paint, dashPathEffect: JbrSkiaDashPathEffect) {
-            if (!paint.isSupportedDashedSolidColor) return
+            if (!paint.isSupportedDashedSolidColorForBlendLayer) return
             val intervals = dashPathEffect.intervals
             if (
                 intervals.size !in 2..16 ||
@@ -2381,21 +2410,31 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("path")
                 return
             }
-            commands.addCommand(
-                COMMAND_STROKE_PATH_DASH_PATH_EFFECT,
-                paint.recordFlags(),
-                paint.commandColor(),
-                state.stroke(paint.strokeWidth),
-                paint.strokeCap.commandValue(),
-                paint.strokeJoin.commandValue(),
-                paint.strokeMiter1000(),
-                dashPathEffect.phase.fixed1000(),
-                intervals.size,
-                *IntArray(intervals.size) { index -> intervals[index].fixed1000() },
-                path.fillType.commandValue(),
-                pathData.size,
-                *pathData,
-            )
+            val bounds = path.getBounds()
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(
+                left = bounds.left - outset,
+                top = bounds.top - outset,
+                right = bounds.right + outset,
+                bottom = bounds.bottom + outset,
+                paint = paint,
+            ) {
+                commands.addCommand(
+                    COMMAND_STROKE_PATH_DASH_PATH_EFFECT,
+                    paint.recordFlags(),
+                    paint.commandColor(),
+                    state.stroke(paint.strokeWidth),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    dashPathEffect.phase.fixed1000(),
+                    intervals.size,
+                    *IntArray(intervals.size) { index -> intervals[index].fixed1000() },
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                )
+            }
         }
 
         private fun definePathEffectIfNeeded(descriptor: JbrSkiaPathEffectDescriptor): Long? {
@@ -2858,6 +2897,28 @@ object JbrSkiaCommandRecorder {
                 return supported
             }
 
+        private val Paint.isSupportedDashedSolidColorForBlendLayer: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                return supported
+            }
+
         private val Paint.tintSrcInColorFilter: BlendModeColorFilter?
             get() =
                 (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
@@ -2891,6 +2952,28 @@ object JbrSkiaCommandRecorder {
                     supported = false
                 }
                 if (blendMode != BlendMode.SrcOver) {
+                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
+                    supported = false
+                }
+                if (shader != null) {
+                    countUnsupported("shader")
+                    supported = false
+                }
+                if (colorFilter != null) {
+                    countUnsupported("colorFilter")
+                    supported = false
+                }
+                return supported
+            }
+
+        private val Paint.isSupportedPathEffectDescriptorSolidColorForBlendLayer: Boolean
+            get() {
+                var supported = true
+                if (!state.supported) {
+                    countUnsupported("unsupportedScope")
+                    supported = false
+                }
+                if (blendMode != BlendMode.SrcOver && commandBlendMode == null) {
                     countUnsupported("blendMode_${blendMode.toReasonToken()}")
                     supported = false
                 }

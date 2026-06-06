@@ -1661,6 +1661,33 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsSolidStrokeRectBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 4f
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 16, 26, 1000, 1), records[0])
+        assertEquals(3, records[1][0])
+        assertEquals(3, records[2][0])
+        assertEquals(3, records[3][0])
+        assertEquals(3, records[4][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[5])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun wrapsSolidRoundRectOvalAndArcBlendModesInLayerRecords() {
         val recording = JbrSkiaCommandRecorder.recordFrame {
             val paint = Paint().apply {
@@ -1682,6 +1709,45 @@ class JbrSkiaCommandRecorderTest {
         assertArrayEquals(intArrayOf(50, 36, 0, 5, 6, 10, 20, 1000, 1), records[6])
         assertEquals(22, records[7][0])
         assertArrayEquals(intArrayOf(8, 12, 0), records[8])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
+    fun wrapsDashedPrimitiveBlendModesInLayerRecords() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+        val paint = Paint().apply {
+            color = Color.Red
+            style = PaintingStyle.Stroke
+            strokeWidth = 4f
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 4f), 0f)
+            blendMode = BlendMode.Plus
+        }
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawLine(Offset(1f, 2f), Offset(11f, 2f), paint)
+            JbrSkiaCommandRecorder.drawRect(1f, 2f, 11f, 22f, paint)
+            JbrSkiaCommandRecorder.drawRoundRect(3f, 4f, 13f, 24f, 2f, 2f, paint)
+            JbrSkiaCommandRecorder.drawPath(path, paint)
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 16, 6, 1000, 1), records[0])
+        assertEquals(43, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 16, 26, 1000, 1), records[3])
+        assertEquals(59, records[4][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[5])
+        assertArrayEquals(intArrayOf(50, 36, 0, 0, 1, 16, 26, 1000, 1), records[6])
+        assertEquals(60, records[7][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[8])
+        assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 26, 16, 1000, 1), records[9])
+        assertEquals(61, records[10][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[11])
         assertEquals(0, recording.unsupportedCount)
     }
 
@@ -2496,6 +2562,37 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands.copyOfRange(15, 41),
         )
+    }
+
+    @Test
+    fun wrapsPathEffectDescriptorBlendModeInLayerRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Green
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    pathEffect = PathEffect.cornerPathEffect(6f)
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(49, records[0][0])
+        assertArrayEquals(intArrayOf(50, 36, 0, -4, -3, 30, 20, 1000, 1), records[1])
+        assertEquals(62, records[2][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[3])
+        assertEquals(0, recording.unsupportedCount)
     }
 
     @Test
