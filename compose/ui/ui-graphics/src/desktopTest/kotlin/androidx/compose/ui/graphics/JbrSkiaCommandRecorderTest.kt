@@ -1640,6 +1640,78 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun wrapsSolidLineBlendModeInLayerRecord() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = Offset(1f, 2f),
+                p2 = Offset(11f, 2f),
+                paint = Paint().apply {
+                    color = Color.Red
+                    strokeWidth = 4f
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 16, 6, 1000, 1), records[0])
+        assertEquals(3, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
+    fun wrapsSolidRoundRectOvalAndArcBlendModesInLayerRecords() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val paint = Paint().apply {
+                color = Color.Green
+                blendMode = BlendMode.Plus
+            }
+            JbrSkiaCommandRecorder.drawRoundRect(1f, 2f, 11f, 22f, 3f, 4f, paint)
+            JbrSkiaCommandRecorder.drawOval(3f, 4f, 13f, 24f, paint)
+            JbrSkiaCommandRecorder.drawArc(5f, 6f, 15f, 26f, 0f, 90f, true, paint)
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 10, 20, 1000, 1), records[0])
+        assertEquals(23, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertArrayEquals(intArrayOf(50, 36, 0, 3, 4, 10, 20, 1000, 1), records[3])
+        assertEquals(4, records[4][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[5])
+        assertArrayEquals(intArrayOf(50, 36, 0, 5, 6, 10, 20, 1000, 1), records[6])
+        assertEquals(22, records[7][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[8])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
+    fun wrapsSolidPathBlendModeInLayerRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Blue
+                    blendMode = BlendMode.Plus
+                },
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, 1, 2, 20, 10, 1000, 1), records[0])
+        assertEquals(21, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun writesFillRectTintColorFilterRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
@@ -2056,6 +2128,28 @@ class JbrSkiaCommandRecorderTest {
             ),
             commands,
         )
+    }
+
+    @Test
+    fun wrapsSolidPointsBlendModeInLayerRecords() {
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val paint = Paint().apply {
+                color = Color.White
+                strokeWidth = 4f
+                blendMode = BlendMode.Plus
+            }
+            JbrSkiaCommandRecorder.drawPoints(listOf(Offset(1f, 2f), Offset(11f, 2f)), paint)
+            JbrSkiaCommandRecorder.drawRawPoints(floatArrayOf(5f, 6f, 15f, 6f), paint)
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 16, 6, 1000, 1), records[0])
+        assertEquals(65, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
+        assertArrayEquals(intArrayOf(50, 36, 0, 2, 3, 16, 6, 1000, 1), records[3])
+        assertEquals(65, records[4][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[5])
+        assertEquals(0, recording.unsupportedCount)
     }
 
     @Test
