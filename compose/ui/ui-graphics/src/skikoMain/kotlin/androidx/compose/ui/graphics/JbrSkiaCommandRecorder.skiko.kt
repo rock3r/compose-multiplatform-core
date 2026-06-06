@@ -2803,32 +2803,6 @@ object JbrSkiaCommandRecorder {
             return true
         }
 
-        private val Paint.isSupportedSolidColor: Boolean
-            get() {
-                var supported = true
-                if (!state.supported) {
-                    countUnsupported("unsupportedScope")
-                    supported = false
-                }
-                if (blendMode != BlendMode.SrcOver) {
-                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                    supported = false
-                }
-                if (shader != null) {
-                    countUnsupported("shader")
-                    supported = false
-                }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
-                    supported = false
-                }
-                if (pathEffect != null) {
-                    countUnsupported("pathEffect")
-                    supported = false
-                }
-                return supported
-            }
-
         private val Paint.isSupportedSolidColorForBlendLayer: Boolean
             get() {
                 var supported = true
@@ -2873,28 +2847,6 @@ object JbrSkiaCommandRecorder {
                 }
                 if (pathEffect != null) {
                     countUnsupported("pathEffect")
-                    supported = false
-                }
-                return supported
-            }
-
-        private val Paint.isSupportedDashedSolidColor: Boolean
-            get() {
-                var supported = true
-                if (!state.supported) {
-                    countUnsupported("unsupportedScope")
-                    supported = false
-                }
-                if (blendMode != BlendMode.SrcOver) {
-                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                    supported = false
-                }
-                if (shader != null) {
-                    countUnsupported("shader")
-                    supported = false
-                }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
                     supported = false
                 }
                 return supported
@@ -2947,28 +2899,6 @@ object JbrSkiaCommandRecorder {
                     (colorFilter == null || descriptorColorFilterOrNull(colorFilter) != null) &&
                     pathEffect == null
 
-        private val Paint.isSupportedPathEffectDescriptorSolidColor: Boolean
-            get() {
-                var supported = true
-                if (!state.supported) {
-                    countUnsupported("unsupportedScope")
-                    supported = false
-                }
-                if (blendMode != BlendMode.SrcOver) {
-                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                    supported = false
-                }
-                if (shader != null) {
-                    countUnsupported("shader")
-                    supported = false
-                }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
-                    supported = false
-                }
-                return supported
-            }
-
         private val Paint.isSupportedPathEffectDescriptorSolidColorForBlendLayer: Boolean
             get() {
                 var supported = true
@@ -2994,32 +2924,6 @@ object JbrSkiaCommandRecorder {
         private val Paint.commandBlendMode: Int?
             get() = commandBlendModeOrNull(blendMode)
 
-        private val Paint.isSupportedImagePaint: Boolean
-            get() {
-                var supported = true
-                if (!state.supported) {
-                    countUnsupported("unsupportedScope")
-                    supported = false
-                }
-                if (blendMode != BlendMode.SrcOver) {
-                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                    supported = false
-                }
-                if (shader != null) {
-                    countUnsupported("shader")
-                    supported = false
-                }
-                if (colorFilter != null && tintSrcInColorFilter == null && descriptorColorFilterOrNull(colorFilter) == null) {
-                    countUnsupported("colorFilter")
-                    supported = false
-                }
-                if (pathEffect != null) {
-                    countUnsupported("pathEffect")
-                    supported = false
-                }
-                return supported
-            }
-
         private val Paint.isSupportedImagePaintForBlendLayer: Boolean
             get() {
                 var supported = true
@@ -3036,32 +2940,6 @@ object JbrSkiaCommandRecorder {
                     supported = false
                 }
                 if (colorFilter != null && tintSrcInColorFilter == null && descriptorColorFilterOrNull(colorFilter) == null) {
-                    countUnsupported("colorFilter")
-                    supported = false
-                }
-                if (pathEffect != null) {
-                    countUnsupported("pathEffect")
-                    supported = false
-                }
-                return supported
-            }
-
-        private val Paint.isSupportedImageShaderPaint: Boolean
-            get() {
-                var supported = true
-                if (!state.supported) {
-                    countUnsupported("unsupportedScope")
-                    supported = false
-                }
-                if (blendMode != BlendMode.SrcOver) {
-                    countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                    supported = false
-                }
-                if (shader?.jbrSkiaImageShader == null) {
-                    countUnsupported("shader")
-                    supported = false
-                }
-                if (colorFilter != null) {
                     countUnsupported("colorFilter")
                     supported = false
                 }
@@ -3097,31 +2975,6 @@ object JbrSkiaCommandRecorder {
                 }
                 return supported
             }
-
-        private fun Paint.isSupportedShaderDescriptorPaint(descriptor: ShaderDescriptor): Boolean {
-            var supported = true
-            if (!state.supported) {
-                countUnsupported("unsupportedScope")
-                supported = false
-            }
-            if (blendMode != BlendMode.SrcOver) {
-                countUnsupported("blendMode_${blendMode.toReasonToken()}")
-                supported = false
-            }
-            if (shaderDescriptorOrNull(shader) == null) {
-                countUnsupported("shader")
-                supported = false
-            }
-            if (colorFilter != null && descriptor !is ShaderDescriptor.ColorFiltered) {
-                countUnsupported("colorFilter")
-                supported = false
-            }
-            if (pathEffect != null) {
-                countUnsupported("pathEffect")
-                supported = false
-            }
-            return supported
-        }
 
         private fun Paint.isSupportedShaderDescriptorPaintForBlendLayer(descriptor: ShaderDescriptor): Boolean {
             var supported = true
