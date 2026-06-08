@@ -215,6 +215,76 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingRejectsMissingChildCommands() {
+        withStrictCommandRecording {
+            val recording = JbrSkiaCommandRecorder.recordFrame {
+                assertFalse(
+                    replaySimpleRecordedLayer(
+                        JbrSkiaCommandRecording(
+                            commands = null,
+                            commandWordCount = 0,
+                            unsupportedCount = 0,
+                            imageDefineCount = 0,
+                            imageRefCount = 0,
+                            textCommandCount = 0,
+                            paragraphTextCommandCount = 0,
+                            imageCacheClearCount = 0,
+                            imageCacheEvictCount = 0,
+                        )
+                    )
+                )
+            }
+
+            assertNull(recording.commands)
+            assertEquals(1, recording.unsupportedCount)
+        }
+    }
+
+    @Test
+    fun nestedRecordingRejectsChildUnsupportedCount() {
+        withStrictCommandRecording {
+            val recording = JbrSkiaCommandRecorder.recordFrame {
+                val nested = simpleNestedRecording()
+
+                assertFalse(replaySimpleRecordedLayer(nested.copy(unsupportedCount = 1)))
+            }
+
+            assertNull(recording.commands)
+            assertEquals(1, recording.unsupportedCount)
+        }
+    }
+
+    @Test
+    fun nestedRecordingRejectsShortChildHeader() {
+        withStrictCommandRecording {
+            val recording = JbrSkiaCommandRecorder.recordFrame {
+                val nested = simpleNestedRecording()
+
+                assertFalse(replaySimpleRecordedLayer(nested.copy(commands = nested.commands!!.copyOf(5))))
+            }
+
+            assertNull(recording.commands)
+            assertEquals(1, recording.unsupportedCount)
+        }
+    }
+
+    @Test
+    fun nestedRecordingRejectsMismatchedChildHeader() {
+        withStrictCommandRecording {
+            val recording = JbrSkiaCommandRecorder.recordFrame {
+                val nested = simpleNestedRecording()
+                val commands = nested.commands!!.copyOf()
+                commands[3] += 1
+
+                assertFalse(replaySimpleRecordedLayer(nested.copy(commands = commands)))
+            }
+
+            assertNull(recording.commands)
+            assertEquals(1, recording.unsupportedCount)
+        }
+    }
+
+    @Test
     fun nestedRecordingReplaysLayerMatrixTransformBeforeSaveLayer() {
         val matrix = Matrix().apply {
             values[Matrix.ScaleX] = 1.1f
@@ -5635,6 +5705,39 @@ class JbrSkiaCommandRecorderTest {
             paint = Paint(),
         )
     }
+
+    private fun simpleNestedRecording(): JbrSkiaCommandRecording =
+        JbrSkiaCommandRecorder.recordNested {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+        }
+
+    private fun replaySimpleRecordedLayer(recording: JbrSkiaCommandRecording): Boolean =
+        JbrSkiaCommandRecorder.replayRecordedLayer(
+            recording = recording,
+            left = 100f,
+            top = 200f,
+            width = 30f,
+            height = 40f,
+            pivotX = 15f,
+            pivotY = 20f,
+            alpha = 0.5f,
+            scaleX = 1f,
+            scaleY = 1f,
+            rotationZ = 0f,
+            translationX = 0f,
+            translationY = 0f,
+            clipRect = null,
+            clipPath = null,
+            blendMode = null,
+        )
 
     private fun replayRedLayerWithImageFilter(imageFilter: JbrSkiaCommandRecorder.ImageFilterDescriptor) {
         val nested = JbrSkiaCommandRecorder.recordNested {
