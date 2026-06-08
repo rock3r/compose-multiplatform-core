@@ -2815,6 +2815,74 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsLinearGradientWithInvalidPointsInStrictMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        shader = LinearGradientShader(
+                            from = Offset(Float.NaN, 2f),
+                            to = Offset(11f, 12f),
+                            colors = listOf(Color.Red, Color.Blue),
+                        )
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
+    fun rejectsRadialGradientWithInvalidGeometryInStrictMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        shader = RadialGradientShader(
+                            center = Offset(6f, 7f),
+                            radius = Float.NaN,
+                            colors = listOf(Color.Red, Color.Blue),
+                        )
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
+    fun rejectsSweepGradientWithInvalidGeometryInStrictMode() {
+        withStrictCommandRecording {
+            val commands = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    paint = Paint().apply {
+                        shader = SweepGradientShader(
+                            center = Offset(Float.NaN, 7f),
+                            colors = listOf(Color.Red, Color.Blue),
+                        )
+                    },
+                )
+            }
+
+            assertNull(commands)
+        }
+    }
+
+    @Test
     fun writesLinearGradientPathRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)

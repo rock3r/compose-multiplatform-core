@@ -107,16 +107,20 @@ internal object SkikoGraphics : PlatformGraphics {
         validateColorStops(colors, colorStops)
         return Shader(
             SkikoShader(
-                skiaShader = SkShader.makeLinearGradient(
-                    from.x,
-                    from.y,
-                    to.x,
-                    to.y,
-                    colors.toSkiaGradient(
-                        colorStops = colorStops,
-                        tileMode = tileMode,
-                    ),
-                ),
+                skiaShader = if (from.x.isFinite() && from.y.isFinite() && to.x.isFinite() && to.y.isFinite()) {
+                    SkShader.makeLinearGradient(
+                        from.x,
+                        from.y,
+                        to.x,
+                        to.y,
+                        colors.toSkiaGradient(
+                            colorStops = colorStops,
+                            tileMode = tileMode,
+                        ),
+                    )
+                } else {
+                    fallbackInvalidGradientShader(colors)
+                },
                 jbrSkiaLinearGradient = JbrSkiaLinearGradientShader(
                     from = from,
                     to = to,
@@ -138,15 +142,19 @@ internal object SkikoGraphics : PlatformGraphics {
         validateColorStops(colors, colorStops)
         return Shader(
             SkikoShader(
-                skiaShader = SkShader.makeRadialGradient(
-                    center.x,
-                    center.y,
-                    radius,
-                    colors.toSkiaGradient(
-                        colorStops = colorStops,
-                        tileMode = tileMode,
-                    ),
-                ),
+                skiaShader = if (center.x.isFinite() && center.y.isFinite() && radius.isFinite() && radius > 0f) {
+                    SkShader.makeRadialGradient(
+                        center.x,
+                        center.y,
+                        radius,
+                        colors.toSkiaGradient(
+                            colorStops = colorStops,
+                            tileMode = tileMode,
+                        ),
+                    )
+                } else {
+                    fallbackInvalidGradientShader(colors)
+                },
                 jbrSkiaRadialGradient = JbrSkiaRadialGradientShader(
                     center = center,
                     radius = radius,
@@ -166,11 +174,15 @@ internal object SkikoGraphics : PlatformGraphics {
         validateColorStops(colors, colorStops)
         return Shader(
             SkikoShader(
-                skiaShader = SkShader.makeSweepGradient(
-                    center.x,
-                    center.y,
-                    colors.toSkiaGradient(colorStops = colorStops),
-                ),
+                skiaShader = if (center.x.isFinite() && center.y.isFinite()) {
+                    SkShader.makeSweepGradient(
+                        center.x,
+                        center.y,
+                        colors.toSkiaGradient(colorStops = colorStops),
+                    )
+                } else {
+                    fallbackInvalidGradientShader(colors)
+                },
                 jbrSkiaSweepGradient = JbrSkiaSweepGradientShader(
                     center = center,
                     colors = colors,
@@ -348,6 +360,9 @@ internal object SkikoGraphics : PlatformGraphics {
             jbrSkiaPathEffectDescriptor = JbrSkiaPathEffectDescriptor.Stamped(shape, advance, phase, style),
         )
 }
+
+private fun fallbackInvalidGradientShader(colors: List<Color>): SkShader =
+    SkShader.makeColor(colors.firstOrNull()?.toArgb() ?: Color.Transparent.toArgb())
 
 @OptIn(InternalComposeUiApi::class)
 private val Shader.hasJbrSkiaShaderMetadata: Boolean
