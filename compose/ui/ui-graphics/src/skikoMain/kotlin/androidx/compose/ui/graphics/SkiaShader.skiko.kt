@@ -269,16 +269,20 @@ internal actual fun ActualLinearGradientShader(
 ): Shader {
     validateColorStops(colors, colorStops)
     return Shader(
-        internalSkiaShader = SkShader.makeLinearGradient(
-            from.x,
-            from.y,
-            to.x,
-            to.y,
-            colors.toSkiaGradient(
-                colorStops = colorStops,
-                tileMode = tileMode
+        internalSkiaShader = if (from.x.isFinite() && from.y.isFinite() && to.x.isFinite() && to.y.isFinite()) {
+            SkShader.makeLinearGradient(
+                from.x,
+                from.y,
+                to.x,
+                to.y,
+                colors.toSkiaGradient(
+                    colorStops = colorStops,
+                    tileMode = tileMode
+                )
             )
-        ),
+        } else {
+            fallbackInvalidGradientShader(colors)
+        },
         jbrSkiaLinearGradient = JbrSkiaLinearGradientShader(
             from = from,
             to = to,
@@ -298,15 +302,19 @@ internal actual fun ActualRadialGradientShader(
 ): Shader {
     validateColorStops(colors, colorStops)
     return Shader(
-        internalSkiaShader = SkShader.makeRadialGradient(
-            center.x,
-            center.y,
-            radius,
-            colors.toSkiaGradient(
-                colorStops = colorStops,
-                tileMode = tileMode
+        internalSkiaShader = if (center.x.isFinite() && center.y.isFinite() && radius.isFinite() && radius > 0f) {
+            SkShader.makeRadialGradient(
+                center.x,
+                center.y,
+                radius,
+                colors.toSkiaGradient(
+                    colorStops = colorStops,
+                    tileMode = tileMode
+                )
             )
-        ),
+        } else {
+            fallbackInvalidGradientShader(colors)
+        },
         jbrSkiaRadialGradient = JbrSkiaRadialGradientShader(
             center = center,
             radius = radius,
@@ -324,11 +332,15 @@ internal actual fun ActualSweepGradientShader(
 ): Shader {
     validateColorStops(colors, colorStops)
     return Shader(
-        internalSkiaShader = SkShader.makeSweepGradient(
-            center.x,
-            center.y,
-            colors.toSkiaGradient(colorStops = colorStops)
-        ),
+        internalSkiaShader = if (center.x.isFinite() && center.y.isFinite()) {
+            SkShader.makeSweepGradient(
+                center.x,
+                center.y,
+                colors.toSkiaGradient(colorStops = colorStops)
+            )
+        } else {
+            fallbackInvalidGradientShader(colors)
+        },
         jbrSkiaSweepGradient = JbrSkiaSweepGradientShader(
             center = center,
             colors = colors,
@@ -336,6 +348,9 @@ internal actual fun ActualSweepGradientShader(
         ),
     )
 }
+
+private fun fallbackInvalidGradientShader(colors: List<Color>): SkShader =
+    SkShader.makeColor(colors.firstOrNull()?.toArgb() ?: Color.Transparent.toArgb())
 
 internal actual fun ActualImageShader(
     image: ImageBitmap,
