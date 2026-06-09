@@ -303,6 +303,9 @@ internal object SkikoGraphics : PlatformGraphics {
         remappedValues[9] *= (1f / 255f)
         remappedValues[14] *= (1f / 255f)
         remappedValues[19] *= (1f / 255f)
+        if (remappedValues.any { !it.isFinite() }) {
+            return SkikoColorFilter(SkColorFilter.makeLighting(0xFFFFFFFF.toInt(), 0x00000000))
+        }
         return SkikoColorFilter(SkColorFilter.makeMatrix(SkColorMatrix(remappedValues)))
     }
 
