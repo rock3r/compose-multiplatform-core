@@ -117,6 +117,10 @@ internal actual fun actualColorMatrixColorFilter(colorMatrix: ColorMatrix): Nati
     remappedValues[14] *= (1f / 255f)
     remappedValues[19] *= (1f / 255f)
 
+    if (remappedValues.any { !it.isFinite() }) {
+        return SkColorFilter.makeLighting(0xFFFFFFFF.toInt(), 0x00000000)
+    }
+
     return SkColorFilter.makeMatrix(
         SkColorMatrix(remappedValues)
     )

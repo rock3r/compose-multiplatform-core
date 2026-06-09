@@ -1962,6 +1962,30 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsNonfiniteFillRectColorMatrixFilterBeforeReplay() {
+        withStrictCommandRecording {
+            val matrix = ColorMatrix()
+            matrix[0, 0] = Float.NaN
+
+            val recording = JbrSkiaCommandRecorder.recordFrame {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 3f,
+                    top = 4f,
+                    right = 13f,
+                    bottom = 24f,
+                    paint = Paint().apply {
+                        color = Color.Magenta
+                        colorFilter = ColorFilter.colorMatrix(matrix)
+                    },
+                )
+            }
+
+            assertNull(recording.commands)
+            assertEquals(1, recording.unsupportedCount)
+        }
+    }
+
+    @Test
     fun wrapsColorMatrixFilterHandleBlendModeInLayerRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val matrix = ColorMatrix()
