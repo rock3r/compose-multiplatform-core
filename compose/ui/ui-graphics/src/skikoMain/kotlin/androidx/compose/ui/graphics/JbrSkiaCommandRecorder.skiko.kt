@@ -2503,11 +2503,11 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addLinearGradientPath(path: Path, paint: Paint) {
-            val gradientPayload = paint.linearGradientPayload() ?: return
             if (paint.style != PaintingStyle.Fill) {
                 countUnsupported("linearGradientPathPaint")
                 return
             }
+            val gradientPayload = paint.linearGradientPayload() ?: return
             val pathData = path.commandData() ?: run {
                 countUnsupported("linearGradientPath")
                 return
@@ -2526,11 +2526,11 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addRadialGradientPath(path: Path, paint: Paint) {
-            val gradientPayload = paint.radialGradientPayload() ?: return
             if (paint.style != PaintingStyle.Fill) {
                 countUnsupported("radialGradientPathPaint")
                 return
             }
+            val gradientPayload = paint.radialGradientPayload() ?: return
             val pathData = path.commandData() ?: run {
                 countUnsupported("radialGradientPath")
                 return
@@ -2549,11 +2549,11 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addSweepGradientPath(path: Path, paint: Paint) {
-            val gradientPayload = paint.sweepGradientPayload() ?: return
             if (paint.style != PaintingStyle.Fill) {
                 countUnsupported("sweepGradientPathPaint")
                 return
             }
+            val gradientPayload = paint.sweepGradientPayload() ?: return
             val pathData = path.commandData() ?: run {
                 countUnsupported("sweepGradientPath")
                 return
