@@ -3182,6 +3182,29 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun rejectsUnknownRoundRectPaintStyleInStrictMode() {
+        withStrictCommandRecording {
+            val recording = JbrSkiaCommandRecorder.recordFrame {
+                JbrSkiaCommandRecorder.drawRoundRect(
+                    left = 1f,
+                    top = 2f,
+                    right = 11f,
+                    bottom = 12f,
+                    radiusX = 3f,
+                    radiusY = 4f,
+                    paint = Paint().apply {
+                        color = Color.Blue
+                        style = PaintingStyle(2)
+                    },
+                )
+            }
+
+            assertNull(recording.commands)
+            assertEquals(1, recording.unsupportedCount)
+        }
+    }
+
+    @Test
     fun writesLinearGradientRectRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
