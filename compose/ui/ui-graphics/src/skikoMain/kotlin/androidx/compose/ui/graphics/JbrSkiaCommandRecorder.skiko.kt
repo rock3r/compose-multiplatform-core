@@ -78,6 +78,7 @@ data class JbrSkiaCommandRecording(
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
+    private const val MAX_COMMAND_IMAGE_DIMENSION = 4096
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
     private const val MAX_DEFINED_SHADER_HANDLES = 1024
@@ -2686,8 +2687,8 @@ object JbrSkiaCommandRecorder {
             if (!paint.isSupportedImagePaintForBlendLayer ||
                 image.width <= 0 ||
                 image.height <= 0 ||
-                image.width > 2048 ||
-                image.height > 2048
+                image.width > MAX_COMMAND_IMAGE_DIMENSION ||
+                image.height > MAX_COMMAND_IMAGE_DIMENSION
             ) {
                 return false
             }
@@ -2748,8 +2749,8 @@ object JbrSkiaCommandRecorder {
             }
             if (imageShader.image.width <= 0 ||
                 imageShader.image.height <= 0 ||
-                imageShader.image.width > 2048 ||
-                imageShader.image.height > 2048
+                imageShader.image.width > MAX_COMMAND_IMAGE_DIMENSION ||
+                imageShader.image.height > MAX_COMMAND_IMAGE_DIMENSION
             ) {
                 countUnsupported("imageShaderImage")
                 return
@@ -2790,8 +2791,8 @@ object JbrSkiaCommandRecorder {
             }
             if (imageShader.image.width <= 0 ||
                 imageShader.image.height <= 0 ||
-                imageShader.image.width > 2048 ||
-                imageShader.image.height > 2048
+                imageShader.image.width > MAX_COMMAND_IMAGE_DIMENSION ||
+                imageShader.image.height > MAX_COMMAND_IMAGE_DIMENSION
             ) {
                 countUnsupported("imageShaderImage")
                 return
@@ -3618,7 +3619,14 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun JbrSkiaImageShader.imageShaderDescriptorPayload(): IntArray? {
-            if (image.width <= 0 || image.height <= 0 || image.width > 2048 || image.height > 2048) return null
+            if (
+                image.width <= 0 ||
+                image.height <= 0 ||
+                image.width > MAX_COMMAND_IMAGE_DIMENSION ||
+                image.height > MAX_COMMAND_IMAGE_DIMENSION
+            ) {
+                return null
+            }
             val cacheKey = defineImageIfNeeded(image) ?: return null
             imageRefCount++
             return intArrayOf(

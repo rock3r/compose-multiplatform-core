@@ -5551,6 +5551,32 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesLargeImageShaderRectRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = ImageBitmap(2049, 1)
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 2f,
+                top = 3f,
+                right = 42f,
+                bottom = 33f,
+                paint = Paint().apply {
+                    shader = ImageShader(image, TileMode.Repeated, TileMode.Mirror)
+                },
+            )
+        }
+
+        val records = requireNotNull(recording.commands).commandRecords()
+        assertEquals(0, recording.unsupportedCount)
+        assertEquals(15, records[0][0])
+        assertEquals(34, records[1][0])
+        assertEquals(2049, records[0][5])
+        assertEquals(1, records[0][6])
+        assertTrue(records[1].containsSubsequence(2049, 1))
+    }
+
+    @Test
     fun wrapsImageShaderPaintBlendModeInLayerRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x66)
