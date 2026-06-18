@@ -3180,10 +3180,6 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("colorFilter")
                     supported = false
                 }
-                if (pathEffect != null) {
-                    countUnsupported("pathEffect")
-                    supported = false
-                }
                 return supported
             }
 

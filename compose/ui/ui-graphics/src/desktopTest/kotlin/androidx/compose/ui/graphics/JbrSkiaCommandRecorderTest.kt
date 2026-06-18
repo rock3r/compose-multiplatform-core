@@ -5388,7 +5388,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun rejectsImagePathEffectInStrictMode() {
+    fun writesImagePathEffectRecordInStrictMode() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x44)
 
@@ -5410,7 +5410,12 @@ class JbrSkiaCommandRecorderTest {
                 )
             }
 
-            assertNull(commands)
+            assertNotNull(commands)
+            val nonNullCommands = requireNotNull(commands)
+            val records = nonNullCommands.commandRecords()
+            assertEquals(15, records[0][0])
+            assertEquals(16, records[1][0])
+            assertEquals(68, records[1][1])
         }
     }
 
