@@ -3019,6 +3019,50 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesLinearGradientStrokePathRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    alpha = 0.5f
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    shader = LinearGradientShader(
+                        from = Offset(1f, 2f),
+                        to = Offset(21f, 12f),
+                        colors = listOf(Color.Red, Color.Blue),
+                        colorStops = listOf(0.25f, 0.75f),
+                        tileMode = TileMode.Mirror,
+                    )
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 106, 0, 32, 1, 1,
+                68, 128, 1, 8000, 0, 1, 0, 0, 13,
+                0, 1000, 2000,
+                1, 11000, 12000,
+                1, 21000, 2000,
+                1, 1000, 2000,
+                4,
+                1000, 2000, 21000, 12000, 2, 2,
+                Color.Red.copy(alpha = 0.5f).toArgb(), 250,
+                Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun wrapsLinearGradientPathBlendModeInLayerRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)
@@ -3091,6 +3135,50 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesRadialGradientStrokePathRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    alpha = 0.5f
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    shader = RadialGradientShader(
+                        center = Offset(11f, 7f),
+                        radius = 13f,
+                        colors = listOf(Color.Red, Color.Blue),
+                        colorStops = listOf(0.25f, 0.75f),
+                        tileMode = TileMode.Mirror,
+                    )
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 106, 0, 31, 1, 1,
+                69, 124, 1, 8000, 0, 1, 0, 0, 13,
+                0, 1000, 2000,
+                1, 11000, 12000,
+                1, 21000, 2000,
+                1, 1000, 2000,
+                4,
+                11000, 7000, 13000, 2, 2,
+                Color.Red.copy(alpha = 0.5f).toArgb(), 250,
+                Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun writesSweepGradientPathRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)
@@ -3117,6 +3205,48 @@ class JbrSkiaCommandRecorderTest {
             intArrayOf(
                 1246972723, 106, 0, 25, 1, 1,
                 32, 100, 1, 0, 13,
+                0, 1000, 2000,
+                1, 11000, 12000,
+                1, 21000, 2000,
+                1, 1000, 2000,
+                4,
+                11000, 7000, 2,
+                Color.Red.copy(alpha = 0.5f).toArgb(), 250,
+                Color.Blue.copy(alpha = 0.5f).toArgb(), 750,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesSweepGradientStrokePathRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    alpha = 0.5f
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 8f
+                    shader = SweepGradientShader(
+                        center = Offset(11f, 7f),
+                        colors = listOf(Color.Red, Color.Blue),
+                        colorStops = listOf(0.25f, 0.75f),
+                    )
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 106, 0, 29, 1, 1,
+                70, 116, 1, 8000, 0, 1, 0, 0, 13,
                 0, 1000, 2000,
                 1, 11000, 12000,
                 1, 21000, 2000,
