@@ -3841,7 +3841,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun rejectsShaderDescriptorStrokeRectInStrictMode() {
+    fun writesShaderDescriptorStrokeRectInStrictMode() {
         withStrictCommandRecording {
             val commands = JbrSkiaCommandRecorder.record {
                 JbrSkiaCommandRecorder.drawRect(
@@ -3857,12 +3857,25 @@ class JbrSkiaCommandRecorderTest {
                 )
             }
 
-            assertNull(commands)
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(56))
+            assertEquals(1, commands.countCommand(71))
+            val descriptor = commands.commandRecords().single { it[0] == 56 }
+            assertEquals(9, descriptor[5])
+            assertEquals(1, descriptor[6])
+            assertEquals(1, descriptor[7])
+            assertEquals(Color.Red.toArgb(), descriptor[8])
+            val stroke = commands.commandRecords().single { it[0] == 71 }
+            assertArrayEquals(
+                intArrayOf(71, 56, 1, stroke[3], stroke[4], 1000, 2000, 11000, 12000, 2000, 0, 1, 0, 1000),
+                stroke,
+            )
         }
     }
 
     @Test
-    fun rejectsImageShaderStrokeRectInStrictMode() {
+    fun writesImageShaderStrokeRectInStrictMode() {
         withStrictCommandRecording {
             val image = onePixelImage(0x22)
             val commands = JbrSkiaCommandRecorder.record {
@@ -3879,7 +3892,15 @@ class JbrSkiaCommandRecorderTest {
                 )
             }
 
-            assertNull(commands)
+            assertNotNull(commands)
+            commands!!
+            assertEquals(1, commands.countCommand(15))
+            assertEquals(1, commands.countCommand(72))
+            val stroke = commands.commandRecords().single { it[0] == 72 }
+            assertArrayEquals(
+                intArrayOf(72, 72, 1, 1000, 2000, 11000, 12000, stroke[7], stroke[8], 1, 1, 1, 2, 1000, 2000, 0, 1, 0),
+                stroke,
+            )
         }
     }
 

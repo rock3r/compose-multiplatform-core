@@ -2736,6 +2736,10 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("shader")
                 return
             }
+            if (paint.style == PaintingStyle.Stroke) {
+                addImageShaderStrokeRect(left, top, right, bottom, paint, imageShader)
+                return
+            }
             if (!paint.isSupportedImageShaderPaintForBlendLayer ||
                 paint.style != PaintingStyle.Fill
             ) {
@@ -2771,6 +2775,53 @@ object JbrSkiaCommandRecorder {
             }
         }
 
+        private fun addImageShaderStrokeRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            imageShader: JbrSkiaImageShader,
+        ) {
+            if (!paint.isSupportedImageShaderPaintForBlendLayer) return
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("imageShaderStrokeWidth")
+                return
+            }
+            if (imageShader.image.width <= 0 ||
+                imageShader.image.height <= 0 ||
+                imageShader.image.width > 2048 ||
+                imageShader.image.height > 2048
+            ) {
+                countUnsupported("imageShaderImage")
+                return
+            }
+            val cacheKey = defineImageIfNeeded(imageShader.image) ?: return
+            imageRefCount++
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_RECT_IMAGE_SHADER,
+                    paint.recordFlags(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    cacheKey.highInt(),
+                    cacheKey.lowInt(),
+                    imageShader.image.width,
+                    imageShader.image.height,
+                    imageShader.tileModeX.commandValue(),
+                    imageShader.tileModeY.commandValue(),
+                    paint.imageAlpha1000(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                )
+            }
+        }
+
         private fun addShaderDescriptorRect(
             left: Float,
             top: Float,
@@ -2783,12 +2834,19 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("shader")
                 return
             }
-            if (!paint.isSupportedShaderDescriptorPaintForBlendLayer(descriptor) || paint.style != PaintingStyle.Fill) {
-                if (paint.style != PaintingStyle.Fill) countUnsupported("paintStyle")
+            if (!paint.isSupportedShaderDescriptorPaintForBlendLayer(descriptor)) {
                 return
             }
             val handle = defineShaderIfNeeded(descriptor) ?: run {
                 countUnsupported("shaderDescriptor")
+                return
+            }
+            if (paint.style == PaintingStyle.Stroke) {
+                addShaderDescriptorStrokeRect(left, top, right, bottom, paint, handle)
+                return
+            }
+            if (paint.style != PaintingStyle.Fill) {
+                countUnsupported("paintStyle")
                 return
             }
             withSolidColorBlendLayer(left, top, right, bottom, paint) {
@@ -2801,6 +2859,38 @@ object JbrSkiaCommandRecorder {
                     top.fixed1000(),
                     right.fixed1000(),
                     bottom.fixed1000(),
+                    paint.imageAlpha1000(),
+                )
+            }
+        }
+
+        private fun addShaderDescriptorStrokeRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+            handle: Long,
+        ) {
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("shaderDescriptorStrokeWidth")
+                return
+            }
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
+                commands.addCommand(
+                    COMMAND_STROKE_RECT_SHADER_REF,
+                    paint.recordFlags(),
+                    handle.highInt(),
+                    handle.lowInt(),
+                    left.fixed1000(),
+                    top.fixed1000(),
+                    right.fixed1000(),
+                    bottom.fixed1000(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
                     paint.imageAlpha1000(),
                 )
             }
@@ -4356,6 +4446,8 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_PATH_LINEAR_GRADIENT = 68
     private const val COMMAND_STROKE_PATH_RADIAL_GRADIENT = 69
     private const val COMMAND_STROKE_PATH_SWEEP_GRADIENT = 70
+    private const val COMMAND_STROKE_RECT_SHADER_REF = 71
+    private const val COMMAND_STROKE_RECT_IMAGE_SHADER = 72
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
