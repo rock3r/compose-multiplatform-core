@@ -2489,6 +2489,10 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun addLinearGradientPath(path: Path, paint: Paint) {
+            if (paint.style == PaintingStyle.Stroke) {
+                addLinearGradientStrokePath(path, paint)
+                return
+            }
             if (paint.style != PaintingStyle.Fill) {
                 countUnsupported("linearGradientPathPaint")
                 return
@@ -2511,7 +2515,45 @@ object JbrSkiaCommandRecorder {
             }
         }
 
+        private fun addLinearGradientStrokePath(path: Path, paint: Paint) {
+            val gradientPayload = paint.linearGradientPayload(requiredStyle = PaintingStyle.Stroke) ?: return
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("linearGradientStrokeWidth")
+                return
+            }
+            val pathData = path.commandData() ?: run {
+                countUnsupported("linearGradientPath")
+                return
+            }
+            val bounds = path.getBounds()
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(
+                bounds.left - outset,
+                bounds.top - outset,
+                bounds.right + outset,
+                bounds.bottom + outset,
+                paint,
+            ) {
+                commands.addCommand(
+                    COMMAND_STROKE_PATH_LINEAR_GRADIENT,
+                    paint.recordFlags(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                    *gradientPayload,
+                )
+            }
+        }
+
         private fun addRadialGradientPath(path: Path, paint: Paint) {
+            if (paint.style == PaintingStyle.Stroke) {
+                addRadialGradientStrokePath(path, paint)
+                return
+            }
             if (paint.style != PaintingStyle.Fill) {
                 countUnsupported("radialGradientPathPaint")
                 return
@@ -2534,7 +2576,45 @@ object JbrSkiaCommandRecorder {
             }
         }
 
+        private fun addRadialGradientStrokePath(path: Path, paint: Paint) {
+            val gradientPayload = paint.radialGradientPayload(requiredStyle = PaintingStyle.Stroke) ?: return
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("radialGradientStrokeWidth")
+                return
+            }
+            val pathData = path.commandData() ?: run {
+                countUnsupported("radialGradientPath")
+                return
+            }
+            val bounds = path.getBounds()
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(
+                bounds.left - outset,
+                bounds.top - outset,
+                bounds.right + outset,
+                bounds.bottom + outset,
+                paint,
+            ) {
+                commands.addCommand(
+                    COMMAND_STROKE_PATH_RADIAL_GRADIENT,
+                    paint.recordFlags(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                    *gradientPayload,
+                )
+            }
+        }
+
         private fun addSweepGradientPath(path: Path, paint: Paint) {
+            if (paint.style == PaintingStyle.Stroke) {
+                addSweepGradientStrokePath(path, paint)
+                return
+            }
             if (paint.style != PaintingStyle.Fill) {
                 countUnsupported("sweepGradientPathPaint")
                 return
@@ -2549,6 +2629,40 @@ object JbrSkiaCommandRecorder {
                 commands.addCommand(
                     COMMAND_FILL_PATH_SWEEP_GRADIENT,
                     paint.recordFlags(),
+                    path.fillType.commandValue(),
+                    pathData.size,
+                    *pathData,
+                    *gradientPayload,
+                )
+            }
+        }
+
+        private fun addSweepGradientStrokePath(path: Path, paint: Paint) {
+            val gradientPayload = paint.sweepGradientPayload(requiredStyle = PaintingStyle.Stroke) ?: return
+            if (!paint.strokeWidth.isFinite() || paint.strokeWidth <= 0f) {
+                countUnsupported("sweepGradientStrokeWidth")
+                return
+            }
+            val pathData = path.commandData() ?: run {
+                countUnsupported("sweepGradientPath")
+                return
+            }
+            val bounds = path.getBounds()
+            val outset = paint.blendLayerOutset(forceStroke = true)
+            withSolidColorBlendLayer(
+                bounds.left - outset,
+                bounds.top - outset,
+                bounds.right + outset,
+                bounds.bottom + outset,
+                paint,
+            ) {
+                commands.addCommand(
+                    COMMAND_STROKE_PATH_SWEEP_GRADIENT,
+                    paint.recordFlags(),
+                    paint.strokeWidth.fixed1000(),
+                    paint.strokeCap.commandValue(),
+                    paint.strokeJoin.commandValue(),
+                    paint.strokeMiter1000(),
                     path.fillType.commandValue(),
                     pathData.size,
                     *pathData,
@@ -4239,6 +4353,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_POINTS = 65
     private const val COMMAND_DEFINE_FONT_DATA = 66
     private const val COMMAND_DRAW_VERTICES = 67
+    private const val COMMAND_STROKE_PATH_LINEAR_GRADIENT = 68
+    private const val COMMAND_STROKE_PATH_RADIAL_GRADIENT = 69
+    private const val COMMAND_STROKE_PATH_SWEEP_GRADIENT = 70
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
