@@ -4655,6 +4655,9 @@ object JbrSkiaCommandRecorder {
         }
 
         fun addRestore() {
+            if (removeRedundantSaveAroundClearRect()) {
+                return
+            }
             if (payloadSize >= 4 &&
                 payload[payloadSize - 4] == COMMAND_RESTORE_N &&
                 payload[payloadSize - 3] == 4 * Int.SIZE_BYTES &&
@@ -4677,6 +4680,28 @@ object JbrSkiaCommandRecorder {
                 return
             }
             addCommand(COMMAND_RESTORE)
+        }
+
+        private fun removeRedundantSaveAroundClearRect(): Boolean {
+            if (payloadSize < 10 ||
+                payload[payloadSize - 10] != COMMAND_SAVE ||
+                payload[payloadSize - 9] != 3 * Int.SIZE_BYTES ||
+                payload[payloadSize - 8] != COMMAND_RECORD_FLAGS_NONE ||
+                payload[payloadSize - 7] != COMMAND_CLEAR_RECT ||
+                payload[payloadSize - 6] != 7 * Int.SIZE_BYTES ||
+                payload[payloadSize - 5] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return false
+            }
+            payload.copyInto(
+                payload,
+                destinationOffset = payloadSize - 10,
+                startIndex = payloadSize - 7,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 3
+            decrementOp(COMMAND_SAVE)
+            return true
         }
 
         fun addTranslate(dx1000: Int, dy1000: Int) {
