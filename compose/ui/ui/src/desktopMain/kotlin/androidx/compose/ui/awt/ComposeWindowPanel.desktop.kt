@@ -49,6 +49,12 @@ internal class ComposeWindowPanel(
     coroutineContext: CoroutineContext = EmptyCoroutineContext,
 ) : JLayeredPaneWithTransparencyHack() {
     private var isDisposed = false
+    private val renderSettings: RenderSettings =
+        if (ComposeFeatureFlags.useSwingGraphicsInComposePanel.value) {
+            RenderSettings.SwingGraphics()
+        } else {
+            RenderSettings.SkiaSurface()
+        }
 
     // AWT can leak JFrame in some cases
     // (see https://youtrack.jetbrains.com/issue/CMP-1688),
@@ -62,14 +68,16 @@ internal class ComposeWindowPanel(
         windowContainer = this,
         savedState = savedState,
         layerType = ComposeFeatureFlags.layerType.value.let {
-            // LayerType.OnComponent may can only be used with rendering via Swing graphics,
-            // but it's always disabled here. Using fallback instead of [check] to support
-            // opening separate windows from [ComposePanel] with such layer type.
-            if (it == LayerType.OnComponent) LayerType.OnSameCanvas else it
+            // LayerType.OnComponent requires SwingGraphics; keep the historical fallback
+            // only when window-level SwingGraphics is not enabled.
+            if (it == LayerType.OnComponent && renderSettings !is RenderSettings.SwingGraphics) {
+                LayerType.OnSameCanvas
+            } else {
+                it
+            }
         },
-        // Swing graphics is not supposed to be used here.
         // TODO: Add isVsyncEnabled flag to ComposeWindowPanel constructor
-        renderSettings = RenderSettings.SkiaSurface(),
+        renderSettings = renderSettings,
         coroutineContext = coroutineContext
     )
     private val composeContainer
