@@ -19,6 +19,7 @@ package androidx.compose.ui.graphics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import java.util.LinkedHashMap
+import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
@@ -34,6 +35,7 @@ data class JbrSkiaCommandShadowContext(
 
 data class JbrSkiaCommandRecording(
     val commands: IntArray?,
+    val nativeImageReferences: Array<ImageBitmap>,
     val commandWordCount: Int,
     val unsupportedCount: Int,
     val imageDefineCount: Int,
@@ -55,6 +57,7 @@ data class JbrSkiaCommandRecording(
         } else if (other.commands != null) {
             return false
         }
+        if (!nativeImageReferences.contentEquals(other.nativeImageReferences)) return false
         if (commandWordCount != other.commandWordCount) return false
         if (unsupportedCount != other.unsupportedCount) return false
         if (imageDefineCount != other.imageDefineCount) return false
@@ -71,6 +74,7 @@ data class JbrSkiaCommandRecording(
 
     override fun hashCode(): Int {
         var result = commands?.contentHashCode() ?: 0
+        result = 31 * result + nativeImageReferences.contentHashCode()
         result = 31 * result + commandWordCount
         result = 31 * result + unsupportedCount
         result = 31 * result + imageDefineCount
@@ -87,6 +91,18 @@ data class JbrSkiaCommandRecording(
     }
 }
 
+private data class ImageCacheEntry(
+    val width: Int,
+    val height: Int,
+    val cacheKey: Long,
+)
+
+private data class NativeBitmapImageDefinition(
+    val ptr: Long,
+    val generationId: Int,
+    val cacheKey: Long,
+)
+
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
@@ -99,6 +115,8 @@ object JbrSkiaCommandRecorder {
     private val active = ThreadLocal<Recorder?>()
     private val imageCacheLock = Any()
     private val definedImageKeys = LinkedHashMap<Long, Unit>(MAX_DEFINED_IMAGE_KEYS, 0.75f, true)
+    private val confirmedNativeImageKeys = HashSet<Long>()
+    private val imageIdentityCache = WeakHashMap<ImageBitmap, ImageCacheEntry>()
     private var previousFrameImageKeys = emptySet<Long>()
     private val colorFilterHandleLock = Any()
     private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
@@ -377,9 +395,19 @@ object JbrSkiaCommandRecorder {
         pendingImageCacheClear.set(true)
     }
 
+    @JvmStatic
+    fun markInteropImageDefinitionsRendered(keys: LongArray) {
+        if (keys.isEmpty()) return
+        synchronized(imageCacheLock) {
+            keys.forEach(confirmedNativeImageKeys::add)
+        }
+    }
+
     private fun clearInteropCaches() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
+            confirmedNativeImageKeys.clear()
+            imageIdentityCache.clear()
             previousFrameImageKeys = emptySet()
         }
         imageCacheHasDefinitions.set(false)
@@ -549,6 +577,7 @@ object JbrSkiaCommandRecorder {
         private var imageDefinePixelCount = 0
         private val imageDefinedKeys = mutableListOf<Long>()
         private val imageReferencedKeys = linkedSetOf<Long>()
+        private val nativeImageReferences = mutableListOf<ImageBitmap>()
         private var imageRefCount = 0
         private var textCommandCount = 0
         private var paragraphTextCommandCount = 0
@@ -573,6 +602,7 @@ object JbrSkiaCommandRecorder {
         fun toRecording(commands: IntArray?): JbrSkiaCommandRecording =
             JbrSkiaCommandRecording(
                 commands = commands,
+                nativeImageReferences = nativeImageReferences.toTypedArray(),
                 commandWordCount = this.commands.streamSize,
                 unsupportedCount = unsupportedCount,
                 imageDefineCount = imageDefineCount,
@@ -1034,6 +1064,7 @@ object JbrSkiaCommandRecorder {
             commands.appendRecords(childCommands, COMMAND_STREAM_HEADER_SIZE, childCommands.size)
             rememberDefinedImageKeys(recording.imageDefinedKeys)
             imageReferencedKeys.addAll(recording.imageReferencedKeys.asIterable())
+            nativeImageReferences.addAll(recording.nativeImageReferences)
             imageDefineCount += recording.imageDefineCount
             imageDefineWordCount += recording.imageDefineWordCount
             imageDefinePixelCount += recording.imageDefinePixelCount
@@ -3868,6 +3899,35 @@ object JbrSkiaCommandRecorder {
             return hash
         }
 
+        private fun nativeBitmapImageDefinition(image: ImageBitmap): NativeBitmapImageDefinition? {
+            val bitmap = runCatching { image.asSkiaBitmap() }.getOrNull() ?: return null
+            val ptr = bitmap.jbrSkiaNativePtrOrZero()
+            if (ptr == 0L) return null
+            var hash = -3750763034362895579L
+            fun mix(value: Int) {
+                hash = hash xor value.toLong()
+                hash *= 1099511628211L
+            }
+            fun mix(value: Long) {
+                hash = hash xor value
+                hash *= 1099511628211L
+            }
+            mix(image.width)
+            mix(image.height)
+            mix(ptr)
+            mix(bitmap.generationId)
+            return NativeBitmapImageDefinition(ptr, bitmap.generationId, hash)
+        }
+
+        private fun org.jetbrains.skia.Bitmap.jbrSkiaNativePtrOrZero(): Long {
+            val marker = "_ptr=0x"
+            val text = toString()
+            val start = text.indexOf(marker)
+            if (start < 0) return 0L
+            val digits = text.substring(start + marker.length).substringBefore(')')
+            return digits.toLongOrNull(radix = 16) ?: 0L
+        }
+
         private fun StrokeCap.commandValue(): Int = when (this) {
             StrokeCap.Butt -> 0
             StrokeCap.Round -> 1
@@ -3897,20 +3957,46 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun defineImageIfNeeded(image: ImageBitmap): Long? {
-            val pixels = IntArray(image.width * image.height)
-            image.readPixels(pixels)
-            val cacheKey = pixels.imageCacheKey(image.width, image.height)
+            val nativeBitmapDefinition = nativeBitmapImageDefinition(image)
+            var pixels: IntArray? = null
+            fun readPixels(): IntArray {
+                pixels?.let { return it }
+                return IntArray(image.width * image.height).also {
+                    image.readPixels(it)
+                    pixels = it
+                }
+            }
+
             var evictedKey: Long? = null
-            val shouldDefine = synchronized(imageCacheLock) {
+            val cacheKey = synchronized(imageCacheLock) {
+                if (nativeBitmapDefinition != null) {
+                    nativeBitmapDefinition.cacheKey
+                } else {
+                    val entry = imageIdentityCache[image]
+                    if (entry != null && entry.width == image.width && entry.height == image.height) {
+                        entry.cacheKey
+                    } else {
+                        val readPixels = readPixels()
+                        val computedKey = readPixels.imageCacheKey(image.width, image.height)
+                        imageIdentityCache[image] = ImageCacheEntry(image.width, image.height, computedKey)
+                        computedKey
+                    }
+                }
+            }
+            var shouldEnsureDefined = false
+            val shouldDefinePixels = synchronized(imageCacheLock) {
                 val enteringFrame = cacheKey !in previousFrameImageKeys
                 imageReferencedKeys += cacheKey
                 if (definedImageKeys.containsKey(cacheKey)) {
                     definedImageKeys[cacheKey] = Unit
-                    forceResourceDefinitions || !imageCacheHasDefinitions.get() || enteringFrame
+                    val needsDefinition = forceResourceDefinitions || !imageCacheHasDefinitions.get()
+                    shouldEnsureDefined = !needsDefinition && enteringFrame && cacheKey in confirmedNativeImageKeys
+                    needsDefinition || enteringFrame && cacheKey !in confirmedNativeImageKeys
                 } else {
                     if (updateSharedResourceCaches && definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
                         val eldest = definedImageKeys.keys.first()
                         definedImageKeys.remove(eldest)
+                        confirmedNativeImageKeys.remove(eldest)
                         evictedKey = eldest
                     }
                     if (updateSharedResourceCaches) {
@@ -3928,20 +4014,53 @@ object JbrSkiaCommandRecorder {
                     it.lowInt(),
                 )
             }
-            if (shouldDefine) {
+            if (shouldDefinePixels) {
+                if (nativeBitmapDefinition != null) {
+                    nativeImageReferences += image
+                    imageDefineCount++
+                    imageDefineWordCount += 7
+                    imageDefinedKeys += cacheKey
+                    commands.addCommand(
+                        COMMAND_DEFINE_IMAGE_BITMAP,
+                        COMMAND_RECORD_FLAGS_NONE,
+                        cacheKey.highInt(),
+                        cacheKey.lowInt(),
+                        image.width,
+                        image.height,
+                        nativeBitmapDefinition.ptr.highInt(),
+                        nativeBitmapDefinition.ptr.lowInt(),
+                        nativeBitmapDefinition.generationId,
+                    )
+                } else {
+                    val definePixels = readPixels()
+                    imageDefineCount++
+                    imageDefineWordCount += definePixels.size + 7
+                    imageDefinePixelCount += definePixels.size
+                    imageDefinedKeys += cacheKey
+                    commands.addCommand(
+                        op = COMMAND_DEFINE_IMAGE_ARGB,
+                        recordFlags = COMMAND_RECORD_FLAGS_NONE,
+                        pixels = definePixels,
+                        cacheKey.highInt(),
+                        cacheKey.lowInt(),
+                        image.width,
+                        image.height,
+                        definePixels.size,
+                    )
+                }
+            } else if (shouldEnsureDefined) {
                 imageDefineCount++
-                imageDefineWordCount += pixels.size + 7
-                imageDefinePixelCount += pixels.size
+                imageDefineWordCount += 7
                 imageDefinedKeys += cacheKey
                 commands.addCommand(
-                    COMMAND_DEFINE_IMAGE_ARGB,
-                    COMMAND_RECORD_FLAGS_NONE,
+                    op = COMMAND_DEFINE_IMAGE_ARGB,
+                    recordFlags = COMMAND_RECORD_FLAGS_NONE,
+                    pixels = IntArray(0),
                     cacheKey.highInt(),
                     cacheKey.lowInt(),
                     image.width,
                     image.height,
-                    pixels.size,
-                    *pixels,
+                    0,
                 )
             }
             return cacheKey
@@ -4438,25 +4557,37 @@ object JbrSkiaCommandRecorder {
     }
 
     private class CommandStreamWriter {
-        private val payload = ArrayList<Int>(1024)
+        private var payload = IntArray(1024)
+        private var payloadSize = 0
         private val opCounts = linkedMapOf<Int, Int>()
 
         val streamSize: Int
-            get() = COMMAND_STREAM_HEADER_SIZE + payload.size
+            get() = COMMAND_STREAM_HEADER_SIZE + payloadSize
 
         fun addCommand(op: Int, recordFlags: Int = COMMAND_RECORD_FLAGS_NONE, vararg args: Int) {
             countOp(op)
-            payload.add(op)
-            payload.add((args.size + 3) * Int.SIZE_BYTES)
-            payload.add(recordFlags)
-            args.forEach(payload::add)
+            addRecordHeader(op, recordFlags, args.size)
+            addAll(args)
+        }
+
+        fun addCommand(
+            op: Int,
+            recordFlags: Int = COMMAND_RECORD_FLAGS_NONE,
+            pixels: IntArray,
+            vararg args: Int,
+        ) {
+            countOp(op)
+            addRecordHeader(op, recordFlags, args.size + pixels.size)
+            addAll(args)
+            addAll(pixels)
         }
 
         fun appendRecords(records: IntArray, startIndex: Int, endIndex: Int) {
             countOps(records, startIndex, endIndex)
-            for (index in startIndex until endIndex) {
-                payload.add(records[index])
-            }
+            val count = endIndex - startIndex
+            ensureCapacity(payloadSize + count)
+            records.copyInto(payload, destinationOffset = payloadSize, startIndex = startIndex, endIndex = endIndex)
+            payloadSize += count
         }
 
         fun opSummary(): String =
@@ -4490,11 +4621,38 @@ object JbrSkiaCommandRecorder {
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
                 stream[2] = COMMAND_STREAM_FLAGS_NONE
-                stream[3] = payload.size
+                stream[3] = payloadSize
                 stream[4] = COMMAND_COORDINATE_SPACE_SWING_USER
                 stream[5] = COMMAND_PAINT_FORMAT_SOLID_ARGB
-                payload.forEachIndexed { index, command -> stream[COMMAND_STREAM_HEADER_SIZE + index] = command }
+                payload.copyInto(
+                    destination = stream,
+                    destinationOffset = COMMAND_STREAM_HEADER_SIZE,
+                    startIndex = 0,
+                    endIndex = payloadSize,
+                )
             }
+
+        private fun addRecordHeader(op: Int, recordFlags: Int, argCount: Int) {
+            ensureCapacity(payloadSize + argCount + 3)
+            payload[payloadSize++] = op
+            payload[payloadSize++] = (argCount + 3) * Int.SIZE_BYTES
+            payload[payloadSize++] = recordFlags
+        }
+
+        private fun addAll(values: IntArray) {
+            ensureCapacity(payloadSize + values.size)
+            values.copyInto(payload, destinationOffset = payloadSize)
+            payloadSize += values.size
+        }
+
+        private fun ensureCapacity(requiredSize: Int) {
+            if (requiredSize <= payload.size) return
+            var newSize = payload.size
+            while (newSize < requiredSize) {
+                newSize *= 2
+            }
+            payload = payload.copyOf(newSize)
+        }
 
         private fun opName(op: Int): String =
             when (op) {
@@ -4568,6 +4726,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_STROKE_PATH_SWEEP_GRADIENT -> "strokePathSweepGradient"
                 COMMAND_STROKE_RECT_SHADER_REF -> "strokeRectShaderRef"
                 COMMAND_STROKE_RECT_IMAGE_SHADER -> "strokeRectImageShader"
+                COMMAND_DEFINE_IMAGE_BITMAP -> "defineImageBitmap"
                 else -> "op$op"
             }
     }
@@ -4652,6 +4811,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_PATH_SWEEP_GRADIENT = 70
     private const val COMMAND_STROKE_RECT_SHADER_REF = 71
     private const val COMMAND_STROKE_RECT_IMAGE_SHADER = 72
+    private const val COMMAND_DEFINE_IMAGE_BITMAP = 73
     private const val COMMAND_EFFECT_DESCRIPTOR_TINT_COLOR_FILTER = 1
     private const val COMMAND_EFFECT_DESCRIPTOR_COLOR_MATRIX_FILTER = 2
     private const val COMMAND_EFFECT_DESCRIPTOR_LIGHTING_FILTER = 3
