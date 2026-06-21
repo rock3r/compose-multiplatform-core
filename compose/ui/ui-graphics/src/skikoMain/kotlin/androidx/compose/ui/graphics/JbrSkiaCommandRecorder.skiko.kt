@@ -2821,33 +2821,62 @@ object JbrSkiaCommandRecorder {
                 null
             }
             withSolidColorBlendLayer(dstLeft, dstTop, dstRight, dstBottom, paint) {
-                commands.addCommand(
-                    when {
-                        tintColorFilter != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER
-                        descriptorHandle != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF
-                        else -> COMMAND_DRAW_IMAGE_REF
-                    },
-                    paint.recordFlags(),
-                    srcLeft.fixed1000(),
-                    srcTop.fixed1000(),
-                    srcRight.fixed1000(),
-                    srcBottom.fixed1000(),
-                    dstLeft.fixed1000(),
-                    dstTop.fixed1000(),
-                    dstRight.fixed1000(),
-                    dstBottom.fixed1000(),
-                    cacheKey.highInt(),
-                    cacheKey.lowInt(),
-                    image.width,
-                    image.height,
-                    paint.imageAlpha1000(),
-                    paint.filterQuality.value,
-                    *when {
-                        tintColorFilter != null -> intArrayOf(tintColorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
-                        descriptorHandle != null -> intArrayOf(descriptorHandle.highInt(), descriptorHandle.lowInt())
-                        else -> IntArray(0)
-                    },
-                )
+                val srcLeft1000 = srcLeft.fixed1000()
+                val srcTop1000 = srcTop.fixed1000()
+                val srcRight1000 = srcRight.fixed1000()
+                val srcBottom1000 = srcBottom.fixed1000()
+                val dstLeft1000 = dstLeft.fixed1000()
+                val dstTop1000 = dstTop.fixed1000()
+                val dstRight1000 = dstRight.fixed1000()
+                val dstBottom1000 = dstBottom.fixed1000()
+                val alpha1000 = paint.imageAlpha1000()
+                if (tintColorFilter == null &&
+                    descriptorHandle == null &&
+                    alpha1000 == 1000 &&
+                    srcLeft1000 == 0 &&
+                    srcTop1000 == 0 &&
+                    srcRight1000 == image.width * 1000 &&
+                    srcBottom1000 == image.height * 1000
+                ) {
+                    commands.addCommand(
+                        COMMAND_DRAW_IMAGE_REF_FULL,
+                        paint.recordFlags(),
+                        dstLeft1000,
+                        dstTop1000,
+                        dstRight1000,
+                        dstBottom1000,
+                        cacheKey.highInt(),
+                        cacheKey.lowInt(),
+                    )
+                } else {
+                    commands.addCommand(
+                        when {
+                            tintColorFilter != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER
+                            descriptorHandle != null -> COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF
+                            else -> COMMAND_DRAW_IMAGE_REF
+                        },
+                        paint.recordFlags(),
+                        srcLeft1000,
+                        srcTop1000,
+                        srcRight1000,
+                        srcBottom1000,
+                        dstLeft1000,
+                        dstTop1000,
+                        dstRight1000,
+                        dstBottom1000,
+                        cacheKey.highInt(),
+                        cacheKey.lowInt(),
+                        image.width,
+                        image.height,
+                        alpha1000,
+                        paint.filterQuality.value,
+                        *when {
+                            tintColorFilter != null -> intArrayOf(tintColorFilter.color.toArgb(), COMMAND_BLEND_MODE_SRC_IN)
+                            descriptorHandle != null -> intArrayOf(descriptorHandle.highInt(), descriptorHandle.lowInt())
+                            else -> IntArray(0)
+                        },
+                    )
+                }
             }
             return true
         }
@@ -4811,6 +4840,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_TRANSLATE -> "saveTranslate"
                 COMMAND_RESTORE_N -> "restoreN"
                 COMMAND_SAVE_TRANSLATE_LAYER -> "saveTranslateLayer"
+                COMMAND_DRAW_IMAGE_REF_FULL -> "drawImageRefFull"
                 COMMAND_SCALE -> "scale"
                 COMMAND_ROTATE -> "rotate"
                 COMMAND_SAVE_LAYER -> "saveLayer"
@@ -4899,6 +4929,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_TRANSLATE = 74
     private const val COMMAND_RESTORE_N = 75
     private const val COMMAND_SAVE_TRANSLATE_LAYER = 76
+    private const val COMMAND_DRAW_IMAGE_REF_FULL = 77
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
@@ -5003,7 +5034,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 109
+    private const val COMMAND_STREAM_ABI_ID = 110
     private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
