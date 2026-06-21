@@ -108,6 +108,7 @@ object JbrSkiaCommandRecorder {
         val recorder = Recorder(
             shadowContext = shadowContext,
             emitPendingImageCacheClear = pendingImageCacheClear.getAndSet(false),
+            forceResourceDefinitions = false,
         )
         active.set(recorder)
         try {
@@ -128,6 +129,7 @@ object JbrSkiaCommandRecorder {
         val recorder = Recorder(
             shadowContext = previous?.shadowContext ?: JbrSkiaCommandShadowContext(),
             emitPendingImageCacheClear = false,
+            forceResourceDefinitions = true,
         )
         active.set(recorder)
         try {
@@ -293,6 +295,11 @@ object JbrSkiaCommandRecorder {
     fun tintSrcInColorFilterOrNull(colorFilter: ColorFilter?): BlendModeColorFilter? =
         (colorFilter as? BlendModeColorFilter)?.takeIf { it.blendMode == BlendMode.SrcIn }
 
+    internal fun blendModeColorFilterOrNull(colorFilter: ColorFilter?): BlendModeColorFilter? =
+        (colorFilter as? BlendModeColorFilter)?.takeIf {
+            it.blendMode == BlendMode.SrcIn || commandBlendModeOrNull(it.blendMode) != null
+        }
+
     internal fun colorMatrixColorFilterOrNull(colorFilter: ColorFilter?): ColorMatrixColorFilter? =
         colorFilter as? ColorMatrixColorFilter
 
@@ -301,7 +308,7 @@ object JbrSkiaCommandRecorder {
 
     @InternalComposeUiApi
     fun descriptorColorFilterOrNull(colorFilter: ColorFilter?): ColorFilter? =
-        tintSrcInColorFilterOrNull(colorFilter)
+        blendModeColorFilterOrNull(colorFilter)
             ?: colorMatrixColorFilterOrNull(colorFilter)
             ?: lightingColorFilterOrNull(colorFilter)
             ?: (colorFilter as? JbrSkiaRuntimeEffectColorFilterHolder)
@@ -519,6 +526,7 @@ object JbrSkiaCommandRecorder {
     private class Recorder(
         val shadowContext: JbrSkiaCommandShadowContext,
         emitPendingImageCacheClear: Boolean,
+        private val forceResourceDefinitions: Boolean,
     ) {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
@@ -1626,8 +1634,8 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("unsupportedScope")
                 return
             }
-            if (paint.colorFilter != null) {
-                countUnsupported("colorFilter")
+            paint.colorFilter?.let {
+                countUnsupported(it.unsupportedReasonToken())
                 return
             }
             if (paint.pathEffect != null) {
@@ -1701,7 +1709,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1730,7 +1738,7 @@ object JbrSkiaCommandRecorder {
                     COMMAND_EFFECT_DESCRIPTOR_VERSION_1,
                     2,
                     colorFilter.color.toArgb(),
-                    COMMAND_BLEND_MODE_SRC_IN,
+                    colorFilter.commandBlendModeOrNull() ?: return,
                 )
             }
         }
@@ -1738,8 +1746,9 @@ object JbrSkiaCommandRecorder {
         private fun defineDescriptorColorFilterIfNeeded(colorFilter: ColorFilter): Long? =
             when (colorFilter) {
                 is BlendModeColorFilter -> {
-                    val tint = colorFilter.takeIf { it.blendMode == BlendMode.SrcIn } ?: return null
-                    tint.handleKey().also { defineTintColorFilterIfNeeded(it, tint) }
+                    colorFilter.commandBlendModeOrNull()?.let {
+                        colorFilter.handleKey().also { defineTintColorFilterIfNeeded(it, colorFilter) }
+                    }
                 }
                 is ColorMatrixColorFilter -> {
                     val matrix = colorFilter.skiaColorMatrixValues()
@@ -1768,7 +1777,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1837,7 +1846,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1898,7 +1907,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1984,7 +1993,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -2048,7 +2057,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -2323,7 +2332,13 @@ object JbrSkiaCommandRecorder {
                 addPathEffectDescriptorPath(path, paint, pathEffectDescriptor)
                 return
             }
-            if (!paint.isSupportedSolidColorForBlendLayer) return
+            val tintColorFilter = paint.tintSrcInColorFilter
+            val commandColor = if (tintColorFilter != null && paint.shader == null && paint.pathEffect == null) {
+                paint.tintSrcInCommandColor(tintColorFilter)
+            } else {
+                if (!paint.isSupportedSolidColorForBlendLayer) return
+                paint.commandColor()
+            }
             val style = when (paint.style) {
                 PaintingStyle.Fill -> COMMAND_PAINT_STYLE_FILL
                 PaintingStyle.Stroke -> COMMAND_PAINT_STYLE_STROKE
@@ -2349,7 +2364,7 @@ object JbrSkiaCommandRecorder {
                     COMMAND_DRAW_PATH,
                     paint.recordFlags(),
                     style,
-                    paint.commandColor(),
+                    commandColor,
                     if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
                     if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
                     if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
@@ -3031,7 +3046,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(fontDataHandleLock) {
                 if (definedFontDataHandles.containsKey(handle)) {
                     definedFontDataHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedFontDataHandles.size >= MAX_DEFINED_FONT_DATA_HANDLES) {
                         val eldest = definedFontDataHandles.keys.first()
@@ -3070,8 +3085,8 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("shader")
                     supported = false
                 }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
+                colorFilter?.let {
+                    countUnsupported(it.unsupportedReasonToken())
                     supported = false
                 }
                 if (pathEffect != null) {
@@ -3119,8 +3134,8 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("shader")
                     supported = false
                 }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
+                colorFilter?.let {
+                    countUnsupported(it.unsupportedReasonToken())
                     supported = false
                 }
                 return supported
@@ -3166,8 +3181,8 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("shader")
                     supported = false
                 }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
+                colorFilter?.let {
+                    countUnsupported(it.unsupportedReasonToken())
                     supported = false
                 }
                 return supported
@@ -3191,8 +3206,12 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("shader")
                     supported = false
                 }
-                if (colorFilter != null && tintSrcInColorFilter == null && descriptorColorFilterOrNull(colorFilter) == null) {
-                    countUnsupported("colorFilter")
+                val tmpColorFilter = colorFilter
+                if (tmpColorFilter != null &&
+                    tintSrcInColorFilter == null &&
+                    descriptorColorFilterOrNull(tmpColorFilter) == null
+                ) {
+                    countUnsupported(tmpColorFilter.unsupportedReasonToken())
                     supported = false
                 }
                 return supported
@@ -3213,8 +3232,8 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("shader")
                     supported = false
                 }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
+                colorFilter?.let {
+                    countUnsupported(it.unsupportedReasonToken())
                     supported = false
                 }
                 if (pathEffect != null) {
@@ -3238,8 +3257,8 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("shader")
                 supported = false
             }
-            if (colorFilter != null && descriptor !is ShaderDescriptor.ColorFiltered) {
-                countUnsupported("colorFilter")
+            colorFilter?.takeIf { descriptor !is ShaderDescriptor.ColorFiltered }?.let {
+                countUnsupported(it.unsupportedReasonToken())
                 supported = false
             }
             if (pathEffect != null) {
@@ -3267,8 +3286,8 @@ object JbrSkiaCommandRecorder {
                     countUnsupported("shader")
                     supported = false
                 }
-                if (colorFilter != null) {
-                    countUnsupported("colorFilter")
+                colorFilter?.let {
+                    countUnsupported(it.unsupportedReasonToken())
                     supported = false
                 }
                 if (pathEffect != null) {
@@ -3280,6 +3299,18 @@ object JbrSkiaCommandRecorder {
 
         private fun Paint.commandColor(): Int =
             color.copy(alpha = color.alpha * alpha).toArgb()
+
+        private fun Paint.tintSrcInCommandColor(colorFilter: BlendModeColorFilter): Int =
+            colorFilter.color.copy(alpha = colorFilter.color.alpha * color.alpha * alpha).toArgb()
+
+        private fun ColorFilter.unsupportedReasonToken(): String =
+            when (this) {
+                is BlendModeColorFilter -> "colorFilter:BlendMode:${blendMode.toReasonToken()}"
+                is ColorMatrixColorFilter -> "colorFilter:ColorMatrix"
+                is LightingColorFilter -> "colorFilter:Lighting"
+                is JbrSkiaRuntimeEffectColorFilterHolder -> "colorFilter:RuntimeEffect"
+                else -> "colorFilter:unknown"
+            }
 
         private fun Paint.recordFlags(): Int =
             if (isAntiAlias) COMMAND_RECORD_FLAG_ANTIALIAS else COMMAND_RECORD_FLAGS_NONE
@@ -3380,7 +3411,10 @@ object JbrSkiaCommandRecorder {
         private fun Long.lowInt(): Int = this.toInt()
 
         private fun BlendModeColorFilter.handleKey(): Long =
-            (color.toArgb().toLong() shl 32) xor (COMMAND_BLEND_MODE_SRC_IN.toLong() and 0xffffffffL)
+            (color.toArgb().toLong() shl 32) xor ((commandBlendModeOrNull() ?: 0).toLong() and 0xffffffffL)
+
+        private fun BlendModeColorFilter.commandBlendModeOrNull(): Int? =
+            if (blendMode == BlendMode.SrcIn) COMMAND_BLEND_MODE_SRC_IN else commandBlendModeOrNull(blendMode)
 
         private fun ColorMatrixColorFilter.skiaColorMatrixValues(): FloatArray {
             val values = copyColorMatrix().values.copyOf()
@@ -3491,7 +3525,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(shaderHandleLock) {
                 if (definedShaderHandles.containsKey(handle)) {
                     definedShaderHandles[handle] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedShaderHandles.size >= MAX_DEFINED_SHADER_HANDLES) {
                         val eldest = definedShaderHandles.keys.first()
@@ -3829,7 +3863,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(imageCacheLock) {
                 if (definedImageKeys.containsKey(cacheKey)) {
                     definedImageKeys[cacheKey] = Unit
-                    false
+                    forceResourceDefinitions
                 } else {
                     if (definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
                         val eldest = definedImageKeys.keys.first()
