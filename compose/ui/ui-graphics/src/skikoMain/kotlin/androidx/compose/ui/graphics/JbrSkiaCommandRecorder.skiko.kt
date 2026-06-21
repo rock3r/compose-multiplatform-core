@@ -4655,6 +4655,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun addRestore() {
+            foldTrailingTranslateIntoRoundRect()
             if (removeRedundantSaveAroundStateNeutralRecords()) {
                 return
             }
@@ -4682,6 +4683,37 @@ object JbrSkiaCommandRecorder {
             addCommand(COMMAND_RESTORE)
         }
 
+        private fun foldTrailingTranslateIntoRoundRect(): Boolean {
+            val roundRectStart = previousRecordStart(payloadSize) ?: return false
+            val roundRectOp = payload[roundRectStart]
+            if (roundRectOp != COMMAND_FILL_ROUND_RECT && roundRectOp != COMMAND_DRAW_ROUND_RECT) {
+                return false
+            }
+            val translateStart = previousRecordStart(roundRectStart) ?: return false
+            if (payload[translateStart] != COMMAND_TRANSLATE ||
+                payload[translateStart + 1] != 5 * Int.SIZE_BYTES ||
+                payload[translateStart + 2] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return false
+            }
+            val dx = payload[translateStart + 3]
+            val dy = payload[translateStart + 4]
+            val leftIndex = if (roundRectOp == COMMAND_FILL_ROUND_RECT) roundRectStart + 4 else roundRectStart + 5
+            payload[leftIndex] += dx
+            payload[leftIndex + 1] += dy
+            payload[leftIndex + 2] += dx
+            payload[leftIndex + 3] += dy
+            payload.copyInto(
+                payload,
+                destinationOffset = translateStart,
+                startIndex = roundRectStart,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 5
+            decrementOp(COMMAND_TRANSLATE)
+            return true
+        }
+
         private fun removeRedundantSaveAroundStateNeutralRecords(): Boolean {
             val saveStart = redundantStateNeutralSaveStart() ?: return false
             payload.copyInto(
@@ -4693,6 +4725,18 @@ object JbrSkiaCommandRecorder {
             payloadSize -= 3
             decrementOp(COMMAND_SAVE)
             return true
+        }
+
+        private fun previousRecordStart(endOffset: Int): Int? {
+            var offset = 0
+            var previous = 0
+            while (offset < endOffset) {
+                previous = offset
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > endOffset) return null
+                offset += recordLength
+            }
+            return if (offset == endOffset) previous else null
         }
 
         private fun redundantStateNeutralSaveStart(): Int? {

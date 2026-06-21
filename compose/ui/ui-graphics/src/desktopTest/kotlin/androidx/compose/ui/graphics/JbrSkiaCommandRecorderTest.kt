@@ -141,6 +141,92 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTrailingTranslateIntoFilledRoundRectBeforeRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(10f, 20f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    blendMode = BlendMode.Clear
+                },
+            )
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(74, records[0][0])
+        assertEquals(10000, records[0][3])
+        assertEquals(20000, records[0][4])
+        assertEquals(6, records[1][0])
+        assertEquals(78, records[2][0])
+        assertEquals(6000, records[2][4])
+        assertEquals(8000, records[2][5])
+        assertEquals(16000, records[2][6])
+        assertEquals(28000, records[2][7])
+        assertEquals(8, records[3][0])
+        assertEquals(0, commands.countCommand(10))
+    }
+
+    @Test
+    fun foldsTrailingTranslateIntoStrokedRoundRectBeforeRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(10f, 20f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    blendMode = BlendMode.Clear
+                },
+            )
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(74, records[0][0])
+        assertEquals(6, records[1][0])
+        assertEquals(23, records[2][0])
+        assertEquals(6000, records[2][5])
+        assertEquals(8000, records[2][6])
+        assertEquals(16000, records[2][7])
+        assertEquals(28000, records[2][8])
+        assertEquals(8, records[3][0])
+        assertEquals(0, commands.countCommand(10))
+    }
+
+    @Test
     fun recordsFrameMetadata() {
         val recording = JbrSkiaCommandRecorder.recordFrame {
             JbrSkiaCommandRecorder.drawRect(
