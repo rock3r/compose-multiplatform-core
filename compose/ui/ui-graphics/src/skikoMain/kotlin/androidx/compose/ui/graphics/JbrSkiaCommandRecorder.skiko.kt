@@ -4655,6 +4655,9 @@ object JbrSkiaCommandRecorder {
         }
 
         fun addRestore() {
+            if (foldSaveTranslateIntoDrawImageRefFullBeforeRestore()) {
+                return
+            }
             foldTrailingTranslateIntoRoundRect()
             foldTrailingTranslateIntoFillRect()
             removeTrailingTranslate()
@@ -4683,6 +4686,50 @@ object JbrSkiaCommandRecorder {
                 return
             }
             addCommand(COMMAND_RESTORE)
+        }
+
+        private fun foldSaveTranslateIntoDrawImageRefFullBeforeRestore(): Boolean {
+            val imageStart = previousRecordStart(payloadSize) ?: return false
+            if (payload[imageStart] != COMMAND_DRAW_IMAGE_REF_FULL) {
+                return false
+            }
+            val saveTranslateStart = saveTranslateBeforeImageDefinitions(imageStart) ?: return false
+            val dx = payload[saveTranslateStart + 3]
+            val dy = payload[saveTranslateStart + 4]
+            payload[imageStart + 3] += dx
+            payload[imageStart + 4] += dy
+            payload[imageStart + 5] += dx
+            payload[imageStart + 6] += dy
+            payload.copyInto(
+                payload,
+                destinationOffset = saveTranslateStart,
+                startIndex = saveTranslateStart + 5,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 5
+            decrementOp(COMMAND_SAVE_TRANSLATE)
+            return true
+        }
+
+        private fun saveTranslateBeforeImageDefinitions(imageStart: Int): Int? {
+            var offset = imageStart
+            while (true) {
+                val previous = previousRecordStart(offset) ?: return null
+                val op = payload[previous]
+                if (op == COMMAND_SAVE_TRANSLATE &&
+                    payload[previous + 1] == 5 * Int.SIZE_BYTES &&
+                    payload[previous + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    return previous
+                }
+                if (op != COMMAND_DEFINE_IMAGE_BITMAP &&
+                    op != COMMAND_DEFINE_IMAGE_ARGB &&
+                    op != COMMAND_EVICT_IMAGE_CACHE_KEY
+                ) {
+                    return null
+                }
+                offset = previous
+            }
         }
 
         private fun removeTrailingTranslate(): Boolean {
