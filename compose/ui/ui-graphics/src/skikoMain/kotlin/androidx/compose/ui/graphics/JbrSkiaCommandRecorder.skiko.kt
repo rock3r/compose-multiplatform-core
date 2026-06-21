@@ -2251,22 +2251,42 @@ object JbrSkiaCommandRecorder {
             }
             val outset = paint.blendLayerOutset()
             withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
-                commands.addCommand(
-                    COMMAND_DRAW_ROUND_RECT,
-                    paint.recordFlags(),
-                    style,
-                    paint.commandColor(),
-                    left.fixed1000(),
-                    top.fixed1000(),
-                    right.fixed1000(),
-                    bottom.fixed1000(),
-                    radiusX.fixed1000().coerceAtLeast(0),
-                    radiusY.fixed1000().coerceAtLeast(0),
-                    if (paint.style == PaintingStyle.Stroke) state.stroke(paint.strokeWidth) else 0,
-                    if (paint.style == PaintingStyle.Stroke) paint.strokeCap.commandValue() else 0,
-                    if (paint.style == PaintingStyle.Stroke) paint.strokeJoin.commandValue() else 0,
-                    if (paint.style == PaintingStyle.Stroke) paint.strokeMiter1000() else 0,
-                )
+                val left1000 = left.fixed1000()
+                val top1000 = top.fixed1000()
+                val right1000 = right.fixed1000()
+                val bottom1000 = bottom.fixed1000()
+                val radiusX1000 = radiusX.fixed1000().coerceAtLeast(0)
+                val radiusY1000 = radiusY.fixed1000().coerceAtLeast(0)
+                if (paint.style == PaintingStyle.Fill) {
+                    commands.addCommand(
+                        COMMAND_FILL_ROUND_RECT,
+                        paint.recordFlags(),
+                        paint.commandColor(),
+                        left1000,
+                        top1000,
+                        right1000,
+                        bottom1000,
+                        radiusX1000,
+                        radiusY1000,
+                    )
+                } else {
+                    commands.addCommand(
+                        COMMAND_DRAW_ROUND_RECT,
+                        paint.recordFlags(),
+                        style,
+                        paint.commandColor(),
+                        left1000,
+                        top1000,
+                        right1000,
+                        bottom1000,
+                        radiusX1000,
+                        radiusY1000,
+                        state.stroke(paint.strokeWidth),
+                        paint.strokeCap.commandValue(),
+                        paint.strokeJoin.commandValue(),
+                        paint.strokeMiter1000(),
+                    )
+                }
             }
         }
 
@@ -4841,6 +4861,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_RESTORE_N -> "restoreN"
                 COMMAND_SAVE_TRANSLATE_LAYER -> "saveTranslateLayer"
                 COMMAND_DRAW_IMAGE_REF_FULL -> "drawImageRefFull"
+                COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
                 COMMAND_SCALE -> "scale"
                 COMMAND_ROTATE -> "rotate"
                 COMMAND_SAVE_LAYER -> "saveLayer"
@@ -4930,6 +4951,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RESTORE_N = 75
     private const val COMMAND_SAVE_TRANSLATE_LAYER = 76
     private const val COMMAND_DRAW_IMAGE_REF_FULL = 77
+    private const val COMMAND_FILL_ROUND_RECT = 78
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
@@ -5034,7 +5056,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 110
+    private const val COMMAND_STREAM_ABI_ID = 111
     private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
