@@ -2123,6 +2123,44 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun reusesConfirmedTintColorFilterHandleAcrossFrames() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        withColorFilterHandles {
+            val first = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 3f,
+                    top = 4f,
+                    right = 13f,
+                    bottom = 24f,
+                    paint = Paint().apply {
+                        color = Color.Magenta
+                        colorFilter = ColorFilter.tint(Color.Cyan)
+                    },
+                )
+            }!!
+            JbrSkiaCommandRecorder.markInteropEffectDefinitionsRendered(
+                longArrayOf(first[9].toLong() shl 32 or (first[10].toLong() and 0xffffffffL))
+            )
+
+            val reused = JbrSkiaCommandRecorder.record {
+                JbrSkiaCommandRecorder.drawRect(
+                    left = 5f,
+                    top = 6f,
+                    right = 15f,
+                    bottom = 26f,
+                    paint = Paint().apply {
+                        color = Color.Magenta
+                        colorFilter = ColorFilter.tint(Color.Cyan)
+                    },
+                )
+            }!!
+
+            assertEquals(0, reused.countCommand(49))
+            assertEquals(1, reused.countCommand(47))
+        }
+    }
+
+    @Test
     fun evictsOldestColorFilterHandleBeforeRedefiningAfterThreshold() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         withColorFilterHandles {
