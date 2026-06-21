@@ -210,6 +210,77 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTrailingTranslateIntoFillRectBeforeRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(10f, 20f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    blendMode = BlendMode.Clear
+                },
+            )
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(74, records[0][0])
+        assertEquals(10000, records[0][3])
+        assertEquals(20000, records[0][4])
+        assertEquals(6, records[1][0])
+        assertEquals(2, records[2][0])
+        assertEquals(6, records[2][4])
+        assertEquals(8, records[2][5])
+        assertEquals(10, records[2][6])
+        assertEquals(20, records[2][7])
+        assertEquals(8, records[3][0])
+        assertEquals(0, commands.countCommand(10))
+    }
+
+    @Test
+    fun keepsFractionalTrailingTranslateBeforeFillRectRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(10f, 20f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    blendMode = BlendMode.Clear
+                },
+            )
+            JbrSkiaCommandRecorder.translate(1.25f, 2.5f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(10))
+    }
+
+    @Test
     fun foldsTrailingTranslateIntoStrokedRoundRectBeforeRestore() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
