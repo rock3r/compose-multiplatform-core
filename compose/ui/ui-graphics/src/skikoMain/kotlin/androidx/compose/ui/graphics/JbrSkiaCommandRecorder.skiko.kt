@@ -1655,18 +1655,35 @@ object JbrSkiaCommandRecorder {
             withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
                 when (paint.style) {
                     PaintingStyle.Fill -> commands.addCommand(COMMAND_FILL_RECT, paint.recordFlags(), paint.commandColor(), x, y, width, height, 0)
-                    PaintingStyle.Stroke -> {
-                        val stroke = state.stroke(paint.strokeWidth)
-                        val recordFlags = paint.recordFlags()
-                        val strokeArgs = intArrayOf(paint.strokeCap.commandValue(), paint.strokeJoin.commandValue(), paint.strokeMiter1000())
-                        commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x, y, x + width, y, stroke, *strokeArgs)
-                        commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x + width, y, x + width, y + height, stroke, *strokeArgs)
-                        commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x + width, y + height, x, y + height, stroke, *strokeArgs)
-                        commands.addCommand(COMMAND_STROKE_LINE, recordFlags, paint.commandColor(), x, y + height, x, y, stroke, *strokeArgs)
-                    }
+                    PaintingStyle.Stroke -> addSolidStrokeRect(left, top, right, bottom, paint)
                     else -> countUnsupported("paintStyle")
                 }
             }
+        }
+
+        private fun addSolidStrokeRect(
+            left: Float,
+            top: Float,
+            right: Float,
+            bottom: Float,
+            paint: Paint,
+        ) {
+            commands.addCommand(
+                COMMAND_DRAW_ROUND_RECT,
+                paint.recordFlags(),
+                COMMAND_PAINT_STYLE_STROKE,
+                paint.commandColor(),
+                left.fixed1000(),
+                top.fixed1000(),
+                right.fixed1000(),
+                bottom.fixed1000(),
+                0,
+                0,
+                state.stroke(paint.strokeWidth),
+                paint.strokeCap.commandValue(),
+                paint.strokeJoin.commandValue(),
+                paint.strokeMiter1000(),
+            )
         }
 
         private fun addDashedRect(
@@ -1796,7 +1813,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    forceResourceDefinitions
+                    true
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1864,7 +1881,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    forceResourceDefinitions
+                    true
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1933,7 +1950,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    forceResourceDefinitions
+                    true
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -1994,7 +2011,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    forceResourceDefinitions
+                    true
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -2080,7 +2097,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    forceResourceDefinitions
+                    true
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
@@ -2144,7 +2161,7 @@ object JbrSkiaCommandRecorder {
             val shouldDefine = synchronized(colorFilterHandleLock) {
                 if (definedColorFilterHandles.containsKey(handle)) {
                     definedColorFilterHandles[handle] = Unit
-                    forceResourceDefinitions
+                    true
                 } else {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
