@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Fields
 import androidx.compose.ui.graphics.GraphicsContext
+import androidx.compose.ui.graphics.JbrSkiaCommandRecorder
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.ReusableGraphicsLayerScope
@@ -242,7 +243,7 @@ internal class GraphicsLayerOwnerLayer(
 
     override fun updateDisplayList() {
         layerManager.voteFrameRate(frameRate)
-        if (isDirty) {
+        if (isDirty || JbrSkiaCommandRecorder.isRecording()) {
             if (transformOrigin != TransformOrigin.Center && graphicsLayer.size != size) {
                 graphicsLayer.pivotOffset =
                     Offset(

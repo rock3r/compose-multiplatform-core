@@ -697,8 +697,12 @@ internal class SkiaParagraph(
         drawStyle: DrawStyle? = Fill,
         blendMode: BlendMode = BlendMode.SrcOver,
     ): Boolean {
-        if (!java.lang.Boolean.getBoolean(NativeJbrSkiaTextProperty)) {
-            return recordJbrSkiaTextImage()
+        if (text.isEmpty()) {
+            return true
+        }
+        val nativeTextRequested = java.lang.Boolean.getBoolean(NativeJbrSkiaTextProperty)
+        if (!nativeTextRequested && recordJbrSkiaTextImage(markUnsupported = false)) {
+            return true
         }
 
         val recordedSimpleText =
@@ -714,7 +718,10 @@ internal class SkiaParagraph(
                 drawStyle.isJbrSkiaFillStyle() &&
                 hasSupportedJbrSkiaParagraphTextEffects(shadow, textDecoration) &&
                 recordJbrSkiaParagraphText(color, textDecoration)
-        return recordedSimpleText || recordedParagraphText || recordJbrSkiaTextImage()
+        if (recordedSimpleText || recordedParagraphText) {
+            return true
+        }
+        return recordJbrSkiaTextImage(markUnsupported = true)
     }
 
     private fun hasNoJbrSkiaTextEffects(shadow: Shadow?, textDecoration: TextDecoration?): Boolean =
@@ -961,10 +968,21 @@ internal class SkiaParagraph(
         return 0f
     }
 
-    private fun recordJbrSkiaTextImage(): Boolean {
-        val bitmapWidth = ceil(width).toInt()
-        val bitmapHeight = ceil(height).toInt()
-        if (bitmapWidth <= 0 || bitmapHeight <= 0 || bitmapWidth > 2048 || bitmapHeight > 2048) {
+    private fun recordJbrSkiaTextImage(markUnsupported: Boolean = true): Boolean {
+        val rawBitmapWidth = ceil(width)
+        val rawBitmapHeight = ceil(height)
+        if (!rawBitmapWidth.isFinite() || !rawBitmapHeight.isFinite()) {
+            if (markUnsupported) {
+                JbrSkiaCommandRecorder.markUnsupportedDraw("textImage:dimension:nonfinite")
+            }
+            return false
+        }
+        val bitmapWidth = rawBitmapWidth.coerceAtMost(4096f).toInt()
+        val bitmapHeight = rawBitmapHeight.coerceAtMost(4096f).toInt()
+        if (bitmapWidth <= 0 || bitmapHeight <= 0) {
+            if (markUnsupported) {
+                JbrSkiaCommandRecorder.markUnsupportedDraw("textImage:dimension:empty")
+            }
             return false
         }
 
@@ -972,7 +990,7 @@ internal class SkiaParagraph(
         val imageCanvas = Canvas(image)
         imageCanvas.skiaCanvas.clear(0x00000000)
         paragraph.paint(imageCanvas.skiaCanvas, 0.0f, 0.0f)
-        return JbrSkiaCommandRecorder.drawImageRect(
+        if (!JbrSkiaCommandRecorder.drawImageRect(
             image = image,
             srcLeft = 0f,
             srcTop = 0f,
@@ -983,7 +1001,13 @@ internal class SkiaParagraph(
             dstRight = bitmapWidth.toFloat(),
             dstBottom = bitmapHeight.toFloat(),
             paint = Paint(),
-        )
+        )) {
+            if (markUnsupported) {
+                JbrSkiaCommandRecorder.markUnsupportedDraw("textImage:image")
+            }
+            return false
+        }
+        return true
     }
 
     /**
