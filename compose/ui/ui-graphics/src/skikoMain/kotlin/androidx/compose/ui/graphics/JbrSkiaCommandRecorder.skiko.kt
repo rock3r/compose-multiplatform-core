@@ -4656,6 +4656,7 @@ object JbrSkiaCommandRecorder {
 
         fun addRestore() {
             foldTrailingTranslateIntoRoundRect()
+            removeTrailingTranslate()
             if (removeRedundantSaveAroundStateNeutralRecords()) {
                 return
             }
@@ -4681,6 +4682,19 @@ object JbrSkiaCommandRecorder {
                 return
             }
             addCommand(COMMAND_RESTORE)
+        }
+
+        private fun removeTrailingTranslate(): Boolean {
+            if (payloadSize < 5 ||
+                payload[payloadSize - 5] != COMMAND_TRANSLATE ||
+                payload[payloadSize - 4] != 5 * Int.SIZE_BYTES ||
+                payload[payloadSize - 3] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return false
+            }
+            payloadSize -= 5
+            decrementOp(COMMAND_TRANSLATE)
+            return true
         }
 
         private fun foldTrailingTranslateIntoRoundRect(): Boolean {

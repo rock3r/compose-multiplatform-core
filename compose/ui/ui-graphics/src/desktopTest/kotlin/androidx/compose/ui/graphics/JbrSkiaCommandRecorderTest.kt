@@ -141,6 +141,32 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun removesTrailingTranslateBeforeRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 111, 0, 9, 1, 1,
+                2, 36, 1, Color.Red.toArgb(), 1, 2, 10, 20, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun foldsTrailingTranslateIntoFilledRoundRectBeforeRestore() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
