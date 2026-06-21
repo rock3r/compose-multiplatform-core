@@ -4656,6 +4656,7 @@ object JbrSkiaCommandRecorder {
 
         fun addRestore() {
             foldTrailingTranslateIntoRoundRect()
+            foldTrailingTranslateIntoFillRect()
             removeTrailingTranslate()
             if (removeRedundantSaveAroundStateNeutralRecords()) {
                 return
@@ -4692,6 +4693,36 @@ object JbrSkiaCommandRecorder {
             ) {
                 return false
             }
+            payloadSize -= 5
+            decrementOp(COMMAND_TRANSLATE)
+            return true
+        }
+
+        private fun foldTrailingTranslateIntoFillRect(): Boolean {
+            val fillRectStart = previousRecordStart(payloadSize) ?: return false
+            if (payload[fillRectStart] != COMMAND_FILL_RECT) {
+                return false
+            }
+            val translateStart = previousRecordStart(fillRectStart) ?: return false
+            if (payload[translateStart] != COMMAND_TRANSLATE ||
+                payload[translateStart + 1] != 5 * Int.SIZE_BYTES ||
+                payload[translateStart + 2] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return false
+            }
+            val dx = payload[translateStart + 3]
+            val dy = payload[translateStart + 4]
+            if (dx % 1000 != 0 || dy % 1000 != 0) {
+                return false
+            }
+            payload[fillRectStart + 4] += dx / 1000
+            payload[fillRectStart + 5] += dy / 1000
+            payload.copyInto(
+                payload,
+                destinationOffset = translateStart,
+                startIndex = fillRectStart,
+                endIndex = payloadSize,
+            )
             payloadSize -= 5
             decrementOp(COMMAND_TRANSLATE)
             return true
