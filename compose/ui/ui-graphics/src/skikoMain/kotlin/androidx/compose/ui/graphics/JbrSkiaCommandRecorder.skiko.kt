@@ -836,7 +836,7 @@ object JbrSkiaCommandRecorder {
 
         fun translate(dx: Float, dy: Float) {
             if (dx == 0f && dy == 0f) return
-            commands.addCommand(COMMAND_TRANSLATE, COMMAND_RECORD_FLAGS_NONE, dx.fixed1000(), dy.fixed1000())
+            commands.addTranslate(dx.fixed1000(), dy.fixed1000())
         }
 
         fun scale(sx: Float, sy: Float) {
@@ -4609,6 +4609,26 @@ object JbrSkiaCommandRecorder {
             addAll(args)
         }
 
+        fun addTranslate(dx1000: Int, dy1000: Int) {
+            if (payloadSize >= 5 &&
+                payload[payloadSize - 5] == COMMAND_TRANSLATE &&
+                payload[payloadSize - 4] == 5 * Int.SIZE_BYTES &&
+                payload[payloadSize - 3] == COMMAND_RECORD_FLAGS_NONE
+            ) {
+                val mergedDx = payload[payloadSize - 2] + dx1000
+                val mergedDy = payload[payloadSize - 1] + dy1000
+                if (mergedDx == 0 && mergedDy == 0) {
+                    payloadSize -= 5
+                    decrementOp(COMMAND_TRANSLATE)
+                } else {
+                    payload[payloadSize - 2] = mergedDx
+                    payload[payloadSize - 1] = mergedDy
+                }
+                return
+            }
+            addCommand(COMMAND_TRANSLATE, COMMAND_RECORD_FLAGS_NONE, dx1000, dy1000)
+        }
+
         fun addCommand(
             op: Int,
             recordFlags: Int = COMMAND_RECORD_FLAGS_NONE,
@@ -4640,6 +4660,15 @@ object JbrSkiaCommandRecorder {
 
         private fun countOp(op: Int) {
             opCounts[op] = (opCounts[op] ?: 0) + 1
+        }
+
+        private fun decrementOp(op: Int) {
+            val count = opCounts[op] ?: return
+            if (count <= 1) {
+                opCounts.remove(op)
+            } else {
+                opCounts[op] = count - 1
+            }
         }
 
         private fun countOps(records: IntArray, startIndex: Int, endIndex: Int) {
