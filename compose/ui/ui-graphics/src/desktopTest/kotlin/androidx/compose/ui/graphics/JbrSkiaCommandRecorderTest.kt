@@ -64,6 +64,31 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun removesRedundantSaveAroundClearRect() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    blendMode = BlendMode.Clear
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 111, 0, 7, 1, 1,
+                6, 28, 0, 1, 2, 10, 20,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun recordsFrameMetadata() {
         val recording = JbrSkiaCommandRecorder.recordFrame {
             JbrSkiaCommandRecorder.drawRect(
