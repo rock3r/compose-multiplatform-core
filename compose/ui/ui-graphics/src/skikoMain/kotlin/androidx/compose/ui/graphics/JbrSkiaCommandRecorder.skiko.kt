@@ -695,9 +695,7 @@ object JbrSkiaCommandRecorder {
                 saveLayerWithBlendMode(bounds, paint, it)
                 return
             }
-            commands.addCommand(
-                COMMAND_SAVE_LAYER,
-                COMMAND_RECORD_FLAGS_NONE,
+            commands.addSaveLayer(
                 state.x(bounds.left),
                 state.y(bounds.top),
                 state.width(bounds.width),
@@ -1053,9 +1051,7 @@ object JbrSkiaCommandRecorder {
                 )
                 layerSaveCount++
             } else if (imageFilter == null) {
-                commands.addCommand(
-                    COMMAND_SAVE_LAYER,
-                    COMMAND_RECORD_FLAGS_NONE,
+                commands.addSaveLayer(
                     0,
                     0,
                     width.roundToInt().coerceAtLeast(0),
@@ -4687,6 +4683,27 @@ object JbrSkiaCommandRecorder {
             addCommand(COMMAND_TRANSLATE, COMMAND_RECORD_FLAGS_NONE, dx1000, dy1000)
         }
 
+        fun addSaveLayer(x: Int, y: Int, width: Int, height: Int, alpha1000: Int) {
+            if (payloadSize >= 5 &&
+                payload[payloadSize - 5] == COMMAND_SAVE_TRANSLATE &&
+                payload[payloadSize - 4] == 5 * Int.SIZE_BYTES &&
+                payload[payloadSize - 3] == COMMAND_RECORD_FLAGS_NONE
+            ) {
+                ensureCapacity(payloadSize + 5)
+                payload[payloadSize - 5] = COMMAND_SAVE_TRANSLATE_LAYER
+                payload[payloadSize - 4] = 10 * Int.SIZE_BYTES
+                payload[payloadSize++] = x
+                payload[payloadSize++] = y
+                payload[payloadSize++] = width
+                payload[payloadSize++] = height
+                payload[payloadSize++] = alpha1000
+                decrementOp(COMMAND_SAVE_TRANSLATE)
+                countOp(COMMAND_SAVE_TRANSLATE_LAYER)
+                return
+            }
+            addCommand(COMMAND_SAVE_LAYER, COMMAND_RECORD_FLAGS_NONE, x, y, width, height, alpha1000)
+        }
+
         fun addCommand(
             op: Int,
             recordFlags: Int = COMMAND_RECORD_FLAGS_NONE,
@@ -4793,6 +4810,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_TRANSLATE -> "translate"
                 COMMAND_SAVE_TRANSLATE -> "saveTranslate"
                 COMMAND_RESTORE_N -> "restoreN"
+                COMMAND_SAVE_TRANSLATE_LAYER -> "saveTranslateLayer"
                 COMMAND_SCALE -> "scale"
                 COMMAND_ROTATE -> "rotate"
                 COMMAND_SAVE_LAYER -> "saveLayer"
@@ -4880,6 +4898,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_TRANSLATE = 10
     private const val COMMAND_SAVE_TRANSLATE = 74
     private const val COMMAND_RESTORE_N = 75
+    private const val COMMAND_SAVE_TRANSLATE_LAYER = 76
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
@@ -4984,7 +5003,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 108
+    private const val COMMAND_STREAM_ABI_ID = 109
     private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
