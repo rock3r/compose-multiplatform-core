@@ -5701,6 +5701,7 @@ class JbrSkiaCommandRecorderTest {
         val firstFrame = JbrSkiaCommandRecorder.record {
             images.forEach { drawOnePixelImage(it) }
         }!!
+        JbrSkiaCommandRecorder.markInteropImageDefinitionsRendered(firstFrame.imageDefinitionKeys())
         val secondFrame = JbrSkiaCommandRecorder.record {
             images.forEach { drawOnePixelImage(it) }
         }!!
@@ -6021,6 +6022,12 @@ class JbrSkiaCommandRecorderTest {
         }
         return records
     }
+
+    private fun IntArray.imageDefinitionKeys(): LongArray =
+        commandRecords()
+            .filter { it[0] == 73 }
+            .map { (it[3].toLong() shl 32) or (it[4].toLong() and 0xffffffffL) }
+            .toLongArray()
 
     private fun assertDefineImageBitmapRecord(record: IntArray, width: Int, height: Int) {
         assertEquals(73, record[0])

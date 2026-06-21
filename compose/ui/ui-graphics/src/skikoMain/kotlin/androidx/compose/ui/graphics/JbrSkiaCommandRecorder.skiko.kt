@@ -3981,11 +3981,25 @@ object JbrSkiaCommandRecorder {
                     pixels = it
                 }
             }
+            val pixelCount = image.width * image.height
+            val useContentKeyForNativeBitmap =
+                nativeBitmapDefinition != null && pixelCount <= SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS
 
             var evictedKey: Long? = null
             val cacheKey = synchronized(imageCacheLock) {
                 if (nativeBitmapDefinition != null) {
-                    nativeBitmapDefinition.cacheKey
+                    if (useContentKeyForNativeBitmap) {
+                        val entry = imageIdentityCache[image]
+                        if (entry != null && entry.width == image.width && entry.height == image.height) {
+                            entry.cacheKey
+                        } else {
+                            val computedKey = readPixels().imageCacheKey(image.width, image.height)
+                            imageIdentityCache[image] = ImageCacheEntry(image.width, image.height, computedKey)
+                            computedKey
+                        }
+                    } else {
+                        nativeBitmapDefinition.cacheKey
+                    }
                 } else {
                     val entry = imageIdentityCache[image]
                     if (entry != null && entry.width == image.width && entry.height == image.height) {
@@ -4006,7 +4020,9 @@ object JbrSkiaCommandRecorder {
                     definedImageKeys[cacheKey] = Unit
                     val needsDefinition = forceResourceDefinitions || !imageCacheHasDefinitions.get()
                     shouldEnsureDefined = !needsDefinition && enteringFrame && cacheKey in confirmedNativeImageKeys
-                    needsDefinition || enteringFrame && cacheKey !in confirmedNativeImageKeys
+                    needsDefinition ||
+                        nativeBitmapDefinition != null && cacheKey !in confirmedNativeImageKeys ||
+                        enteringFrame && cacheKey !in confirmedNativeImageKeys
                 } else {
                     if (updateSharedResourceCaches && definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
                         val eldest = definedImageKeys.keys.first()
@@ -4879,6 +4895,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RECORD_FLAG_ANTIALIAS = 1
     private const val COMMAND_PAINT_STYLE_FILL = 0
     private const val COMMAND_PAINT_STYLE_STROKE = 1
+    private const val SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS = 8192
     private const val MAX_PATH_DATA_INTS = 4096
     private const val PATH_FILL_TYPE_NON_ZERO = 0
     private const val PATH_FILL_TYPE_EVEN_ODD = 1
