@@ -4901,7 +4901,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RECORD_FLAG_ANTIALIAS = 1
     private const val COMMAND_PAINT_STYLE_FILL = 0
     private const val COMMAND_PAINT_STYLE_STROKE = 1
-    private const val SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS = 8192
+    private const val SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS = 65_536
     private const val MAX_PATH_DATA_INTS = 4096
     private const val PATH_FILL_TYPE_NON_ZERO = 0
     private const val PATH_FILL_TYPE_EVEN_ODD = 1
