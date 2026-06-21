@@ -4655,7 +4655,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun addRestore() {
-            if (removeRedundantSaveAroundClearRect()) {
+            if (removeRedundantSaveAroundStateNeutralRecords()) {
                 return
             }
             if (payloadSize >= 4 &&
@@ -4682,27 +4682,101 @@ object JbrSkiaCommandRecorder {
             addCommand(COMMAND_RESTORE)
         }
 
-        private fun removeRedundantSaveAroundClearRect(): Boolean {
-            if (payloadSize < 10 ||
-                payload[payloadSize - 10] != COMMAND_SAVE ||
-                payload[payloadSize - 9] != 3 * Int.SIZE_BYTES ||
-                payload[payloadSize - 8] != COMMAND_RECORD_FLAGS_NONE ||
-                payload[payloadSize - 7] != COMMAND_CLEAR_RECT ||
-                payload[payloadSize - 6] != 7 * Int.SIZE_BYTES ||
-                payload[payloadSize - 5] != COMMAND_RECORD_FLAGS_NONE
-            ) {
-                return false
-            }
+        private fun removeRedundantSaveAroundStateNeutralRecords(): Boolean {
+            val saveStart = redundantStateNeutralSaveStart() ?: return false
             payload.copyInto(
                 payload,
-                destinationOffset = payloadSize - 10,
-                startIndex = payloadSize - 7,
+                destinationOffset = saveStart,
+                startIndex = saveStart + 3,
                 endIndex = payloadSize,
             )
             payloadSize -= 3
             decrementOp(COMMAND_SAVE)
             return true
         }
+
+        private fun redundantStateNeutralSaveStart(): Int? {
+            var offset = 0
+            var saveStart: Int? = null
+            while (offset < payloadSize) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) return null
+                val op = payload[offset]
+                if (op == COMMAND_SAVE &&
+                    recordLength == 3 &&
+                    payload[offset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    saveStart = offset
+                } else if (saveStart != null && !isStateNeutralCommand(op)) {
+                    saveStart = null
+                }
+                offset += recordLength
+            }
+            return saveStart
+        }
+
+        private fun isStateNeutralCommand(op: Int): Boolean =
+            when (op) {
+                COMMAND_FILL_RECT,
+                COMMAND_STROKE_LINE,
+                COMMAND_FILL_OVAL,
+                COMMAND_STROKE_OVAL,
+                COMMAND_CLEAR_RECT,
+                COMMAND_FILL_ROUND_RECT,
+                COMMAND_DEFINE_IMAGE_ARGB,
+                COMMAND_DRAW_IMAGE_REF,
+                COMMAND_DRAW_TEXT_UTF16,
+                COMMAND_CLEAR_IMAGE_CACHE,
+                COMMAND_DRAW_PARAGRAPH_UTF16,
+                COMMAND_DRAW_PATH,
+                COMMAND_DRAW_ARC,
+                COMMAND_DRAW_ROUND_RECT,
+                COMMAND_FILL_RECT_LINEAR_GRADIENT,
+                COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT,
+                COMMAND_FILL_RECT_RADIAL_GRADIENT,
+                COMMAND_FILL_ROUND_RECT_RADIAL_GRADIENT,
+                COMMAND_FILL_PATH_LINEAR_GRADIENT,
+                COMMAND_FILL_PATH_RADIAL_GRADIENT,
+                COMMAND_FILL_RECT_SWEEP_GRADIENT,
+                COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT,
+                COMMAND_FILL_PATH_SWEEP_GRADIENT,
+                COMMAND_EVICT_IMAGE_CACHE_KEY,
+                COMMAND_FILL_RECT_IMAGE_SHADER,
+                COMMAND_STROKE_RECT_LINEAR_GRADIENT,
+                COMMAND_STROKE_ROUND_RECT_LINEAR_GRADIENT,
+                COMMAND_STROKE_RECT_RADIAL_GRADIENT,
+                COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT,
+                COMMAND_STROKE_RECT_SWEEP_GRADIENT,
+                COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT,
+                COMMAND_FILL_RECT_BLEND_MODE,
+                COMMAND_FILL_RECT_COLOR_FILTER,
+                COMMAND_STROKE_LINE_DASH_PATH_EFFECT,
+                COMMAND_DRAW_IMAGE_REF_COLOR_FILTER,
+                COMMAND_DEFINE_COLOR_FILTER_TINT,
+                COMMAND_FILL_RECT_COLOR_FILTER_REF,
+                COMMAND_EVICT_COLOR_FILTER_HANDLE,
+                COMMAND_DEFINE_EFFECT_DESCRIPTOR,
+                COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF,
+                COMMAND_DEFINE_SHADER_DESCRIPTOR,
+                COMMAND_EVICT_SHADER_HANDLE,
+                COMMAND_FILL_RECT_SHADER_REF,
+                COMMAND_STROKE_RECT_DASH_PATH_EFFECT,
+                COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT,
+                COMMAND_STROKE_PATH_DASH_PATH_EFFECT,
+                COMMAND_DRAW_PATH_PATH_EFFECT_REF,
+                COMMAND_DRAW_SHADOW_PATH,
+                COMMAND_DRAW_POINTS,
+                COMMAND_DEFINE_FONT_DATA,
+                COMMAND_DRAW_VERTICES,
+                COMMAND_STROKE_PATH_LINEAR_GRADIENT,
+                COMMAND_STROKE_PATH_RADIAL_GRADIENT,
+                COMMAND_STROKE_PATH_SWEEP_GRADIENT,
+                COMMAND_STROKE_RECT_SHADER_REF,
+                COMMAND_STROKE_RECT_IMAGE_SHADER,
+                COMMAND_DEFINE_IMAGE_BITMAP,
+                COMMAND_DRAW_IMAGE_REF_FULL -> true
+                else -> false
+            }
 
         fun addTranslate(dx1000: Int, dy1000: Int) {
             if (payloadSize >= 5 &&
