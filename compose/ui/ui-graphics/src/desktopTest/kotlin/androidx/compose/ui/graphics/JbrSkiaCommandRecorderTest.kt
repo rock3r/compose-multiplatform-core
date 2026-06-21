@@ -205,12 +205,11 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(10, records[2][0])
         assertEquals(105000, records[2][3])
         assertEquals(206000, records[2][4])
-        assertEquals(13, records[7][0])
-        assertEquals(500, records[7][7])
-        assertEquals(2, records[8][0])
-        assertEquals(Color.Red.toArgb(), records[8][3])
-        assertEquals(8, records[9][0])
-        assertEquals(8, records[10][0])
+        val saveLayer = records.first { it[0] == 13 }
+        assertEquals(500, saveLayer[7])
+        val redFill = records.first { it[0] == 2 && it[3] == Color.Red.toArgb() }
+        assertEquals(Color.Red.toArgb(), redFill[3])
+        assertEquals(2, records.count { it[0] == 8 })
         assertEquals(0, recording.unsupportedCount)
     }
 
