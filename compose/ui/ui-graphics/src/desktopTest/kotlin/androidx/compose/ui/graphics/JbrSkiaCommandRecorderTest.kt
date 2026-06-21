@@ -5868,6 +5868,60 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsNestedSaveTranslateIntoFillRectBeforeRestoreN() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(74))
+        val translatedFill = records.single { it[0] == 2 }
+        assertArrayEquals(
+            intArrayOf(
+                2, 36, 1,
+                Color.Red.toArgb(), 15, 26, 20, 20, 0,
+            ),
+            translatedFill,
+        )
+        val restoreN = records.last { it[0] == 75 }
+        assertEquals(2, restoreN[3])
+    }
+
+    @Test
+    fun keepsFractionalSaveTranslateBeforeFillRectRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(0.5f, 1f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(74))
+        assertEquals(1, commands.countCommand(2))
+        assertEquals(1, commands.countCommand(8))
+    }
+
+    @Test
     fun wrapsImagePaintBlendModeInLayerRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
