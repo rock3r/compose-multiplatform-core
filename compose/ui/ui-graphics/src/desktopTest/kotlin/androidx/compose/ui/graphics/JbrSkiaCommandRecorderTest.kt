@@ -757,7 +757,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun reusesLayerImageFilterHandleAcrossFrames() {
+    fun redefinesLayerImageFilterHandleAcrossFrames() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val blur = JbrSkiaCommandRecorder.ImageFilterDescriptor.Blur(
             sigmaX = 2f,
@@ -772,7 +772,7 @@ class JbrSkiaCommandRecorderTest {
             replayRedLayerWithImageFilter(blur)
         }
 
-        assertEquals(0, recording.commands!!.countCommand(49))
+        assertEquals(1, recording.commands!!.countCommand(49))
         assertEquals(1, recording.commands.countCommand(55))
         assertEquals(0, recording.unsupportedCount)
     }
@@ -1754,11 +1754,8 @@ class JbrSkiaCommandRecorderTest {
 
         val records = recording.commands!!.commandRecords()
         assertArrayEquals(intArrayOf(50, 36, 0, -2, -1, 16, 26, 1000, 1), records[0])
-        assertEquals(3, records[1][0])
-        assertEquals(3, records[2][0])
-        assertEquals(3, records[3][0])
-        assertEquals(3, records[4][0])
-        assertArrayEquals(intArrayOf(8, 12, 0), records[5])
+        assertEquals(23, records[1][0])
+        assertArrayEquals(intArrayOf(8, 12, 0), records[2])
         assertEquals(0, recording.unsupportedCount)
     }
 
@@ -2049,7 +2046,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun reusesTintColorFilterHandleAcrossFrames() {
+    fun redefinesTintColorFilterHandleAcrossFrames() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         withColorFilterHandles {
             JbrSkiaCommandRecorder.record {
@@ -2076,12 +2073,13 @@ class JbrSkiaCommandRecorderTest {
                         colorFilter = ColorFilter.tint(Color.Cyan)
                     },
                 )
-            }
+            }!!
 
             assertArrayEquals(
                 intArrayOf(
-                    1246972723, 106, 0, 10, 1, 1,
-                    47, 40, 1, Color.Magenta.toArgb(), Color.Cyan.toArgb(), 2, 5, 6, 10, 20,
+                    1246972723, 106, 0, 20, 1, 1,
+                    49, 40, 0, commands[9], commands[10], 1, 1, 2, Color.Cyan.toArgb(), 2,
+                    47, 40, 1, Color.Magenta.toArgb(), commands[9], commands[10], 5, 6, 10, 20,
                 ),
                 commands,
             )
@@ -3311,6 +3309,31 @@ class JbrSkiaCommandRecorderTest {
             intArrayOf(
                 1246972723, 106, 0, 15, 1, 1,
                 23, 60, 1, 1, Color.Blue.toArgb(), 1000, 2000, 11000, 12000, 3000, 4000, 2, 0, 1, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
+    fun writesStrokeRectAsZeroRadiusRoundRectRecord() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 106, 0, 15, 1, 1,
+                23, 60, 1, 1, Color.Blue.toArgb(), 1000, 2000, 11000, 12000, 0, 0, 2, 0, 1, 0,
             ),
             commands,
         )
