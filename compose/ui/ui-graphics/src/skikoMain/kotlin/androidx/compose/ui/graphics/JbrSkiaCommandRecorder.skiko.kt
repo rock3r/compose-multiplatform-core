@@ -4655,6 +4655,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun addRestore() {
+            foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             if (foldSaveTranslateIntoDrawImageRefFullBeforeRestore()) {
                 return
             }
@@ -4688,12 +4689,51 @@ object JbrSkiaCommandRecorder {
             addCommand(COMMAND_RESTORE)
         }
 
+        private fun foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore(): Boolean {
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            val imageStart = previousRecordStart(restoreStart) ?: return false
+            if (payload[imageStart] != COMMAND_DRAW_IMAGE_REF_FULL) {
+                return false
+            }
+            val saveTranslateStart = saveTranslateBeforeImageDefinitions(imageStart) ?: return false
+            foldSaveTranslateIntoDrawImageRefFull(saveTranslateStart, imageStart)
+            val shiftedRestoreStart = restoreStart - 5
+            when (restoreOp) {
+                COMMAND_RESTORE -> {
+                    payloadSize -= 3
+                    decrementOp(COMMAND_RESTORE)
+                }
+                COMMAND_RESTORE_N -> {
+                    val restoreCount = payload[shiftedRestoreStart + 3]
+                    if (restoreCount <= 2) {
+                        payload[shiftedRestoreStart] = COMMAND_RESTORE
+                        payload[shiftedRestoreStart + 1] = 3 * Int.SIZE_BYTES
+                        payloadSize -= 1
+                        decrementOp(COMMAND_RESTORE_N)
+                        countOp(COMMAND_RESTORE)
+                    } else {
+                        payload[shiftedRestoreStart + 3] = restoreCount - 1
+                    }
+                }
+            }
+            return true
+        }
+
         private fun foldSaveTranslateIntoDrawImageRefFullBeforeRestore(): Boolean {
             val imageStart = previousRecordStart(payloadSize) ?: return false
             if (payload[imageStart] != COMMAND_DRAW_IMAGE_REF_FULL) {
                 return false
             }
             val saveTranslateStart = saveTranslateBeforeImageDefinitions(imageStart) ?: return false
+            foldSaveTranslateIntoDrawImageRefFull(saveTranslateStart, imageStart)
+            return true
+        }
+
+        private fun foldSaveTranslateIntoDrawImageRefFull(saveTranslateStart: Int, imageStart: Int) {
             val dx = payload[saveTranslateStart + 3]
             val dy = payload[saveTranslateStart + 4]
             payload[imageStart + 3] += dx
@@ -4708,7 +4748,6 @@ object JbrSkiaCommandRecorder {
             )
             payloadSize -= 5
             decrementOp(COMMAND_SAVE_TRANSLATE)
-            return true
         }
 
         private fun saveTranslateBeforeImageDefinitions(imageStart: Int): Int? {
