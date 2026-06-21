@@ -835,10 +835,12 @@ object JbrSkiaCommandRecorder {
         }
 
         fun translate(dx: Float, dy: Float) {
+            if (dx == 0f && dy == 0f) return
             commands.addCommand(COMMAND_TRANSLATE, COMMAND_RECORD_FLAGS_NONE, dx.fixed1000(), dy.fixed1000())
         }
 
         fun scale(sx: Float, sy: Float) {
+            if (sx == 1f && sy == 1f) return
             commands.addCommand(COMMAND_SCALE, COMMAND_RECORD_FLAGS_NONE, sx.fixed1000(), sy.fixed1000())
         }
 
