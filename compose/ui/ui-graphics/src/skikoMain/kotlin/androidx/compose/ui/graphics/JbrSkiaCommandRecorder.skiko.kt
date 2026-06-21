@@ -4611,6 +4611,39 @@ object JbrSkiaCommandRecorder {
 
         fun addTranslate(dx1000: Int, dy1000: Int) {
             if (payloadSize >= 5 &&
+                payload[payloadSize - 5] == COMMAND_SAVE_TRANSLATE &&
+                payload[payloadSize - 4] == 5 * Int.SIZE_BYTES &&
+                payload[payloadSize - 3] == COMMAND_RECORD_FLAGS_NONE
+            ) {
+                val mergedDx = payload[payloadSize - 2] + dx1000
+                val mergedDy = payload[payloadSize - 1] + dy1000
+                if (mergedDx == 0 && mergedDy == 0) {
+                    payload[payloadSize - 5] = COMMAND_SAVE
+                    payload[payloadSize - 4] = 3 * Int.SIZE_BYTES
+                    payloadSize -= 2
+                    decrementOp(COMMAND_SAVE_TRANSLATE)
+                    countOp(COMMAND_SAVE)
+                } else {
+                    payload[payloadSize - 2] = mergedDx
+                    payload[payloadSize - 1] = mergedDy
+                }
+                return
+            }
+            if (payloadSize >= 3 &&
+                payload[payloadSize - 3] == COMMAND_SAVE &&
+                payload[payloadSize - 2] == 3 * Int.SIZE_BYTES &&
+                payload[payloadSize - 1] == COMMAND_RECORD_FLAGS_NONE
+            ) {
+                ensureCapacity(payloadSize + 2)
+                payload[payloadSize - 3] = COMMAND_SAVE_TRANSLATE
+                payload[payloadSize - 2] = 5 * Int.SIZE_BYTES
+                payload[payloadSize++] = dx1000
+                payload[payloadSize++] = dy1000
+                decrementOp(COMMAND_SAVE)
+                countOp(COMMAND_SAVE_TRANSLATE)
+                return
+            }
+            if (payloadSize >= 5 &&
                 payload[payloadSize - 5] == COMMAND_TRANSLATE &&
                 payload[payloadSize - 4] == 5 * Int.SIZE_BYTES &&
                 payload[payloadSize - 3] == COMMAND_RECORD_FLAGS_NONE
@@ -4733,6 +4766,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_RESTORE -> "restore"
                 COMMAND_CLIP_RECT -> "clipRect"
                 COMMAND_TRANSLATE -> "translate"
+                COMMAND_SAVE_TRANSLATE -> "saveTranslate"
                 COMMAND_SCALE -> "scale"
                 COMMAND_ROTATE -> "rotate"
                 COMMAND_SAVE_LAYER -> "saveLayer"
@@ -4818,6 +4852,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RESTORE = 8
     private const val COMMAND_CLIP_RECT = 9
     private const val COMMAND_TRANSLATE = 10
+    private const val COMMAND_SAVE_TRANSLATE = 74
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
@@ -4922,7 +4957,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_BLEND_MODE_LUMINOSITY = 17
     private const val COMMAND_BLEND_MODE_SRC_OVER = 18
     private const val COMMAND_STREAM_MAGIC = 1246972723
-    private const val COMMAND_STREAM_ABI_ID = 106
+    private const val COMMAND_STREAM_ABI_ID = 107
     private const val MAX_FONT_DATA_BYTES = 1_048_576
     private const val COMMAND_STREAM_HEADER_SIZE = 6
     private const val COMMAND_STREAM_FLAGS_NONE = 0
