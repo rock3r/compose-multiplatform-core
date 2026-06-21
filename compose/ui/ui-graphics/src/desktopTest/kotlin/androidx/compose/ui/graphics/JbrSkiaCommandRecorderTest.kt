@@ -89,6 +89,58 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun removesRedundantSaveAroundDrawingRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.drawRect(
+                left = 3f,
+                top = 4f,
+                right = 13f,
+                bottom = 24f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(0, commands!!.countCommand(7))
+        assertEquals(0, commands.countCommand(8))
+        assertEquals(2, commands.countCommand(2))
+    }
+
+    @Test
+    fun keepsSaveAroundStateChangingRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(74))
+        assertEquals(1, commands.countCommand(8))
+        assertEquals(1, commands.countCommand(2))
+    }
+
+    @Test
     fun recordsFrameMetadata() {
         val recording = JbrSkiaCommandRecorder.recordFrame {
             JbrSkiaCommandRecorder.drawRect(
