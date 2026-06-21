@@ -37,6 +37,10 @@ data class JbrSkiaCommandRecording(
     val commandWordCount: Int,
     val unsupportedCount: Int,
     val imageDefineCount: Int,
+    val imageDefineWordCount: Int,
+    val imageDefinePixelCount: Int,
+    val imageDefinedKeys: LongArray,
+    val imageReferencedKeys: LongArray,
     val imageRefCount: Int,
     val textCommandCount: Int,
     val paragraphTextCommandCount: Int,
@@ -54,6 +58,10 @@ data class JbrSkiaCommandRecording(
         if (commandWordCount != other.commandWordCount) return false
         if (unsupportedCount != other.unsupportedCount) return false
         if (imageDefineCount != other.imageDefineCount) return false
+        if (imageDefineWordCount != other.imageDefineWordCount) return false
+        if (imageDefinePixelCount != other.imageDefinePixelCount) return false
+        if (!imageDefinedKeys.contentEquals(other.imageDefinedKeys)) return false
+        if (!imageReferencedKeys.contentEquals(other.imageReferencedKeys)) return false
         if (imageRefCount != other.imageRefCount) return false
         if (textCommandCount != other.textCommandCount) return false
         if (paragraphTextCommandCount != other.paragraphTextCommandCount) return false
@@ -66,6 +74,10 @@ data class JbrSkiaCommandRecording(
         result = 31 * result + commandWordCount
         result = 31 * result + unsupportedCount
         result = 31 * result + imageDefineCount
+        result = 31 * result + imageDefineWordCount
+        result = 31 * result + imageDefinePixelCount
+        result = 31 * result + imageDefinedKeys.contentHashCode()
+        result = 31 * result + imageReferencedKeys.contentHashCode()
         result = 31 * result + imageRefCount
         result = 31 * result + textCommandCount
         result = 31 * result + paragraphTextCommandCount
@@ -78,6 +90,7 @@ data class JbrSkiaCommandRecording(
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
+    private const val LOG_COMMAND_OP_COUNTS_PROPERTY = "compose.jbr.skia.command.logOpCounts"
     private const val MAX_COMMAND_IMAGE_DIMENSION = 4096
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
@@ -86,6 +99,7 @@ object JbrSkiaCommandRecorder {
     private val active = ThreadLocal<Recorder?>()
     private val imageCacheLock = Any()
     private val definedImageKeys = LinkedHashMap<Long, Unit>(MAX_DEFINED_IMAGE_KEYS, 0.75f, true)
+    private var previousFrameImageKeys = emptySet<Long>()
     private val colorFilterHandleLock = Any()
     private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
     private val shaderHandleLock = Any()
@@ -93,6 +107,7 @@ object JbrSkiaCommandRecorder {
     private val fontDataHandleLock = Any()
     private val definedFontDataHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_FONT_DATA_HANDLES, 0.75f, true)
     private val pendingImageCacheClear = AtomicBoolean(false)
+    private val imageCacheHasDefinitions = AtomicBoolean(false)
 
     fun record(block: () -> Unit): IntArray? {
         return recordFrame(block = block).commands
@@ -107,11 +122,19 @@ object JbrSkiaCommandRecorder {
             shadowContext = shadowContext,
             emitPendingImageCacheClear = pendingImageCacheClear.getAndSet(false),
             forceResourceDefinitions = false,
+            updateSharedResourceCaches = true,
         )
         active.set(recorder)
         try {
             block()
-            return recorder.toRecording(recorder.toCommandArray())
+            val recording = recorder.toRecording(recorder.toCommandArray())
+            if (recording.imageDefineCount > 0) {
+                imageCacheHasDefinitions.set(true)
+            }
+            synchronized(imageCacheLock) {
+                previousFrameImageKeys = recording.imageReferencedKeys.toSet()
+            }
+            return recording
         } finally {
             recorder.logFrame()
             active.set(previous)
@@ -125,7 +148,8 @@ object JbrSkiaCommandRecorder {
         val recorder = Recorder(
             shadowContext = previous?.shadowContext ?: JbrSkiaCommandShadowContext(),
             emitPendingImageCacheClear = false,
-            forceResourceDefinitions = true,
+            forceResourceDefinitions = false,
+            updateSharedResourceCaches = false,
         )
         active.set(recorder)
         try {
@@ -356,7 +380,9 @@ object JbrSkiaCommandRecorder {
     private fun clearInteropCaches() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
+            previousFrameImageKeys = emptySet()
         }
+        imageCacheHasDefinitions.set(false)
         synchronized(colorFilterHandleLock) {
             definedColorFilterHandles.clear()
         }
@@ -513,11 +539,16 @@ object JbrSkiaCommandRecorder {
         val shadowContext: JbrSkiaCommandShadowContext,
         emitPendingImageCacheClear: Boolean,
         private val forceResourceDefinitions: Boolean,
+        private val updateSharedResourceCaches: Boolean,
     ) {
         private val commands = CommandStreamWriter()
         private val stack = ArrayDeque<State>()
         private val unsupportedReasons = linkedMapOf<String, Int>()
         private var imageDefineCount = 0
+        private var imageDefineWordCount = 0
+        private var imageDefinePixelCount = 0
+        private val imageDefinedKeys = mutableListOf<Long>()
+        private val imageReferencedKeys = linkedSetOf<Long>()
         private var imageRefCount = 0
         private var textCommandCount = 0
         private var paragraphTextCommandCount = 0
@@ -545,6 +576,10 @@ object JbrSkiaCommandRecorder {
                 commandWordCount = this.commands.streamSize,
                 unsupportedCount = unsupportedCount,
                 imageDefineCount = imageDefineCount,
+                imageDefineWordCount = imageDefineWordCount,
+                imageDefinePixelCount = imageDefinePixelCount,
+                imageDefinedKeys = imageDefinedKeys.toLongArray(),
+                imageReferencedKeys = imageReferencedKeys.toLongArray(),
                 imageRefCount = imageRefCount,
                 textCommandCount = textCommandCount,
                 paragraphTextCommandCount = paragraphTextCommandCount,
@@ -561,9 +596,13 @@ object JbrSkiaCommandRecorder {
             System.err.println(
                 "CMP_JBR_COMMAND_RECORDER_FRAME commands=${commands.streamSize} unsupported=$unsupported" +
                     " textCommands=$textCommandCount paragraphTextCommands=$paragraphTextCommandCount" +
-                " imageDefines=$imageDefineCount imageRefs=$imageRefCount" +
+                " imageDefines=$imageDefineCount imageDefineWords=$imageDefineWordCount" +
+                    " imageDefinePixels=$imageDefinePixelCount imageRefs=$imageRefCount" +
                     " imageCacheClears=$imageCacheClearCount imageCacheEvicts=$imageCacheEvictCount$suffix"
             )
+            if (java.lang.Boolean.getBoolean(LOG_COMMAND_OP_COUNTS_PROPERTY)) {
+                System.err.println("CMP_JBR_COMMAND_RECORDER_OPS ${commands.opSummary()}")
+            }
         }
 
         fun logNestedUnsupported() {
@@ -993,7 +1032,11 @@ object JbrSkiaCommandRecorder {
                 clipPath(clipPath, ClipOp.Intersect)
             }
             commands.appendRecords(childCommands, COMMAND_STREAM_HEADER_SIZE, childCommands.size)
+            rememberDefinedImageKeys(recording.imageDefinedKeys)
+            imageReferencedKeys.addAll(recording.imageReferencedKeys.asIterable())
             imageDefineCount += recording.imageDefineCount
+            imageDefineWordCount += recording.imageDefineWordCount
+            imageDefinePixelCount += recording.imageDefinePixelCount
             imageRefCount += recording.imageRefCount
             textCommandCount += recording.textCommandCount
             paragraphTextCommandCount += recording.paragraphTextCommandCount
@@ -1004,6 +1047,18 @@ object JbrSkiaCommandRecorder {
             }
             restore()
             return true
+        }
+
+        private fun rememberDefinedImageKeys(cacheKeys: LongArray) {
+            if (cacheKeys.isEmpty()) return
+            synchronized(imageCacheLock) {
+                cacheKeys.forEach { cacheKey ->
+                    if (definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS && !definedImageKeys.containsKey(cacheKey)) {
+                        definedImageKeys.remove(definedImageKeys.keys.first())
+                    }
+                    definedImageKeys[cacheKey] = Unit
+                }
+            }
         }
 
         private fun addLayerShadow(
@@ -3847,16 +3902,20 @@ object JbrSkiaCommandRecorder {
             val cacheKey = pixels.imageCacheKey(image.width, image.height)
             var evictedKey: Long? = null
             val shouldDefine = synchronized(imageCacheLock) {
+                val enteringFrame = cacheKey !in previousFrameImageKeys
+                imageReferencedKeys += cacheKey
                 if (definedImageKeys.containsKey(cacheKey)) {
                     definedImageKeys[cacheKey] = Unit
-                    forceResourceDefinitions
+                    forceResourceDefinitions || !imageCacheHasDefinitions.get() || enteringFrame
                 } else {
-                    if (definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
+                    if (updateSharedResourceCaches && definedImageKeys.size >= MAX_DEFINED_IMAGE_KEYS) {
                         val eldest = definedImageKeys.keys.first()
                         definedImageKeys.remove(eldest)
                         evictedKey = eldest
                     }
-                    definedImageKeys[cacheKey] = Unit
+                    if (updateSharedResourceCaches) {
+                        definedImageKeys[cacheKey] = Unit
+                    }
                     true
                 }
             }
@@ -3871,6 +3930,9 @@ object JbrSkiaCommandRecorder {
             }
             if (shouldDefine) {
                 imageDefineCount++
+                imageDefineWordCount += pixels.size + 7
+                imageDefinePixelCount += pixels.size
+                imageDefinedKeys += cacheKey
                 commands.addCommand(
                     COMMAND_DEFINE_IMAGE_ARGB,
                     COMMAND_RECORD_FLAGS_NONE,
@@ -4377,11 +4439,13 @@ object JbrSkiaCommandRecorder {
 
     private class CommandStreamWriter {
         private val payload = ArrayList<Int>(1024)
+        private val opCounts = linkedMapOf<Int, Int>()
 
         val streamSize: Int
             get() = COMMAND_STREAM_HEADER_SIZE + payload.size
 
         fun addCommand(op: Int, recordFlags: Int = COMMAND_RECORD_FLAGS_NONE, vararg args: Int) {
+            countOp(op)
             payload.add(op)
             payload.add((args.size + 3) * Int.SIZE_BYTES)
             payload.add(recordFlags)
@@ -4389,8 +4453,35 @@ object JbrSkiaCommandRecorder {
         }
 
         fun appendRecords(records: IntArray, startIndex: Int, endIndex: Int) {
+            countOps(records, startIndex, endIndex)
             for (index in startIndex until endIndex) {
                 payload.add(records[index])
+            }
+        }
+
+        fun opSummary(): String =
+            if (opCounts.isEmpty()) {
+                "none"
+            } else {
+                opCounts.entries
+                    .sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
+                    .joinToString(separator = " ") { (op, count) -> "${opName(op)}=$count" }
+            }
+
+        private fun countOp(op: Int) {
+            opCounts[op] = (opCounts[op] ?: 0) + 1
+        }
+
+        private fun countOps(records: IntArray, startIndex: Int, endIndex: Int) {
+            var index = startIndex
+            while (index + 2 < endIndex) {
+                val op = records[index]
+                val recordByteSize = records[index + 1]
+                if (recordByteSize < 3 * Int.SIZE_BYTES || recordByteSize % Int.SIZE_BYTES != 0) return
+                val recordIntSize = recordByteSize / Int.SIZE_BYTES
+                if (index + recordIntSize > endIndex) return
+                countOp(op)
+                index += recordIntSize
             }
         }
 
@@ -4403,6 +4494,81 @@ object JbrSkiaCommandRecorder {
                 stream[4] = COMMAND_COORDINATE_SPACE_SWING_USER
                 stream[5] = COMMAND_PAINT_FORMAT_SOLID_ARGB
                 payload.forEachIndexed { index, command -> stream[COMMAND_STREAM_HEADER_SIZE + index] = command }
+            }
+
+        private fun opName(op: Int): String =
+            when (op) {
+                COMMAND_FILL_RECT -> "fillRect"
+                COMMAND_STROKE_LINE -> "strokeLine"
+                COMMAND_FILL_OVAL -> "fillOval"
+                COMMAND_STROKE_OVAL -> "strokeOval"
+                COMMAND_CLEAR_RECT -> "clearRect"
+                COMMAND_SAVE -> "save"
+                COMMAND_RESTORE -> "restore"
+                COMMAND_CLIP_RECT -> "clipRect"
+                COMMAND_TRANSLATE -> "translate"
+                COMMAND_SCALE -> "scale"
+                COMMAND_ROTATE -> "rotate"
+                COMMAND_SAVE_LAYER -> "saveLayer"
+                COMMAND_DEFINE_IMAGE_ARGB -> "defineImageArgb"
+                COMMAND_DRAW_IMAGE_REF -> "drawImageRef"
+                COMMAND_DRAW_TEXT_UTF16 -> "drawTextUtf16"
+                COMMAND_CLEAR_IMAGE_CACHE -> "clearImageCache"
+                COMMAND_DRAW_PARAGRAPH_UTF16 -> "drawParagraphUtf16"
+                COMMAND_CLIP_PATH -> "clipPath"
+                COMMAND_DRAW_PATH -> "drawPath"
+                COMMAND_DRAW_ARC -> "drawArc"
+                COMMAND_DRAW_ROUND_RECT -> "drawRoundRect"
+                COMMAND_FILL_RECT_LINEAR_GRADIENT -> "fillRectLinearGradient"
+                COMMAND_FILL_ROUND_RECT_LINEAR_GRADIENT -> "fillRoundRectLinearGradient"
+                COMMAND_FILL_RECT_RADIAL_GRADIENT -> "fillRectRadialGradient"
+                COMMAND_FILL_ROUND_RECT_RADIAL_GRADIENT -> "fillRoundRectRadialGradient"
+                COMMAND_FILL_PATH_LINEAR_GRADIENT -> "fillPathLinearGradient"
+                COMMAND_FILL_PATH_RADIAL_GRADIENT -> "fillPathRadialGradient"
+                COMMAND_FILL_RECT_SWEEP_GRADIENT -> "fillRectSweepGradient"
+                COMMAND_FILL_ROUND_RECT_SWEEP_GRADIENT -> "fillRoundRectSweepGradient"
+                COMMAND_FILL_PATH_SWEEP_GRADIENT -> "fillPathSweepGradient"
+                COMMAND_EVICT_IMAGE_CACHE_KEY -> "evictImageCacheKey"
+                COMMAND_FILL_RECT_IMAGE_SHADER -> "fillRectImageShader"
+                COMMAND_STROKE_RECT_LINEAR_GRADIENT -> "strokeRectLinearGradient"
+                COMMAND_STROKE_ROUND_RECT_LINEAR_GRADIENT -> "strokeRoundRectLinearGradient"
+                COMMAND_STROKE_RECT_RADIAL_GRADIENT -> "strokeRectRadialGradient"
+                COMMAND_STROKE_ROUND_RECT_RADIAL_GRADIENT -> "strokeRoundRectRadialGradient"
+                COMMAND_STROKE_RECT_SWEEP_GRADIENT -> "strokeRectSweepGradient"
+                COMMAND_STROKE_ROUND_RECT_SWEEP_GRADIENT -> "strokeRoundRectSweepGradient"
+                COMMAND_FILL_RECT_BLEND_MODE -> "fillRectBlendMode"
+                COMMAND_FILL_RECT_COLOR_FILTER -> "fillRectColorFilter"
+                COMMAND_STROKE_LINE_DASH_PATH_EFFECT -> "strokeLineDashPathEffect"
+                COMMAND_SAVE_LAYER_COLOR_FILTER -> "saveLayerColorFilter"
+                COMMAND_DRAW_IMAGE_REF_COLOR_FILTER -> "drawImageRefColorFilter"
+                COMMAND_DEFINE_COLOR_FILTER_TINT -> "defineColorFilterTint"
+                COMMAND_FILL_RECT_COLOR_FILTER_REF -> "fillRectColorFilterRef"
+                COMMAND_EVICT_COLOR_FILTER_HANDLE -> "evictColorFilterHandle"
+                COMMAND_DEFINE_EFFECT_DESCRIPTOR -> "defineEffectDescriptor"
+                COMMAND_SAVE_LAYER_BLEND_MODE -> "saveLayerBlendMode"
+                COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER -> "saveLayerBlendColorFilter"
+                COMMAND_SAVE_LAYER_COLOR_FILTER_REF -> "saveLayerColorFilterRef"
+                COMMAND_DRAW_IMAGE_REF_COLOR_FILTER_REF -> "drawImageRefColorFilterRef"
+                COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF -> "saveLayerBlendColorFilterRef"
+                COMMAND_SAVE_LAYER_IMAGE_FILTER_REF -> "saveLayerImageFilterRef"
+                COMMAND_DEFINE_SHADER_DESCRIPTOR -> "defineShaderDescriptor"
+                COMMAND_EVICT_SHADER_HANDLE -> "evictShaderHandle"
+                COMMAND_FILL_RECT_SHADER_REF -> "fillRectShaderRef"
+                COMMAND_STROKE_RECT_DASH_PATH_EFFECT -> "strokeRectDashPathEffect"
+                COMMAND_STROKE_ROUND_RECT_DASH_PATH_EFFECT -> "strokeRoundRectDashPathEffect"
+                COMMAND_STROKE_PATH_DASH_PATH_EFFECT -> "strokePathDashPathEffect"
+                COMMAND_DRAW_PATH_PATH_EFFECT_REF -> "drawPathPathEffectRef"
+                COMMAND_CONCAT_MATRIX33 -> "concatMatrix33"
+                COMMAND_DRAW_SHADOW_PATH -> "drawShadowPath"
+                COMMAND_DRAW_POINTS -> "drawPoints"
+                COMMAND_DEFINE_FONT_DATA -> "defineFontData"
+                COMMAND_DRAW_VERTICES -> "drawVertices"
+                COMMAND_STROKE_PATH_LINEAR_GRADIENT -> "strokePathLinearGradient"
+                COMMAND_STROKE_PATH_RADIAL_GRADIENT -> "strokePathRadialGradient"
+                COMMAND_STROKE_PATH_SWEEP_GRADIENT -> "strokePathSweepGradient"
+                COMMAND_STROKE_RECT_SHADER_REF -> "strokeRectShaderRef"
+                COMMAND_STROKE_RECT_IMAGE_SHADER -> "strokeRectImageShader"
+                else -> "op$op"
             }
     }
 
