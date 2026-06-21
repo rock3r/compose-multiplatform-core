@@ -123,6 +123,7 @@ object JbrSkiaCommandRecorder {
     private var previousFrameImageKeys = emptySet<Long>()
     private val colorFilterHandleLock = Any()
     private val definedColorFilterHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_COLOR_FILTER_HANDLES, 0.75f, true)
+    private val confirmedColorFilterHandles = HashSet<Long>()
     private val shaderHandleLock = Any()
     private val definedShaderHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_SHADER_HANDLES, 0.75f, true)
     private val fontDataHandleLock = Any()
@@ -417,6 +418,14 @@ object JbrSkiaCommandRecorder {
         }
     }
 
+    @JvmStatic
+    fun markInteropEffectDefinitionsRendered(handles: LongArray) {
+        if (handles.isEmpty()) return
+        synchronized(colorFilterHandleLock) {
+            handles.forEach(confirmedColorFilterHandles::add)
+        }
+    }
+
     private fun clearInteropCaches() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
@@ -427,6 +436,7 @@ object JbrSkiaCommandRecorder {
         imageCacheHasDefinitions.set(false)
         synchronized(colorFilterHandleLock) {
             definedColorFilterHandles.clear()
+            confirmedColorFilterHandles.clear()
         }
         synchronized(shaderHandleLock) {
             definedShaderHandles.clear()
@@ -1811,18 +1821,17 @@ object JbrSkiaCommandRecorder {
         private fun defineTintColorFilterIfNeeded(handle: Long, colorFilter: BlendModeColorFilter) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(colorFilterHandleLock) {
-                if (definedColorFilterHandles.containsKey(handle)) {
-                    definedColorFilterHandles[handle] = Unit
-                    true
-                } else {
+                val alreadyDefined = definedColorFilterHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
                         definedColorFilterHandles.remove(eldest)
+                        confirmedColorFilterHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedColorFilterHandles[handle] = Unit
-                    true
                 }
+                definedColorFilterHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedColorFilterHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
@@ -1879,18 +1888,17 @@ object JbrSkiaCommandRecorder {
         private fun defineEffectDescriptorIfNeeded(handle: Long, type: Int, payload: IntArray) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(colorFilterHandleLock) {
-                if (definedColorFilterHandles.containsKey(handle)) {
-                    definedColorFilterHandles[handle] = Unit
-                    true
-                } else {
+                val alreadyDefined = definedColorFilterHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
                         definedColorFilterHandles.remove(eldest)
+                        confirmedColorFilterHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedColorFilterHandles[handle] = Unit
-                    true
                 }
+                definedColorFilterHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedColorFilterHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
@@ -1948,18 +1956,17 @@ object JbrSkiaCommandRecorder {
         ) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(colorFilterHandleLock) {
-                if (definedColorFilterHandles.containsKey(handle)) {
-                    definedColorFilterHandles[handle] = Unit
-                    true
-                } else {
+                val alreadyDefined = definedColorFilterHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
                         definedColorFilterHandles.remove(eldest)
+                        confirmedColorFilterHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedColorFilterHandles[handle] = Unit
-                    true
                 }
+                definedColorFilterHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedColorFilterHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
@@ -2009,18 +2016,17 @@ object JbrSkiaCommandRecorder {
         ) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(colorFilterHandleLock) {
-                if (definedColorFilterHandles.containsKey(handle)) {
-                    definedColorFilterHandles[handle] = Unit
-                    true
-                } else {
+                val alreadyDefined = definedColorFilterHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
                         definedColorFilterHandles.remove(eldest)
+                        confirmedColorFilterHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedColorFilterHandles[handle] = Unit
-                    true
                 }
+                definedColorFilterHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedColorFilterHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
@@ -2095,18 +2101,17 @@ object JbrSkiaCommandRecorder {
         private fun defineColorMatrixFilterIfNeeded(handle: Long, matrix: FloatArray) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(colorFilterHandleLock) {
-                if (definedColorFilterHandles.containsKey(handle)) {
-                    definedColorFilterHandles[handle] = Unit
-                    true
-                } else {
+                val alreadyDefined = definedColorFilterHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
                         definedColorFilterHandles.remove(eldest)
+                        confirmedColorFilterHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedColorFilterHandles[handle] = Unit
-                    true
                 }
+                definedColorFilterHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedColorFilterHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
@@ -2159,18 +2164,17 @@ object JbrSkiaCommandRecorder {
         private fun defineLightingFilterIfNeeded(handle: Long, colorFilter: LightingColorFilter) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(colorFilterHandleLock) {
-                if (definedColorFilterHandles.containsKey(handle)) {
-                    definedColorFilterHandles[handle] = Unit
-                    true
-                } else {
+                val alreadyDefined = definedColorFilterHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedColorFilterHandles.size >= MAX_DEFINED_COLOR_FILTER_HANDLES) {
                         val eldest = definedColorFilterHandles.keys.first()
                         definedColorFilterHandles.remove(eldest)
+                        confirmedColorFilterHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedColorFilterHandles[handle] = Unit
-                    true
                 }
+                definedColorFilterHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedColorFilterHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
