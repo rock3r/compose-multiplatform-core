@@ -6149,6 +6149,8 @@ object JbrSkiaCommandRecorder {
 
         private fun isTranslatedLayerFoldTransformableRecord(op: Int): Boolean =
             op == COMMAND_DRAW_ROUND_RECT ||
+                op == COMMAND_DRAW_IMAGE_REF_FULL ||
+                op == COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
                 op == COMMAND_DRAW_IMAGE_REF_FULL_RUN ||
                 op == COMMAND_FILL_ROUND_RECT ||
                 op == COMMAND_FILL_RECT ||
@@ -6181,6 +6183,22 @@ object JbrSkiaCommandRecorder {
                         top1000 >= layerTop1000 &&
                         left1000 + payload[recordStart + 6] * 1000 <= layerRight1000 &&
                         top1000 + payload[recordStart + 7] * 1000 <= layerBottom1000
+                }
+                COMMAND_DRAW_IMAGE_REF_FULL -> {
+                    payload[recordStart + 3] >= layerLeft1000 &&
+                        payload[recordStart + 4] >= layerTop1000 &&
+                        payload[recordStart + 5] <= layerRight1000 &&
+                        payload[recordStart + 6] <= layerBottom1000
+                }
+                COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> {
+                    payload[recordStart + 4] >= layerLeft1000 &&
+                        payload[recordStart + 5] >= layerTop1000 &&
+                        payload[recordStart + 6] <= layerRight1000 &&
+                        payload[recordStart + 7] <= layerBottom1000 &&
+                        payload[recordStart + 12] >= layerLeft1000 &&
+                        payload[recordStart + 13] >= layerTop1000 &&
+                        payload[recordStart + 14] <= layerRight1000 &&
+                        payload[recordStart + 15] <= layerBottom1000
                 }
                 COMMAND_DRAW_IMAGE_REF_FULL_RUN -> {
                     val recordEnd = recordStart + payload[recordStart + 1] / Int.SIZE_BYTES

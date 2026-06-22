@@ -6702,7 +6702,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun keepsTranslatedLayerAroundImageAndFillScope() {
+    fun foldsTranslatedLayerAroundImageAndFillScope() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
 
@@ -6733,9 +6733,77 @@ class JbrSkiaCommandRecorderTest {
             JbrSkiaCommandRecorder.restore()
         }
 
-        assertEquals(1, commands!!.countCommand(76))
-        assertEquals(1, commands.countCommand(77))
-        assertEquals(1, commands.countCommand(2))
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(76))
+        val translatedDraw = records.single { it[0] == 77 }
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                11000, 22000, 31000, 42000,
+                translatedDraw[7], translatedDraw[8],
+            ),
+            translatedDraw,
+        )
+        assertArrayEquals(
+            intArrayOf(
+                2, 36, 1,
+                Color.Red.toArgb(), 11, 22, 20, 20, 0,
+            ),
+            records.single { it[0] == 2 },
+        )
+    }
+
+    @Test
+    fun foldsTranslatedLayerAroundImageRoundRectPair() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(76))
+        assertEquals(0, commands.countCommand(77))
+        assertEquals(0, commands.countCommand(4))
+        val compactRecord = records.single { it[0] == 80 }
+        assertEquals(11000, compactRecord[4])
+        assertEquals(22000, compactRecord[5])
+        assertEquals(31000, compactRecord[6])
+        assertEquals(42000, compactRecord[7])
+        assertEquals(11000, compactRecord[12])
+        assertEquals(22000, compactRecord[13])
+        assertEquals(31000, compactRecord[14])
+        assertEquals(42000, compactRecord[15])
     }
 
     @Test
