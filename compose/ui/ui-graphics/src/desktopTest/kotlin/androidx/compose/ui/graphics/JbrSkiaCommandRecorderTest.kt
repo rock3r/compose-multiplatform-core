@@ -5801,7 +5801,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun writesCompactClearAndFullImageRefRecord() {
+    fun dropsMatchedClearBeforeFullImageRefRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
 
@@ -5832,13 +5832,67 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(73, records[0][0])
         assertArrayEquals(
             intArrayOf(
-                79, 52, 1,
-                10, 20, 20, 20,
+                77, 36, 1,
                 10000, 20000, 30000, 40000,
                 records[0][3], records[0][4],
             ),
             records[1],
         )
+    }
+
+    @Test
+    fun keepsRoundRectSeparateAfterDroppingMatchedClearBeforeFullImageRef() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { blendMode = BlendMode.Clear },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(79))
+        assertEquals(1, commands.countCommand(23))
+        assertEquals(73, records[0][0])
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                10000, 20000, 30000, 40000,
+                records[0][3], records[0][4],
+            ),
+            records[1],
+        )
+        assertEquals(23, records[2][0])
     }
 
     @Test
