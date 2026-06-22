@@ -5999,7 +5999,7 @@ class JbrSkiaCommandRecorderTest {
     @Test
     fun dropsMatchedClearBeforeFullImageRefRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
-        val image = onePixelImage(0x55)
+        val image = onePixelImage(0x55, hasAlpha = false)
 
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
@@ -6037,9 +6037,55 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun keepsRoundRectSeparateAfterDroppingMatchedClearBeforeFullImageRef() {
+    fun keepsMatchedClearBeforeAlphaFullImageRefRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
-        val image = onePixelImage(0x55)
+        val image = onePixelImage(0x55, hasAlpha = true)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { blendMode = BlendMode.Clear },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertArrayEquals(
+            intArrayOf(
+                6, 28, 0,
+                10, 20, 20, 20,
+            ),
+            records[0],
+        )
+        assertEquals(73, records[1][0])
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                10000, 20000, 30000, 40000,
+                records[1][3], records[1][4],
+            ),
+            records[2],
+        )
+    }
+
+    @Test
+    fun keepsRoundRectFusedAfterDroppingMatchedClearBeforeFullImageRef() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55, hasAlpha = false)
 
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
@@ -6078,17 +6124,9 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(79))
-        assertEquals(1, commands.countCommand(23))
+        assertEquals(1, commands.countCommand(80))
         assertEquals(73, records[0][0])
-        assertArrayEquals(
-            intArrayOf(
-                77, 36, 1,
-                10000, 20000, 30000, 40000,
-                records[0][3], records[0][4],
-            ),
-            records[1],
-        )
-        assertEquals(23, records[2][0])
+        assertEquals(80, records[1][0])
     }
 
     @Test
@@ -7512,8 +7550,8 @@ class JbrSkiaCommandRecorderTest {
         }
     }
 
-    private fun onePixelImage(index: Int): ImageBitmap {
-        val image = ImageBitmap(1, 1)
+    private fun onePixelImage(index: Int, hasAlpha: Boolean = true): ImageBitmap {
+        val image = ImageBitmap(1, 1, hasAlpha = hasAlpha)
         Canvas(image).drawRect(0f, 0f, 1f, 1f, Paint().apply {
             color = Color(index or 0xff000000.toInt())
         })
