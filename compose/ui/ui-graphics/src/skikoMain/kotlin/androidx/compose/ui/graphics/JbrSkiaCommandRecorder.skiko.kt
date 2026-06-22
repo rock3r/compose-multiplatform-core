@@ -4658,6 +4658,7 @@ object JbrSkiaCommandRecorder {
             foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldSaveTranslateIntoFillRectBeforeTrailingRestore()
             foldSaveTranslateTransformableScopeBeforeTrailingRestore()
+            foldTrailingTranslateIntoRoundRectBeforeTrailingRestore()
             if (foldSaveTranslateIntoDrawImageRefFullBeforeRestore()) {
                 return
             }
@@ -5020,13 +5021,7 @@ object JbrSkiaCommandRecorder {
             ) {
                 return false
             }
-            val dx = payload[translateStart + 3]
-            val dy = payload[translateStart + 4]
-            val leftIndex = if (roundRectOp == COMMAND_FILL_ROUND_RECT) roundRectStart + 4 else roundRectStart + 5
-            payload[leftIndex] += dx
-            payload[leftIndex + 1] += dy
-            payload[leftIndex + 2] += dx
-            payload[leftIndex + 3] += dy
+            translateRoundRectRecord(translateStart, roundRectStart, roundRectOp)
             payload.copyInto(
                 payload,
                 destinationOffset = translateStart,
@@ -5036,6 +5031,43 @@ object JbrSkiaCommandRecorder {
             payloadSize -= 5
             decrementOp(COMMAND_TRANSLATE)
             return true
+        }
+
+        private fun foldTrailingTranslateIntoRoundRectBeforeTrailingRestore(): Boolean {
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            val roundRectStart = previousRecordStart(restoreStart) ?: return false
+            val roundRectOp = payload[roundRectStart]
+            if (roundRectOp != COMMAND_FILL_ROUND_RECT && roundRectOp != COMMAND_DRAW_ROUND_RECT) {
+                return false
+            }
+            val translateStart = previousRecordStart(roundRectStart) ?: return false
+            if (!isTranslateRecord(translateStart)) {
+                return false
+            }
+            translateRoundRectRecord(translateStart, roundRectStart, roundRectOp)
+            payload.copyInto(
+                payload,
+                destinationOffset = translateStart,
+                startIndex = roundRectStart,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 5
+            decrementOp(COMMAND_TRANSLATE)
+            return true
+        }
+
+        private fun translateRoundRectRecord(translateStart: Int, roundRectStart: Int, roundRectOp: Int) {
+            val dx = payload[translateStart + 3]
+            val dy = payload[translateStart + 4]
+            val leftIndex = if (roundRectOp == COMMAND_FILL_ROUND_RECT) roundRectStart + 4 else roundRectStart + 5
+            payload[leftIndex] += dx
+            payload[leftIndex + 1] += dy
+            payload[leftIndex + 2] += dx
+            payload[leftIndex + 3] += dy
         }
 
         private fun removeRedundantSaveAroundStateNeutralRecords(): Boolean {
