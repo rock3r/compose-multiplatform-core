@@ -4660,6 +4660,9 @@ object JbrSkiaCommandRecorder {
             foldSaveTranslateTransformableScopeBeforeTrailingRestore()
             foldTrailingTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldTrailingTranslateIntoRoundRectBeforeTrailingRestore()
+            if (removeRedundantSaveBeforeLayerBeforeCurrentRestore()) {
+                return
+            }
             if (foldSaveTranslateIntoDrawImageRefFullBeforeRestore()) {
                 return
             }
@@ -5152,6 +5155,81 @@ object JbrSkiaCommandRecorder {
             decrementOp(COMMAND_SAVE)
             return true
         }
+
+        private fun removeRedundantSaveBeforeLayerBeforeCurrentRestore(): Boolean {
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            val openSaves = openSaveStartsBefore(restoreStart) ?: return false
+            if (openSaves.size < 2) {
+                return false
+            }
+            val layerStart = openSaves.last()
+            val saveStart = openSaves[openSaves.lastIndex - 1]
+            if (payload[saveStart] != COMMAND_SAVE ||
+                payload[saveStart + 1] != 3 * Int.SIZE_BYTES ||
+                payload[saveStart + 2] != COMMAND_RECORD_FLAGS_NONE ||
+                saveStart + 3 != layerStart ||
+                !isLayerSaveRecord(payload[layerStart])
+            ) {
+                return false
+            }
+            payload.copyInto(
+                payload,
+                destinationOffset = saveStart,
+                startIndex = saveStart + 3,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 3
+            decrementOp(COMMAND_SAVE)
+            return true
+        }
+
+        private fun openSaveStartsBefore(endOffset: Int): MutableList<Int>? {
+            val openSaves = mutableListOf<Int>()
+            var offset = 0
+            while (offset < endOffset) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > endOffset) return null
+                when (payload[offset]) {
+                    COMMAND_SAVE,
+                    COMMAND_SAVE_LAYER,
+                    COMMAND_SAVE_LAYER_COLOR_FILTER,
+                    COMMAND_SAVE_LAYER_BLEND_MODE,
+                    COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER,
+                    COMMAND_SAVE_LAYER_COLOR_FILTER_REF,
+                    COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF,
+                    COMMAND_SAVE_LAYER_IMAGE_FILTER_REF,
+                    COMMAND_SAVE_TRANSLATE,
+                    COMMAND_SAVE_TRANSLATE_LAYER -> openSaves += offset
+                    COMMAND_RESTORE -> {
+                        if (openSaves.isEmpty()) return null
+                        openSaves.removeAt(openSaves.lastIndex)
+                    }
+                    COMMAND_RESTORE_N -> {
+                        val restoreCount = payload[offset + 3]
+                        if (restoreCount < 0 || restoreCount > openSaves.size) return null
+                        repeat(restoreCount) {
+                            openSaves.removeAt(openSaves.lastIndex)
+                        }
+                    }
+                }
+                offset += recordLength
+            }
+            return openSaves
+        }
+
+        private fun isLayerSaveRecord(op: Int): Boolean =
+            op == COMMAND_SAVE_LAYER ||
+                op == COMMAND_SAVE_LAYER_COLOR_FILTER ||
+                op == COMMAND_SAVE_LAYER_BLEND_MODE ||
+                op == COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER ||
+                op == COMMAND_SAVE_LAYER_COLOR_FILTER_REF ||
+                op == COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF ||
+                op == COMMAND_SAVE_LAYER_IMAGE_FILTER_REF ||
+                op == COMMAND_SAVE_TRANSLATE_LAYER
 
         private fun previousRecordStart(endOffset: Int): Int? {
             var offset = 0
