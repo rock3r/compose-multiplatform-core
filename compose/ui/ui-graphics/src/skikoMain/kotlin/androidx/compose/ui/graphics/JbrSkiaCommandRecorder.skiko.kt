@@ -4658,10 +4658,12 @@ object JbrSkiaCommandRecorder {
             foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldSaveTranslateIntoFillRectBeforeTrailingRestore()
             foldSaveTranslateTransformableScopeBeforeTrailingRestore()
+            foldTrailingTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldTrailingTranslateIntoRoundRectBeforeTrailingRestore()
             if (foldSaveTranslateIntoDrawImageRefFullBeforeRestore()) {
                 return
             }
+            foldTrailingTranslateIntoDrawImageRefFull()
             foldTrailingTranslateIntoRoundRect()
             foldTrailingTranslateIntoFillRect()
             removeTrailingTranslate()
@@ -5008,6 +5010,24 @@ object JbrSkiaCommandRecorder {
             return true
         }
 
+        private fun foldTrailingTranslateIntoDrawImageRefFull(): Boolean {
+            val imageStart = previousRecordStart(payloadSize) ?: return false
+            if (payload[imageStart] != COMMAND_DRAW_IMAGE_REF_FULL) {
+                return false
+            }
+            val translateStart = translateBeforeImageDefinitions(imageStart) ?: return false
+            translateDrawImageRefFullRecord(translateStart, imageStart)
+            payload.copyInto(
+                payload,
+                destinationOffset = translateStart,
+                startIndex = translateStart + 5,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 5
+            decrementOp(COMMAND_TRANSLATE)
+            return true
+        }
+
         private fun foldTrailingTranslateIntoRoundRect(): Boolean {
             val roundRectStart = previousRecordStart(payloadSize) ?: return false
             val roundRectOp = payload[roundRectStart]
@@ -5026,6 +5046,29 @@ object JbrSkiaCommandRecorder {
                 payload,
                 destinationOffset = translateStart,
                 startIndex = roundRectStart,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 5
+            decrementOp(COMMAND_TRANSLATE)
+            return true
+        }
+
+        private fun foldTrailingTranslateIntoDrawImageRefFullBeforeTrailingRestore(): Boolean {
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            val imageStart = previousRecordStart(restoreStart) ?: return false
+            if (payload[imageStart] != COMMAND_DRAW_IMAGE_REF_FULL) {
+                return false
+            }
+            val translateStart = translateBeforeImageDefinitions(imageStart) ?: return false
+            translateDrawImageRefFullRecord(translateStart, imageStart)
+            payload.copyInto(
+                payload,
+                destinationOffset = translateStart,
+                startIndex = translateStart + 5,
                 endIndex = payloadSize,
             )
             payloadSize -= 5
@@ -5058,6 +5101,33 @@ object JbrSkiaCommandRecorder {
             payloadSize -= 5
             decrementOp(COMMAND_TRANSLATE)
             return true
+        }
+
+        private fun translateDrawImageRefFullRecord(translateStart: Int, imageStart: Int) {
+            val dx = payload[translateStart + 3]
+            val dy = payload[translateStart + 4]
+            payload[imageStart + 3] += dx
+            payload[imageStart + 4] += dy
+            payload[imageStart + 5] += dx
+            payload[imageStart + 6] += dy
+        }
+
+        private fun translateBeforeImageDefinitions(imageStart: Int): Int? {
+            var offset = imageStart
+            while (true) {
+                val previous = previousRecordStart(offset) ?: return null
+                if (isTranslateRecord(previous)) {
+                    return previous
+                }
+                val op = payload[previous]
+                if (op != COMMAND_DEFINE_IMAGE_BITMAP &&
+                    op != COMMAND_DEFINE_IMAGE_ARGB &&
+                    op != COMMAND_EVICT_IMAGE_CACHE_KEY
+                ) {
+                    return null
+                }
+                offset = previous
+            }
         }
 
         private fun translateRoundRectRecord(translateStart: Int, roundRectStart: Int, roundRectOp: Int) {
