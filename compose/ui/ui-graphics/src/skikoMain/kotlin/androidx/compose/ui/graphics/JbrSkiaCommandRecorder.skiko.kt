@@ -5779,6 +5779,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentFullImageRefs()
             foldTransformableRecordsOutOfPlainTranslatedLayers()
             compactAdjacentStrokeLineImageRefFullRunRecords()
+            compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
             compactAdjacentSaveTranslateLayerSaveTranslateRecords()
             compactAdjacentSaveLayerClipRectRecords()
             compactAdjacentFullImageRefRestoreRecords()
@@ -6509,6 +6510,70 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentStrokeLineImageRefFullRunRestoreNRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val op = payload[readOffset]
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                val isRunRecord =
+                    (op == COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN && recordLength >= 26) ||
+                        (op == COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N && recordLength >= 27)
+                if (isRunRecord &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_RESTORE_N &&
+                    payload[nextOffset + 1] == 4 * Int.SIZE_BYTES &&
+                    payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                    payload[nextOffset + 3] > 0
+                ) {
+                    val restoreCount =
+                        payload[nextOffset + 3] +
+                            if (op == COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N) {
+                                payload[readOffset + recordLength - 1]
+                            } else {
+                                0
+                            }
+                    val bodyEnd =
+                        if (op == COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N) {
+                            readOffset + recordLength - 1
+                        } else {
+                            readOffset + recordLength
+                        }
+                    payload[writeOffset++] = COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N
+                    payload[writeOffset++] =
+                        (recordLength +
+                            if (op == COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N) 0 else 1) *
+                            Int.SIZE_BYTES
+                    payload[writeOffset++] = payload[readOffset + 2]
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset + 3,
+                        endIndex = bodyEnd,
+                    )
+                    writeOffset += bodyEnd - (readOffset + 3)
+                    payload[writeOffset++] = restoreCount
+                    decrementOp(op)
+                    decrementOp(COMMAND_RESTORE_N)
+                    countOp(COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N)
+                    readOffset = nextOffset + 4
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun compactAdjacentSaveTranslateLayerSaveTranslateRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -6802,6 +6867,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_LAYER_CLIP_RECT -> "saveLayerClipRect"
                 COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT -> "drawImageRefFullFillRect"
                 COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN -> "strokeLineDrawImageRefFullRun"
+                COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N -> "strokeLineDrawImageRefFullRunRestoreN"
                 COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE -> "saveTranslateLayerSaveTranslate"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> "drawImageRefFullRestore"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> "drawImageRefFullRestoreN"
@@ -6908,6 +6974,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_FULL_RESTORE = 86
     private const val COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N = 87
     private const val COMMAND_DRAW_ROUND_RECT_RESTORE_N = 88
+    private const val COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN_RESTORE_N = 89
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
