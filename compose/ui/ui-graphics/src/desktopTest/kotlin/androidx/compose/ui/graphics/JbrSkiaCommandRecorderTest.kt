@@ -5997,6 +5997,113 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesCompactStrokeLineAndFullImageRefRunRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 1f,
+                dstTop = 1f,
+                dstRight = 2f,
+                dstBottom = 2f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = Offset(1f, 2f),
+                p2 = Offset(11f, 12f),
+                paint = Paint().apply {
+                    color = Color.Red
+                    strokeWidth = 2f
+                    strokeCap = StrokeCap.Round
+                    strokeJoin = StrokeJoin.Bevel
+                    isAntiAlias = true
+                },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint().apply { isAntiAlias = false },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 50f,
+                dstTop = 60f,
+                dstRight = 70f,
+                dstBottom = 80f,
+                paint = Paint().apply { isAntiAlias = false },
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        val compactRecord = records.last()
+        assertArrayEquals(
+            intArrayOf(
+                84, 104, 0,
+                0,
+                Color.Red.toArgb(), 1, 2, 11, 12, 2, 1, 2, 0,
+                2,
+                10000, 20000, 30000, 40000, compactRecord[18], compactRecord[19],
+                50000, 60000, 70000, 80000, compactRecord[18], compactRecord[19],
+            ),
+            compactRecord,
+        )
+        assertEquals(0, commands.countCommand(3))
+        assertEquals(0, commands.countCommand(81))
+        assertEquals(1, commands.countCommand(77))
+        assertEquals(1, commands.countCommand(84))
+    }
+
+    @Test
+    fun keepsStrokeLineBeforeSingleFullImageRefRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = Offset(1f, 2f),
+                p2 = Offset(11f, 12f),
+                paint = Paint().apply {
+                    color = Color.Red
+                    strokeWidth = 2f
+                },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+        }
+
+        assertEquals(1, commands!!.countCommand(3))
+        assertEquals(1, commands.countCommand(77))
+        assertEquals(0, commands.countCommand(84))
+    }
+
+    @Test
     fun dropsMatchedClearBeforeFullImageRefRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55, hasAlpha = false)
