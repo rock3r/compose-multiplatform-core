@@ -6184,6 +6184,118 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTrailingTranslatedCompactFullImageRefSuffixBeforeRestore() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.translate(7f, 8f)
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 50f,
+                dstTop = 60f,
+                dstRight = 70f,
+                dstBottom = 80f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val imageRecords = commands!!.commandRecords().filter { it[0] == 77 }
+        assertEquals(0, commands.countCommand(6))
+        assertEquals(2, imageRecords.size)
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                15000, 26000, 35000, 46000,
+                imageRecords[0][7], imageRecords[0][8],
+            ),
+            imageRecords[0],
+        )
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                62000, 74000, 82000, 94000,
+                imageRecords[1][7], imageRecords[1][8],
+            ),
+            imageRecords[1],
+        )
+    }
+
+    @Test
+    fun keepsTrailingTranslateSuffixBeforeNonImageDraw() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                },
+            )
+            JbrSkiaCommandRecorder.translate(7f, 8f)
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val imageRecord = commands!!.commandRecords().last { it[0] == 77 }
+        assertEquals(1, commands.countCommand(74))
+        assertEquals(0, commands.countCommand(6))
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                17000, 28000, 37000, 48000,
+                imageRecord[7], imageRecord[8],
+            ),
+            imageRecord,
+        )
+    }
+
+    @Test
     fun foldsTrailingTranslateIntoCompactFullImageRefBeforeRestore() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
