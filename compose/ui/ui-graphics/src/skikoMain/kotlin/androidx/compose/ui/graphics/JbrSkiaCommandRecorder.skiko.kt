@@ -105,6 +105,11 @@ private data class NativeBitmapImageDefinition(
     val cacheKey: Long,
 )
 
+private data class DefinedImage(
+    val cacheKey: Long,
+    val hasAlpha: Boolean,
+)
+
 object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
@@ -2834,7 +2839,8 @@ object JbrSkiaCommandRecorder {
             ) {
                 return false
             }
-            val cacheKey = defineImageIfNeeded(image) ?: return false
+            val definedImage = defineImageIfNeeded(image) ?: return false
+            val cacheKey = definedImage.cacheKey
             imageRefCount++
             val tintColorFilter = paint.tintSrcInColorFilter
             val descriptorColorFilter = if (tintColorFilter == null) descriptorColorFilterOrNull(paint.colorFilter) else null
@@ -2862,7 +2868,7 @@ object JbrSkiaCommandRecorder {
                 ) {
                     commands.addFullImageRefCommand(
                         paint.recordFlags(),
-                        image.hasAlpha,
+                        definedImage.hasAlpha,
                         dstLeft1000,
                         dstTop1000,
                         dstRight1000,
@@ -2926,7 +2932,7 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("imageShaderImage")
                 return
             }
-            val cacheKey = defineImageIfNeeded(imageShader.image) ?: return
+            val cacheKey = defineImageIfNeeded(imageShader.image)?.cacheKey ?: return
             imageRefCount++
             withSolidColorBlendLayer(left, top, right, bottom, paint) {
                 commands.addCommand(
@@ -2968,7 +2974,7 @@ object JbrSkiaCommandRecorder {
                 countUnsupported("imageShaderImage")
                 return
             }
-            val cacheKey = defineImageIfNeeded(imageShader.image) ?: return
+            val cacheKey = defineImageIfNeeded(imageShader.image)?.cacheKey ?: return
             imageRefCount++
             val outset = paint.blendLayerOutset(forceStroke = true)
             withSolidColorBlendLayer(left - outset, top - outset, right + outset, bottom + outset, paint) {
@@ -3817,7 +3823,7 @@ object JbrSkiaCommandRecorder {
             ) {
                 return null
             }
-            val cacheKey = defineImageIfNeeded(image) ?: return null
+            val cacheKey = defineImageIfNeeded(image)?.cacheKey ?: return null
             imageRefCount++
             return intArrayOf(
                 cacheKey.highInt(),
@@ -4031,7 +4037,7 @@ object JbrSkiaCommandRecorder {
             else -> 0
         }
 
-        private fun defineImageIfNeeded(image: ImageBitmap): Long? {
+        private fun defineImageIfNeeded(image: ImageBitmap): DefinedImage? {
             val nativeBitmapDefinition = nativeBitmapImageDefinition(image)
             var pixels: IntArray? = null
             fun readPixels(): IntArray {
@@ -4045,6 +4051,7 @@ object JbrSkiaCommandRecorder {
             val useContentKeyForNativeBitmap =
                 nativeBitmapDefinition != null && pixelCount <= SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS
             var nativeBitmapHasAlpha = nativeBitmapDefinition?.hasAlpha ?: false
+            var effectiveHasAlpha = image.hasAlpha
 
             var evictedKey: Long? = null
             val cacheKey = synchronized(imageCacheLock) {
@@ -4053,10 +4060,12 @@ object JbrSkiaCommandRecorder {
                         val entry = imageIdentityCache[image]
                         if (entry != null && entry.width == image.width && entry.height == image.height) {
                             nativeBitmapHasAlpha = nativeBitmapDefinition.hasAlpha || entry.hasAlpha
+                            effectiveHasAlpha = nativeBitmapHasAlpha
                             entry.cacheKey
                         } else {
                             val pixelData = readPixels()
                             nativeBitmapHasAlpha = nativeBitmapDefinition.hasAlpha || pixelData.hasTransparentPixels()
+                            effectiveHasAlpha = nativeBitmapHasAlpha
                             val computedKey = pixelData.imageCacheKey(image.width, image.height)
                             imageIdentityCache[image] = ImageCacheEntry(
                                 image.width,
@@ -4067,20 +4076,23 @@ object JbrSkiaCommandRecorder {
                             computedKey
                         }
                     } else {
+                        effectiveHasAlpha = nativeBitmapDefinition.hasAlpha
                         nativeBitmapDefinition.cacheKey
                     }
                 } else {
                     val entry = imageIdentityCache[image]
                     if (entry != null && entry.width == image.width && entry.height == image.height) {
+                        effectiveHasAlpha = entry.hasAlpha
                         entry.cacheKey
                     } else {
                         val readPixels = readPixels()
+                        effectiveHasAlpha = image.hasAlpha || readPixels.hasTransparentPixels()
                         val computedKey = readPixels.imageCacheKey(image.width, image.height)
                         imageIdentityCache[image] = ImageCacheEntry(
                             image.width,
                             image.height,
                             computedKey,
-                            image.hasAlpha || readPixels.hasTransparentPixels(),
+                            effectiveHasAlpha,
                         )
                         computedKey
                     }
@@ -4169,7 +4181,7 @@ object JbrSkiaCommandRecorder {
                     0,
                 )
             }
-            return cacheKey
+            return DefinedImage(cacheKey, effectiveHasAlpha)
         }
 
         private fun addClearRect(left: Float, top: Float, right: Float, bottom: Float) {
@@ -5800,6 +5812,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentStrokeLineImageRefFullRunRecords()
             compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
             compactAdjacentSaveTranslateLayerSaveTranslateRecords()
+            compactAdjacentSaveLayerSaveTranslateRecords()
             compactAdjacentSaveLayerClipRectRecords()
             compactAdjacentFullImageRefRestoreRecords()
             compactAdjacentFullImageRefRestoreNRecords()
@@ -6746,6 +6759,56 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentSaveLayerSaveTranslateRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_SAVE_LAYER &&
+                    recordLength == 8 &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_SAVE_TRANSLATE &&
+                    payload[nextOffset + 1] == 5 * Int.SIZE_BYTES &&
+                    payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    payload[writeOffset++] = COMMAND_SAVE_LAYER_SAVE_TRANSLATE
+                    payload[writeOffset++] = 10 * Int.SIZE_BYTES
+                    payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset + 3,
+                        endIndex = readOffset + 8,
+                    )
+                    writeOffset += 5
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = nextOffset + 3,
+                        endIndex = nextOffset + 5,
+                    )
+                    writeOffset += 2
+                    decrementOp(COMMAND_SAVE_LAYER)
+                    decrementOp(COMMAND_SAVE_TRANSLATE)
+                    countOp(COMMAND_SAVE_LAYER_SAVE_TRANSLATE)
+                    readOffset = nextOffset + 5
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun compactAdjacentFullImageRefRestoreRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -7008,6 +7071,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_FILL_RECT -> "fillRect"
                 COMMAND_FILL_RECT_SAVE -> "fillRectSave"
                 COMMAND_SAVE_FILL_RECT_SAVE -> "saveFillRectSave"
+                COMMAND_SAVE_LAYER_SAVE_TRANSLATE -> "saveLayerSaveTranslate"
                 COMMAND_STROKE_LINE -> "strokeLine"
                 COMMAND_FILL_OVAL -> "fillOval"
                 COMMAND_STROKE_OVAL -> "strokeOval"
@@ -7138,6 +7202,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE = 90
     private const val COMMAND_FILL_RECT_SAVE = 91
     private const val COMMAND_SAVE_FILL_RECT_SAVE = 92
+    private const val COMMAND_SAVE_LAYER_SAVE_TRANSLATE = 93
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
