@@ -707,6 +707,117 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun nestedRecordingFoldsPlainTranslatedImageLayer() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawImageRect(
+                    image = image,
+                    srcLeft = 0f,
+                    srcTop = 0f,
+                    srcRight = 1f,
+                    srcBottom = 1f,
+                    dstLeft = 1f,
+                    dstTop = 2f,
+                    dstRight = 11f,
+                    dstBottom = 12f,
+                    paint = Paint(),
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 0f,
+                    pivotY = 0f,
+                    alpha = 1f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 5f,
+                    translationY = 6f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = null,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(0, recording.commands!!.countCommand(76))
+        assertEquals(0, recording.commands!!.countCommand(75))
+        val imageRecord = records.last { it[0] == 77 }
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                106000, 208000, 116000, 218000,
+                imageRecord[7], imageRecord[8],
+            ),
+            imageRecord,
+        )
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
+    fun nestedRecordingKeepsAlphaTranslatedImageLayer() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val recording = JbrSkiaCommandRecorder.recordFrame {
+            val nested = JbrSkiaCommandRecorder.recordNested {
+                JbrSkiaCommandRecorder.drawImageRect(
+                    image = image,
+                    srcLeft = 0f,
+                    srcTop = 0f,
+                    srcRight = 1f,
+                    srcBottom = 1f,
+                    dstLeft = 1f,
+                    dstTop = 2f,
+                    dstRight = 11f,
+                    dstBottom = 12f,
+                    paint = Paint(),
+                )
+            }
+
+            assertTrue(
+                JbrSkiaCommandRecorder.replayRecordedLayer(
+                    recording = nested,
+                    left = 100f,
+                    top = 200f,
+                    width = 30f,
+                    height = 40f,
+                    pivotX = 0f,
+                    pivotY = 0f,
+                    alpha = 0.5f,
+                    scaleX = 1f,
+                    scaleY = 1f,
+                    rotationZ = 0f,
+                    translationX = 5f,
+                    translationY = 6f,
+                    clipRect = null,
+                    clipPath = null,
+                    blendMode = null,
+                )
+            )
+        }
+
+        val records = recording.commands!!.commandRecords()
+        assertEquals(76, records[0][0])
+        assertEquals(500, records[0][9])
+        assertEquals(73, records[1][0])
+        assertEquals(77, records[2][0])
+        assertEquals(75, records[3][0])
+        assertEquals(2, records[3][3])
+        assertEquals(0, recording.unsupportedCount)
+    }
+
+    @Test
     fun nestedRecordingReplaysLayerClipPath() {
         val clipPath = Path().apply {
             moveTo(1f, 2f)
