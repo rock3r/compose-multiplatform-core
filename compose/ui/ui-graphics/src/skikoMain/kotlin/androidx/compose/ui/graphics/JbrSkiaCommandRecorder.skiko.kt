@@ -4657,6 +4657,7 @@ object JbrSkiaCommandRecorder {
         fun addRestore() {
             foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldSaveTranslateIntoFillRectBeforeTrailingRestore()
+            foldSaveTranslateTransformableScopeBeforeTrailingRestore()
             if (foldSaveTranslateIntoDrawImageRefFullBeforeRestore()) {
                 return
             }
@@ -4723,6 +4724,65 @@ object JbrSkiaCommandRecorder {
             ) {
                 return false
             }
+            val shiftedRestoreStart = restoreStart - 5
+            removeOneTrailingRestore(shiftedRestoreStart, restoreOp)
+            return true
+        }
+
+        private fun foldSaveTranslateTransformableScopeBeforeTrailingRestore(): Boolean {
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            var offset = restoreStart
+            var saveTranslateStart: Int? = null
+            var transformableRecordCount = 0
+            while (true) {
+                val previous = previousRecordStart(offset) ?: return false
+                if (isSaveTranslateRecord(previous)) {
+                    saveTranslateStart = previous
+                    break
+                }
+                val op = payload[previous]
+                if (isTranslateScopePassThroughRecord(op)) {
+                    offset = previous
+                    continue
+                }
+                if (!isTranslateScopeTransformableRecord(op)) {
+                    return false
+                }
+                transformableRecordCount++
+                offset = previous
+            }
+            if (transformableRecordCount == 0) {
+                return false
+            }
+            val start = saveTranslateStart ?: return false
+            val dx = payload[start + 3]
+            val dy = payload[start + 4]
+            if (dx % 1000 != 0 || dy % 1000 != 0) {
+                return false
+            }
+            offset = restoreStart
+            while (true) {
+                val previous = previousRecordStart(offset) ?: return false
+                if (previous == start) {
+                    break
+                }
+                if (isTranslateScopeTransformableRecord(payload[previous])) {
+                    translateScopeRecord(previous, dx, dy)
+                }
+                offset = previous
+            }
+            payload.copyInto(
+                payload,
+                destinationOffset = start,
+                startIndex = start + 5,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 5
+            decrementOp(COMMAND_SAVE_TRANSLATE)
             val shiftedRestoreStart = restoreStart - 5
             removeOneTrailingRestore(shiftedRestoreStart, restoreOp)
             return true
@@ -4817,6 +4877,49 @@ object JbrSkiaCommandRecorder {
             payload[recordStart] == COMMAND_SAVE_TRANSLATE &&
                 payload[recordStart + 1] == 5 * Int.SIZE_BYTES &&
                 payload[recordStart + 2] == COMMAND_RECORD_FLAGS_NONE
+
+        private fun isTranslateScopePassThroughRecord(op: Int): Boolean =
+            op == COMMAND_DEFINE_IMAGE_BITMAP ||
+                op == COMMAND_DEFINE_IMAGE_ARGB ||
+                op == COMMAND_EVICT_IMAGE_CACHE_KEY
+
+        private fun isTranslateScopeTransformableRecord(op: Int): Boolean =
+            op == COMMAND_CLEAR_RECT ||
+                op == COMMAND_DRAW_IMAGE_REF_FULL ||
+                op == COMMAND_DRAW_ROUND_RECT ||
+                op == COMMAND_FILL_ROUND_RECT ||
+                op == COMMAND_FILL_RECT
+
+        private fun translateScopeRecord(recordStart: Int, dx: Int, dy: Int) {
+            when (payload[recordStart]) {
+                COMMAND_CLEAR_RECT -> {
+                    payload[recordStart + 3] += dx / 1000
+                    payload[recordStart + 4] += dy / 1000
+                }
+                COMMAND_DRAW_IMAGE_REF_FULL -> {
+                    payload[recordStart + 3] += dx
+                    payload[recordStart + 4] += dy
+                    payload[recordStart + 5] += dx
+                    payload[recordStart + 6] += dy
+                }
+                COMMAND_DRAW_ROUND_RECT -> {
+                    payload[recordStart + 5] += dx
+                    payload[recordStart + 6] += dy
+                    payload[recordStart + 7] += dx
+                    payload[recordStart + 8] += dy
+                }
+                COMMAND_FILL_ROUND_RECT -> {
+                    payload[recordStart + 4] += dx
+                    payload[recordStart + 5] += dy
+                    payload[recordStart + 6] += dx
+                    payload[recordStart + 7] += dy
+                }
+                COMMAND_FILL_RECT -> {
+                    payload[recordStart + 4] += dx / 1000
+                    payload[recordStart + 5] += dy / 1000
+                }
+            }
+        }
 
         private fun removeTrailingTranslate(): Boolean {
             if (payloadSize < 5 ||
