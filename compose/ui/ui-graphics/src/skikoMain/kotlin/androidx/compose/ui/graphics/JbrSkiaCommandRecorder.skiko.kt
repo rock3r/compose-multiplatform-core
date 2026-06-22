@@ -4738,6 +4738,7 @@ object JbrSkiaCommandRecorder {
             var offset = restoreStart
             var saveTranslateStart: Int? = null
             var transformableRecordCount = 0
+            var innerTranslateCount = 0
             while (true) {
                 val previous = previousRecordStart(offset) ?: return false
                 if (isSaveTranslateRecord(previous)) {
@@ -4745,6 +4746,14 @@ object JbrSkiaCommandRecorder {
                     break
                 }
                 val op = payload[previous]
+                if (isTranslateRecord(previous)) {
+                    if (payload[previous + 3] % 1000 != 0 || payload[previous + 4] % 1000 != 0) {
+                        return false
+                    }
+                    innerTranslateCount++
+                    offset = previous
+                    continue
+                }
                 if (isTranslateScopePassThroughRecord(op)) {
                     offset = previous
                     continue
@@ -4764,29 +4773,63 @@ object JbrSkiaCommandRecorder {
             if (dx % 1000 != 0 || dy % 1000 != 0) {
                 return false
             }
-            offset = restoreStart
-            while (true) {
-                val previous = previousRecordStart(offset) ?: return false
-                if (previous == start) {
-                    break
+            var readOffset = start + 5
+            var writeOffset = start
+            var accumulatedDx = dx
+            var accumulatedDy = dy
+            while (readOffset < restoreStart) {
+                val op = payload[readOffset]
+                val recordSize = payload[readOffset + 1] / Int.SIZE_BYTES
+                if (isTranslateRecord(readOffset)) {
+                    accumulatedDx += payload[readOffset + 3]
+                    accumulatedDy += payload[readOffset + 4]
+                    readOffset += recordSize
+                    continue
                 }
-                if (isTranslateScopeTransformableRecord(payload[previous])) {
-                    translateScopeRecord(previous, dx, dy)
+                if (isTranslateScopeTransformableRecord(op)) {
+                    if (requiresWholePixelTranslation(op) &&
+                        (accumulatedDx % 1000 != 0 || accumulatedDy % 1000 != 0)
+                    ) {
+                        return false
+                    }
+                    translateScopeRecord(readOffset, accumulatedDx, accumulatedDy)
                 }
-                offset = previous
+                payload.copyInto(
+                    payload,
+                    destinationOffset = writeOffset,
+                    startIndex = readOffset,
+                    endIndex = readOffset + recordSize,
+                )
+                writeOffset += recordSize
+                readOffset += recordSize
             }
+            if (readOffset != restoreStart) {
+                return false
+            }
+            val removedWords = restoreStart - writeOffset
             payload.copyInto(
                 payload,
-                destinationOffset = start,
-                startIndex = start + 5,
+                destinationOffset = writeOffset,
+                startIndex = restoreStart,
                 endIndex = payloadSize,
             )
-            payloadSize -= 5
+            payloadSize -= removedWords
             decrementOp(COMMAND_SAVE_TRANSLATE)
-            val shiftedRestoreStart = restoreStart - 5
+            repeat(innerTranslateCount) {
+                decrementOp(COMMAND_TRANSLATE)
+            }
+            val shiftedRestoreStart = restoreStart - removedWords
             removeOneTrailingRestore(shiftedRestoreStart, restoreOp)
             return true
         }
+
+        private fun requiresWholePixelTranslation(op: Int): Boolean =
+            op == COMMAND_CLEAR_RECT || op == COMMAND_FILL_RECT
+
+        private fun isTranslateRecord(recordStart: Int): Boolean =
+            payload[recordStart] == COMMAND_TRANSLATE &&
+                payload[recordStart + 1] == 5 * Int.SIZE_BYTES &&
+                payload[recordStart + 2] == COMMAND_RECORD_FLAGS_NONE
 
         private fun foldSaveTranslateIntoDrawImageRefFullBeforeRestore(): Boolean {
             val imageStart = previousRecordStart(payloadSize) ?: return false
