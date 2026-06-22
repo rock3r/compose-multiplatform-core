@@ -7093,8 +7093,9 @@ object JbrSkiaCommandRecorder {
             while (readOffset < payloadSize) {
                 val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
                 val nextOffset = readOffset + recordLength
-                if (payload[readOffset] == COMMAND_DRAW_ROUND_RECT &&
-                    recordLength == 15 &&
+                val op = payload[readOffset]
+                if (((op == COMMAND_DRAW_ROUND_RECT && recordLength == 15) ||
+                    (op == COMMAND_DRAW_ROUND_RECT_RESTORE_N && recordLength == 16)) &&
                     nextOffset < payloadSize &&
                     payload[nextOffset] == COMMAND_RESTORE_N &&
                     payload[nextOffset + 1] == 4 * Int.SIZE_BYTES &&
@@ -7111,8 +7112,12 @@ object JbrSkiaCommandRecorder {
                         endIndex = readOffset + 15,
                     )
                     writeOffset += 12
-                    payload[writeOffset++] = payload[nextOffset + 3]
-                    decrementOp(COMMAND_DRAW_ROUND_RECT)
+                    payload[writeOffset++] = if (op == COMMAND_DRAW_ROUND_RECT_RESTORE_N) {
+                        payload[readOffset + 15] + payload[nextOffset + 3]
+                    } else {
+                        payload[nextOffset + 3]
+                    }
+                    decrementOp(op)
                     decrementOp(COMMAND_RESTORE_N)
                     countOp(COMMAND_DRAW_ROUND_RECT_RESTORE_N)
                     readOffset = nextOffset + 4
