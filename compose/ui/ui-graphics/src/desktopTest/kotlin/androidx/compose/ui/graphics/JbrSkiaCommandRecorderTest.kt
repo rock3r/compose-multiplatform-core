@@ -6807,6 +6807,55 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsAdjacentSaveLayerClipRect() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.saveLayer(Rect(1f, 2f, 31f, 42f), Paint())
+            JbrSkiaCommandRecorder.clipRect(3f, 4f, 13f, 24f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 5f,
+                top = 6f,
+                right = 15f,
+                bottom = 26f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(13))
+        assertEquals(0, commands.countCommand(9))
+        assertEquals(1, commands.countCommand(82))
+        assertArrayEquals(
+            intArrayOf(
+                82, 52, 1,
+                1, 2, 30, 40, 1000,
+                3, 4, 10, 20, 0,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
+    fun keepsSeparatedSaveLayerClipRectRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.saveLayer(Rect(1f, 2f, 31f, 42f), Paint())
+            JbrSkiaCommandRecorder.drawRect(
+                left = 5f,
+                top = 6f,
+                right = 15f,
+                bottom = 26f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.clipRect(3f, 4f, 13f, 24f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(13))
+        assertEquals(1, commands.countCommand(9))
+        assertEquals(0, commands.countCommand(82))
+    }
+
+    @Test
     fun foldsNestedSaveTranslateIntoStrokeLineAndImageBeforeRestoreN() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
