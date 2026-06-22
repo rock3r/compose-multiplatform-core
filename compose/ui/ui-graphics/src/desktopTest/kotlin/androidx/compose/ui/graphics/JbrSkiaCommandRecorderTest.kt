@@ -347,6 +347,22 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun removesEmptyLayerClipBeforeRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.clipRect(0f, 0f, 50f, 50f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 111, 0, 0, 1, 1,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun recordsFrameMetadata() {
         val recording = JbrSkiaCommandRecorder.recordFrame {
             JbrSkiaCommandRecorder.drawRect(

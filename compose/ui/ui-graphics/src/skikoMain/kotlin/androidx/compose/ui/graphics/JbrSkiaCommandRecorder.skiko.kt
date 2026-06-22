@@ -4655,6 +4655,9 @@ object JbrSkiaCommandRecorder {
         }
 
         fun addRestore() {
+            if (removeEmptyLayerClipBeforeCurrentRestore()) {
+                return
+            }
             foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldSaveTranslateIntoFillRectBeforeTrailingRestore()
             foldSaveTranslateTransformableScopeBeforeTrailingRestore()
@@ -5155,6 +5158,27 @@ object JbrSkiaCommandRecorder {
             decrementOp(COMMAND_SAVE)
             return true
         }
+
+        private fun removeEmptyLayerClipBeforeCurrentRestore(): Boolean {
+            val clipStart = previousRecordStart(payloadSize) ?: return false
+            if (!isClipRecord(payload[clipStart])) {
+                return false
+            }
+            val layerStart = previousRecordStart(clipStart) ?: return false
+            if (!isEmptyLayerSaveRecord(payload[layerStart])) {
+                return false
+            }
+            payloadSize = layerStart
+            decrementOp(payload[layerStart])
+            decrementOp(payload[clipStart])
+            return true
+        }
+
+        private fun isClipRecord(op: Int): Boolean =
+            op == COMMAND_CLIP_RECT || op == COMMAND_CLIP_PATH
+
+        private fun isEmptyLayerSaveRecord(op: Int): Boolean =
+            op == COMMAND_SAVE_LAYER || op == COMMAND_SAVE_TRANSLATE_LAYER
 
         private fun removeRedundantSaveBeforeLayerBeforeCurrentRestore(): Boolean {
             val restoreStart = previousRecordStart(payloadSize) ?: return false
