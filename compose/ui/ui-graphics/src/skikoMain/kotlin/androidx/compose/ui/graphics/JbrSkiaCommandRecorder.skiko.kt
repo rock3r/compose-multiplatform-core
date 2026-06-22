@@ -4837,7 +4837,10 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun requiresWholePixelTranslation(op: Int): Boolean =
-            op == COMMAND_CLEAR_RECT || op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL || op == COMMAND_FILL_RECT
+            op == COMMAND_CLEAR_RECT ||
+                op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL ||
+                op == COMMAND_FILL_RECT ||
+                op == COMMAND_STROKE_LINE
 
         private fun isTranslateRecord(recordStart: Int): Boolean =
             payload[recordStart] == COMMAND_TRANSLATE &&
@@ -5037,7 +5040,8 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
                 op == COMMAND_DRAW_ROUND_RECT ||
                 op == COMMAND_FILL_ROUND_RECT ||
-                op == COMMAND_FILL_RECT
+                op == COMMAND_FILL_RECT ||
+                op == COMMAND_STROKE_LINE
 
         private fun translateScopeRecord(recordStart: Int, dx: Int, dy: Int) {
             when (payload[recordStart]) {
@@ -5084,6 +5088,12 @@ object JbrSkiaCommandRecorder {
                 COMMAND_FILL_RECT -> {
                     payload[recordStart + 4] += dx / 1000
                     payload[recordStart + 5] += dy / 1000
+                }
+                COMMAND_STROKE_LINE -> {
+                    payload[recordStart + 4] += dx / 1000
+                    payload[recordStart + 5] += dy / 1000
+                    payload[recordStart + 6] += dx / 1000
+                    payload[recordStart + 7] += dy / 1000
                 }
             }
         }
