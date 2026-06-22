@@ -7607,6 +7607,42 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsSaveBeforeSaveLayerSaveTranslate() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.saveLayer(
+                Rect(1f, 2f, 31f, 42f),
+                Paint().apply { alpha = 0.5f },
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(3f, 4f)
+            JbrSkiaCommandRecorder.drawOval(
+                left = 7f,
+                top = 8f,
+                right = 17f,
+                bottom = 28f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(8))
+        assertEquals(0, commands.countCommand(93))
+        assertEquals(1, commands.countCommand(94))
+        assertArrayEquals(
+            intArrayOf(
+                94, 40, 0,
+                1, 2, 30, 40, 252,
+                3000, 4000,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
     fun compactsFullImageRefRestoreNBeforeSaveTranslateLayerSaveTranslate() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
