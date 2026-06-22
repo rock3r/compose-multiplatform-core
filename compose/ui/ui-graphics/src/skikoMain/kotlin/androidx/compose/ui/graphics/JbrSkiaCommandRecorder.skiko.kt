@@ -5775,6 +5775,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentImageRefFullRoundRectRecords()
             compactAdjacentFullImageRefs()
             foldTransformableRecordsOutOfPlainTranslatedLayers()
+            compactAdjacentStrokeLineImageRefFullRunRecords()
             compactAdjacentSaveLayerClipRectRecords()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
@@ -6429,6 +6430,78 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentStrokeLineImageRefFullRunRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_STROKE_LINE &&
+                    recordLength == 12
+                ) {
+                    var runOffset = nextOffset
+                    while (runOffset < payloadSize && payload[runOffset] == COMMAND_DEFINE_IMAGE_BITMAP) {
+                        val definitionLength = payload[runOffset + 1] / Int.SIZE_BYTES
+                        if (definitionLength != 10 || runOffset + definitionLength > payloadSize) break
+                        runOffset += definitionLength
+                    }
+                    if (runOffset < payloadSize &&
+                        payload[runOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RUN
+                    ) {
+                        val runRecordLength = payload[runOffset + 1] / Int.SIZE_BYTES
+                        if (runRecordLength < 16 || runOffset + runRecordLength > payloadSize) {
+                            if (writeOffset != readOffset) {
+                                payload.copyInto(
+                                    payload,
+                                    destinationOffset = writeOffset,
+                                    startIndex = readOffset,
+                                    endIndex = nextOffset,
+                                )
+                            }
+                            writeOffset += recordLength
+                            readOffset = nextOffset
+                            continue
+                        }
+                        val strokeArgs = payload.copyOfRange(readOffset + 3, nextOffset)
+                        val runArgs = payload.copyOfRange(runOffset + 3, runOffset + runRecordLength)
+                        if (nextOffset < runOffset) {
+                            payload.copyInto(
+                                payload,
+                                destinationOffset = writeOffset,
+                                startIndex = nextOffset,
+                                endIndex = runOffset,
+                            )
+                            writeOffset += runOffset - nextOffset
+                        }
+                        payload[writeOffset++] = COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN
+                        payload[writeOffset++] = (recordLength + runRecordLength - 2) * Int.SIZE_BYTES
+                        payload[writeOffset++] = payload[readOffset + 2]
+                        payload[writeOffset++] = payload[runOffset + 2]
+                        strokeArgs.copyInto(payload, destinationOffset = writeOffset)
+                        writeOffset += strokeArgs.size
+                        runArgs.copyInto(payload, destinationOffset = writeOffset)
+                        writeOffset += runArgs.size
+                        decrementOp(COMMAND_STROKE_LINE)
+                        decrementOp(COMMAND_DRAW_IMAGE_REF_FULL_RUN)
+                        countOp(COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN)
+                        readOffset = runOffset + runRecordLength
+                        continue
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun compactAdjacentSaveLayerClipRectRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -6524,6 +6597,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> "drawImageRefFullDrawRoundRect"
                 COMMAND_SAVE_LAYER_CLIP_RECT -> "saveLayerClipRect"
                 COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT -> "drawImageRefFullFillRect"
+                COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN -> "strokeLineDrawImageRefFullRun"
                 COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> "clearDrawImageRefFull"
                 COMMAND_SCALE -> "scale"
@@ -6621,6 +6695,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_FULL_RUN = 81
     private const val COMMAND_SAVE_LAYER_CLIP_RECT = 82
     private const val COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT = 83
+    private const val COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN = 84
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
