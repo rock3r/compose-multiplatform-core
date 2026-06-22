@@ -7029,17 +7029,31 @@ object JbrSkiaCommandRecorder {
                         recordLength == 10
                 if (isImageRestoreRecord &&
                     nextOffset < payloadSize &&
-                    payload[nextOffset] == COMMAND_RESTORE_N &&
-                    payload[nextOffset + 1] == 4 * Int.SIZE_BYTES &&
-                    payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
-                    payload[nextOffset + 3] > 0 &&
-                    (op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
-                        op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N ||
-                        payload[nextOffset + 3] > 1)
+                    ((payload[nextOffset] == COMMAND_RESTORE &&
+                        payload[nextOffset + 1] == 3 * Int.SIZE_BYTES &&
+                        payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                        (op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
+                            op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N)) ||
+                        (payload[nextOffset] == COMMAND_RESTORE_N &&
+                            payload[nextOffset + 1] == 4 * Int.SIZE_BYTES &&
+                            payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                            payload[nextOffset + 3] > 0 &&
+                            (op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
+                                op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N ||
+                                payload[nextOffset + 3] > 1)))
                 ) {
                     val extraRestoreCount = when (op) {
-                        COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> payload[readOffset + 9] + payload[nextOffset + 3]
-                        COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> payload[nextOffset + 3]
+                        COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N ->
+                            payload[readOffset + 9] + if (payload[nextOffset] == COMMAND_RESTORE) {
+                                1
+                            } else {
+                                payload[nextOffset + 3]
+                            }
+                        COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> if (payload[nextOffset] == COMMAND_RESTORE) {
+                            1
+                        } else {
+                            payload[nextOffset + 3]
+                        }
                         else -> payload[nextOffset + 3] - 1
                     }
                     payload[writeOffset++] = COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N
@@ -7054,9 +7068,9 @@ object JbrSkiaCommandRecorder {
                     writeOffset += 6
                     payload[writeOffset++] = extraRestoreCount
                     decrementOp(op)
-                    decrementOp(COMMAND_RESTORE_N)
+                    decrementOp(payload[nextOffset])
                     countOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N)
-                    readOffset = nextOffset + 4
+                    readOffset = nextOffset + if (payload[nextOffset] == COMMAND_RESTORE) 3 else 4
                     continue
                 }
                 if (writeOffset != readOffset) {
