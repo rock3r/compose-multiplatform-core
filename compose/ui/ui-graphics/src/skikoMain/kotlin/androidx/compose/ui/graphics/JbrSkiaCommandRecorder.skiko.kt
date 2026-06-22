@@ -6652,21 +6652,29 @@ object JbrSkiaCommandRecorder {
             var readOffset = 0
             var writeOffset = 0
             while (readOffset < payloadSize) {
+                val op = payload[readOffset]
                 val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
                 val nextOffset = readOffset + recordLength
-                if ((payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
-                        payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL) &&
-                    recordLength == 9 &&
+                val isImageRestoreRecord =
+                    ((op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE || op == COMMAND_DRAW_IMAGE_REF_FULL) &&
+                        recordLength == 9) ||
+                        op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N &&
+                        recordLength == 10
+                if (isImageRestoreRecord &&
                     nextOffset < payloadSize &&
                     payload[nextOffset] == COMMAND_RESTORE_N &&
                     payload[nextOffset + 1] == 4 * Int.SIZE_BYTES &&
                     payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
                     payload[nextOffset + 3] > 0 &&
-                    (payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
+                    (op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
+                        op == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N ||
                         payload[nextOffset + 3] > 1)
                 ) {
-                    val includesRestore = payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE
-                    val extraRestoreCount = payload[nextOffset + 3] - if (includesRestore) 0 else 1
+                    val extraRestoreCount = when (op) {
+                        COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> payload[readOffset + 9] + payload[nextOffset + 3]
+                        COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> payload[nextOffset + 3]
+                        else -> payload[nextOffset + 3] - 1
+                    }
                     payload[writeOffset++] = COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N
                     payload[writeOffset++] = 10 * Int.SIZE_BYTES
                     payload[writeOffset++] = payload[readOffset + 2]
@@ -6678,7 +6686,7 @@ object JbrSkiaCommandRecorder {
                     )
                     writeOffset += 6
                     payload[writeOffset++] = extraRestoreCount
-                    decrementOp(payload[readOffset])
+                    decrementOp(op)
                     decrementOp(COMMAND_RESTORE_N)
                     countOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N)
                     readOffset = nextOffset + 4
