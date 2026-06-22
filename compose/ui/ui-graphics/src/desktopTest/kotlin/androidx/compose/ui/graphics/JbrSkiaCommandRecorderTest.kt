@@ -347,6 +347,31 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun removesRedundantSaveBeforeLayerClosedWithNestedRestoreN() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(7))
+        assertEquals(13, records[0][0])
+        assertEquals(2, records[1][0])
+        assertEquals(8, records[2][0])
+    }
+
+    @Test
     fun removesEmptyLayerClipBeforeRestore() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
