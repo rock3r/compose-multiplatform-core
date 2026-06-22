@@ -5750,6 +5750,7 @@ object JbrSkiaCommandRecorder {
 
         fun toIntArray(): IntArray {
             foldTrailingTranslatedRoundRectSuffix()
+            foldTransformableRecordsOutOfPlainTranslatedLayers()
             foldFullImageRefsOutOfPlainTranslatedLayers()
             compactAdjacentImageRefFullRoundRectRecords()
             return IntArray(streamSize).also { stream ->
@@ -5857,6 +5858,159 @@ object JbrSkiaCommandRecorder {
             decrementOp(COMMAND_SAVE)
             return true
         }
+
+        private fun foldTransformableRecordsOutOfPlainTranslatedLayers() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_SAVE_TRANSLATE_LAYER && recordLength == 10) {
+                    val layerEnd = plainTranslatedLayerContentEnd(nextOffset)
+                    if (layerEnd != null && canFoldTransformableRecordsOutOfTranslatedLayer(readOffset, nextOffset, layerEnd)) {
+                        val dx = payload[readOffset + 3]
+                        val dy = payload[readOffset + 4]
+                        var contentOffset = nextOffset
+                        while (contentOffset < layerEnd) {
+                            val contentLength = payload[contentOffset + 1] / Int.SIZE_BYTES
+                            val op = payload[contentOffset]
+                            payload.copyInto(
+                                payload,
+                                destinationOffset = writeOffset,
+                                startIndex = contentOffset,
+                                endIndex = contentOffset + contentLength,
+                            )
+                            if (isTranslatedLayerFoldTransformableRecord(op)) {
+                                translateScopeRecord(writeOffset, dx, dy)
+                            }
+                            writeOffset += contentLength
+                            contentOffset += contentLength
+                        }
+                        val restoreCount = payload[layerEnd + 3]
+                        val remainingRestoreCount = restoreCount - 2
+                        if (remainingRestoreCount > 0) {
+                            payload[writeOffset++] = COMMAND_RESTORE_N
+                            payload[writeOffset++] = 4 * Int.SIZE_BYTES
+                            payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                            payload[writeOffset++] = remainingRestoreCount
+                        }
+                        decrementOp(COMMAND_SAVE_TRANSLATE_LAYER)
+                        decrementRestoreCount(restoreCount)
+                        if (remainingRestoreCount > 0) {
+                            countOp(COMMAND_RESTORE_N)
+                        }
+                        readOffset = layerEnd + 4
+                        continue
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
+        private fun plainTranslatedLayerContentEnd(startOffset: Int): Int? {
+            var offset = startOffset
+            var transformableRecordCount = 0
+            while (offset < payloadSize) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) return null
+                val op = payload[offset]
+                if (op == COMMAND_RESTORE_N && recordLength == 4 && payload[offset + 2] == COMMAND_RECORD_FLAGS_NONE) {
+                    return if (payload[offset + 3] >= 2 && transformableRecordCount > 0) offset else null
+                }
+                if (isTranslatedLayerFoldTransformableRecord(op)) {
+                    transformableRecordCount++
+                } else if (!isTranslateScopePassThroughRecord(op)) {
+                    return null
+                }
+                offset += recordLength
+            }
+            return null
+        }
+
+        private fun canFoldTransformableRecordsOutOfTranslatedLayer(
+            layerStart: Int,
+            contentStart: Int,
+            contentEnd: Int,
+        ): Boolean {
+            if (payload[layerStart + 9] != 1000) return false
+            val dx = payload[layerStart + 3]
+            val dy = payload[layerStart + 4]
+            val layerLeft1000 = payload[layerStart + 5] * 1000
+            val layerTop1000 = payload[layerStart + 6] * 1000
+            val layerRight1000 = layerLeft1000 + payload[layerStart + 7] * 1000
+            val layerBottom1000 = layerTop1000 + payload[layerStart + 8] * 1000
+            if (payload[layerStart + 7] < 0 || payload[layerStart + 8] < 0) return false
+            var offset = contentStart
+            while (offset < contentEnd) {
+                val op = payload[offset]
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (isTranslatedLayerFoldTransformableRecord(op)) {
+                    if (requiresWholePixelTranslation(op) && (dx % 1000 != 0 || dy % 1000 != 0)) return false
+                    if (!isRecordInsideLayerBounds(offset, layerLeft1000, layerTop1000, layerRight1000, layerBottom1000)) {
+                        return false
+                    }
+                }
+                offset += recordLength
+            }
+            return offset == contentEnd
+        }
+
+        private fun isTranslatedLayerFoldTransformableRecord(op: Int): Boolean =
+            op == COMMAND_DRAW_ROUND_RECT ||
+                op == COMMAND_FILL_ROUND_RECT ||
+                op == COMMAND_FILL_RECT ||
+                op == COMMAND_STROKE_LINE
+
+        private fun isRecordInsideLayerBounds(
+            recordStart: Int,
+            layerLeft1000: Int,
+            layerTop1000: Int,
+            layerRight1000: Int,
+            layerBottom1000: Int,
+        ): Boolean =
+            when (payload[recordStart]) {
+                COMMAND_DRAW_ROUND_RECT -> {
+                    payload[recordStart + 5] >= layerLeft1000 &&
+                        payload[recordStart + 6] >= layerTop1000 &&
+                        payload[recordStart + 7] <= layerRight1000 &&
+                        payload[recordStart + 8] <= layerBottom1000
+                }
+                COMMAND_FILL_ROUND_RECT -> {
+                    payload[recordStart + 4] >= layerLeft1000 &&
+                        payload[recordStart + 5] >= layerTop1000 &&
+                        payload[recordStart + 6] <= layerRight1000 &&
+                        payload[recordStart + 7] <= layerBottom1000
+                }
+                COMMAND_FILL_RECT -> {
+                    val left1000 = payload[recordStart + 4] * 1000
+                    val top1000 = payload[recordStart + 5] * 1000
+                    left1000 >= layerLeft1000 &&
+                        top1000 >= layerTop1000 &&
+                        left1000 + payload[recordStart + 6] * 1000 <= layerRight1000 &&
+                        top1000 + payload[recordStart + 7] * 1000 <= layerBottom1000
+                }
+                COMMAND_STROKE_LINE -> {
+                    payload[recordStart + 4] * 1000 >= layerLeft1000 &&
+                        payload[recordStart + 5] * 1000 >= layerTop1000 &&
+                        payload[recordStart + 4] * 1000 <= layerRight1000 &&
+                        payload[recordStart + 5] * 1000 <= layerBottom1000 &&
+                        payload[recordStart + 6] * 1000 >= layerLeft1000 &&
+                        payload[recordStart + 7] * 1000 >= layerTop1000 &&
+                        payload[recordStart + 6] * 1000 <= layerRight1000 &&
+                        payload[recordStart + 7] * 1000 <= layerBottom1000
+                }
+                else -> false
+            }
 
         private fun foldFullImageRefsOutOfPlainTranslatedLayers() {
             var readOffset = 0
