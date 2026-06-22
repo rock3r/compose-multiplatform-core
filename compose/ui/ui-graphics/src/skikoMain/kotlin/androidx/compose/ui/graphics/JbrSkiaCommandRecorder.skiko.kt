@@ -5276,24 +5276,50 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun redundantStateNeutralSaveStart(): Int? {
-            var offset = 0
-            var saveStart: Int? = null
-            while (offset < payloadSize) {
+            val openSaves = openSaveStartsBefore(payloadSize) ?: return null
+            val saveStart = openSaves.lastOrNull() ?: return null
+            if (payload[saveStart] != COMMAND_SAVE ||
+                payload[saveStart + 1] != 3 * Int.SIZE_BYTES ||
+                payload[saveStart + 2] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return null
+            }
+            return if (isStateNeutralScope(saveStart + 3, payloadSize)) saveStart else null
+        }
+
+        private fun isStateNeutralScope(startOffset: Int, endOffset: Int): Boolean {
+            var offset = startOffset
+            var nestedSaveDepth = 0
+            while (offset < endOffset) {
                 val recordLength = payload[offset + 1] / Int.SIZE_BYTES
-                if (recordLength < 3 || offset + recordLength > payloadSize) return null
+                if (recordLength < 3 || offset + recordLength > endOffset) return false
                 val op = payload[offset]
-                if (op == COMMAND_SAVE &&
-                    recordLength == 3 &&
-                    payload[offset + 2] == COMMAND_RECORD_FLAGS_NONE
-                ) {
-                    saveStart = offset
-                } else if (saveStart != null && !isStateNeutralCommand(op)) {
-                    saveStart = null
+                if (nestedSaveDepth == 0) {
+                    when {
+                        isStateNeutralCommand(op) -> Unit
+                        isAnySaveRecord(op) -> nestedSaveDepth++
+                        else -> return false
+                    }
+                } else {
+                    when {
+                        isAnySaveRecord(op) -> nestedSaveDepth++
+                        op == COMMAND_RESTORE -> nestedSaveDepth--
+                        op == COMMAND_RESTORE_N -> {
+                            val restoreCount = payload[offset + 3]
+                            if (restoreCount < 0 || restoreCount > nestedSaveDepth) return false
+                            nestedSaveDepth -= restoreCount
+                        }
+                    }
                 }
                 offset += recordLength
             }
-            return saveStart
+            return offset == endOffset && nestedSaveDepth == 0
         }
+
+        private fun isAnySaveRecord(op: Int): Boolean =
+            op == COMMAND_SAVE ||
+                op == COMMAND_SAVE_TRANSLATE ||
+                isLayerSaveRecord(op)
 
         private fun isStateNeutralCommand(op: Int): Boolean =
             when (op) {
