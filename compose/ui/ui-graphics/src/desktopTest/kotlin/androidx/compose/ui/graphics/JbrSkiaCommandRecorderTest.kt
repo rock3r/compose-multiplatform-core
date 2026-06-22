@@ -3837,6 +3837,81 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesCompactDrawRoundRectRestoreNRecord() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(0f, 0f, 100f, 100f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(1f, 2f, 90f, 80f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        val compactRecord = records.single { it[0] == 88 }
+        assertArrayEquals(
+            intArrayOf(
+                88, 64, 1,
+                1, Color.Blue.toArgb(), 1000, 2000, 11000, 12000, 3000, 4000, 2, 0, 1, 0,
+                2,
+            ),
+            compactRecord,
+        )
+        assertEquals(0, commands.countCommand(23))
+        assertEquals(0, commands.countCommand(75))
+        assertEquals(1, commands.countCommand(88))
+    }
+
+    @Test
+    fun keepsSeparatedDrawRoundRectRestoreNRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(0f, 0f, 100f, 100f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(1f, 2f, 90f, 80f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+            JbrSkiaCommandRecorder.drawRect(
+                left = 20f,
+                top = 21f,
+                right = 30f,
+                bottom = 31f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(23))
+        assertEquals(1, commands.countCommand(75))
+        assertEquals(0, commands.countCommand(88))
+    }
+
+    @Test
     fun writesStrokeRectAsZeroRadiusRoundRectRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(
@@ -8293,12 +8368,13 @@ class JbrSkiaCommandRecorderTest {
 
     private fun assertDefineImageBitmapRecord(record: IntArray, width: Int, height: Int) {
         assertEquals(73, record[0])
-        assertEquals(40, record[1])
+        assertEquals(44, record[1])
         assertEquals(0, record[2])
         assertEquals(width, record[5])
         assertEquals(height, record[6])
         assertTrue(record.joinToString(), record[7] != 0 || record[8] != 0)
         assertTrue(record.joinToString(), record[9] != 0)
+        assertTrue(record.joinToString(), record[10] == 0 || record[10] == 1)
     }
 
     private fun IntArray.containsSubsequence(vararg values: Int): Boolean =
