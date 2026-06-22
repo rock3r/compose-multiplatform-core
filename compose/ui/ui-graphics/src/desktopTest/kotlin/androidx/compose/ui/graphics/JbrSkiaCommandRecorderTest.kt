@@ -6026,6 +6026,35 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun definesSmallNativeBitmapAlphaFromPixels() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = ImageBitmap(1, 1, hasAlpha = false)
+        Canvas(image).drawRect(0f, 0f, 1f, 1f, Paint().apply {
+            color = Color.Transparent
+            blendMode = BlendMode.Src
+        })
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 0f,
+                dstTop = 0f,
+                dstRight = 1f,
+                dstBottom = 1f,
+                paint = Paint(),
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertDefineImageBitmapRecord(records[0], 1, 1)
+        assertEquals(1, records[0][10])
+    }
+
+    @Test
     fun writesCompactFullImageRefRestoreRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
