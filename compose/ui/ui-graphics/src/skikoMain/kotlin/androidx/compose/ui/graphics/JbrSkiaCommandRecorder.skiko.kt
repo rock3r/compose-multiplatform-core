@@ -5779,6 +5779,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentSaveTranslateLayerSaveTranslateRecords()
             compactAdjacentSaveLayerClipRectRecords()
             compactAdjacentFullImageRefRestoreRecords()
+            compactAdjacentFullImageRefRestoreNRecords()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
@@ -6647,6 +6648,56 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentFullImageRefRestoreNRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if ((payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
+                        payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL) &&
+                    recordLength == 9 &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_RESTORE_N &&
+                    payload[nextOffset + 1] == 4 * Int.SIZE_BYTES &&
+                    payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                    payload[nextOffset + 3] > 0 &&
+                    (payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE ||
+                        payload[nextOffset + 3] > 1)
+                ) {
+                    val includesRestore = payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RESTORE
+                    val extraRestoreCount = payload[nextOffset + 3] - if (includesRestore) 0 else 1
+                    payload[writeOffset++] = COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N
+                    payload[writeOffset++] = 10 * Int.SIZE_BYTES
+                    payload[writeOffset++] = payload[readOffset + 2]
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset + 3,
+                        endIndex = readOffset + 9,
+                    )
+                    writeOffset += 6
+                    payload[writeOffset++] = extraRestoreCount
+                    decrementOp(payload[readOffset])
+                    decrementOp(COMMAND_RESTORE_N)
+                    countOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N)
+                    readOffset = nextOffset + 4
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun addRecordHeader(op: Int, recordFlags: Int, argCount: Int) {
             ensureCapacity(payloadSize + argCount + 3)
             payload[payloadSize++] = op
@@ -6696,6 +6747,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN -> "strokeLineDrawImageRefFullRun"
                 COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE -> "saveTranslateLayerSaveTranslate"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> "drawImageRefFullRestore"
+                COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> "drawImageRefFullRestoreN"
                 COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> "clearDrawImageRefFull"
                 COMMAND_SCALE -> "scale"
@@ -6796,6 +6848,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN = 84
     private const val COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE = 85
     private const val COMMAND_DRAW_IMAGE_REF_FULL_RESTORE = 86
+    private const val COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N = 87
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
