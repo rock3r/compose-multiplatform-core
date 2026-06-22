@@ -5502,10 +5502,6 @@ object JbrSkiaCommandRecorder {
                 )
                 return
             }
-            val clearX = payload[clearStart + 3]
-            val clearY = payload[clearStart + 4]
-            val clearWidth = payload[clearStart + 5]
-            val clearHeight = payload[clearStart + 6]
             payload.copyInto(
                 payload,
                 destinationOffset = clearStart,
@@ -5515,12 +5511,8 @@ object JbrSkiaCommandRecorder {
             payloadSize -= 7
             decrementOp(COMMAND_CLEAR_RECT)
             addCommand(
-                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL,
+                COMMAND_DRAW_IMAGE_REF_FULL,
                 recordFlags,
-                clearX,
-                clearY,
-                clearWidth,
-                clearHeight,
                 dstLeft1000,
                 dstTop1000,
                 dstRight1000,
