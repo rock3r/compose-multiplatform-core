@@ -7537,6 +7537,46 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsFillRectBeforeSaveLayerClipRect() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply {
+                    color = Color.Red
+                    isAntiAlias = false
+                },
+            )
+            JbrSkiaCommandRecorder.saveLayer(Rect(3f, 4f, 33f, 44f), Paint().apply { alpha = 0.5f })
+            JbrSkiaCommandRecorder.clipRect(5f, 6f, 25f, 36f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 7f,
+                top = 8f,
+                right = 17f,
+                bottom = 28f,
+                paint = Paint().apply { color = Color.Blue },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(1, commands.countCommand(2))
+        assertEquals(0, commands.countCommand(82))
+        assertEquals(1, commands.countCommand(95))
+        assertArrayEquals(
+            intArrayOf(
+                95, 80, 0,
+                Color.Red.toArgb(), 1, 2, 10, 20, 0,
+                1, 3, 4, 30, 40, 252,
+                5, 6, 20, 30, 0,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
     fun compactsAdjacentSaveTranslateLayerSaveTranslate() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
