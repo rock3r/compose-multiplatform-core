@@ -5646,6 +5646,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun toIntArray(): IntArray {
+            foldFullImageRefsOutOfPlainTranslatedLayers()
             compactAdjacentImageRefFullRoundRectRecords()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
@@ -5660,6 +5661,123 @@ object JbrSkiaCommandRecorder {
                     startIndex = 0,
                     endIndex = payloadSize,
                 )
+            }
+        }
+
+        private fun foldFullImageRefsOutOfPlainTranslatedLayers() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_SAVE_TRANSLATE_LAYER && recordLength == 10) {
+                    val imageStart = fullImageRefAfterPassThroughRecords(nextOffset)
+                    if (imageStart != null) {
+                        val restoreStart = imageStart + 9
+                        val restoreCount = restoreCountOrZero(restoreStart)
+                        if (restoreCount >= 2 &&
+                            canFoldFullImageRefOutOfTranslatedLayer(readOffset, imageStart)
+                        ) {
+                            val dx = payload[readOffset + 3]
+                            val dy = payload[readOffset + 4]
+                            if (nextOffset < imageStart) {
+                                payload.copyInto(
+                                    payload,
+                                    destinationOffset = writeOffset,
+                                    startIndex = nextOffset,
+                                    endIndex = imageStart,
+                                )
+                                writeOffset += imageStart - nextOffset
+                            }
+                            payload.copyInto(
+                                payload,
+                                destinationOffset = writeOffset,
+                                startIndex = imageStart,
+                                endIndex = imageStart + 9,
+                            )
+                            payload[writeOffset + 3] += dx
+                            payload[writeOffset + 4] += dy
+                            payload[writeOffset + 5] += dx
+                            payload[writeOffset + 6] += dy
+                            writeOffset += 9
+                            val restoreLength = payload[restoreStart + 1] / Int.SIZE_BYTES
+                            val remainingRestoreCount = restoreCount - 2
+                            if (remainingRestoreCount > 0) {
+                                payload[writeOffset++] = COMMAND_RESTORE_N
+                                payload[writeOffset++] = 4 * Int.SIZE_BYTES
+                                payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                                payload[writeOffset++] = remainingRestoreCount
+                            }
+                            decrementOp(COMMAND_SAVE_TRANSLATE_LAYER)
+                            decrementRestoreCount(restoreCount)
+                            if (remainingRestoreCount > 0) {
+                                countOp(COMMAND_RESTORE_N)
+                            }
+                            readOffset = restoreStart + restoreLength
+                            continue
+                        }
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
+        private fun fullImageRefAfterPassThroughRecords(startOffset: Int): Int? {
+            var offset = startOffset
+            while (offset < payloadSize) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) return null
+                if (payload[offset] == COMMAND_DRAW_IMAGE_REF_FULL && recordLength == 9) {
+                    return offset
+                }
+                if (!isTranslateScopePassThroughRecord(payload[offset])) {
+                    return null
+                }
+                offset += recordLength
+            }
+            return null
+        }
+
+        private fun restoreCountOrZero(recordStart: Int): Int {
+            if (recordStart >= payloadSize) return 0
+            val recordLength = payload[recordStart + 1] / Int.SIZE_BYTES
+            if (payload[recordStart] != COMMAND_RESTORE_N ||
+                recordLength != 4 ||
+                payload[recordStart + 2] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return 0
+            }
+            return payload[recordStart + 3]
+        }
+
+        private fun canFoldFullImageRefOutOfTranslatedLayer(layerStart: Int, imageStart: Int): Boolean {
+            if (payload[layerStart + 9] != 1000) return false
+            val layerLeft1000 = payload[layerStart + 5] * 1000
+            val layerTop1000 = payload[layerStart + 6] * 1000
+            val layerRight1000 = layerLeft1000 + payload[layerStart + 7] * 1000
+            val layerBottom1000 = layerTop1000 + payload[layerStart + 8] * 1000
+            return payload[layerStart + 7] >= 0 &&
+                payload[layerStart + 8] >= 0 &&
+                payload[imageStart + 3] >= layerLeft1000 &&
+                payload[imageStart + 4] >= layerTop1000 &&
+                payload[imageStart + 5] <= layerRight1000 &&
+                payload[imageStart + 6] <= layerBottom1000
+        }
+
+        private fun decrementRestoreCount(restoreCount: Int) {
+            decrementOp(COMMAND_RESTORE_N)
+            if (restoreCount > 2) {
+                countOp(COMMAND_RESTORE_N)
             }
         }
 
