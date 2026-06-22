@@ -6609,6 +6609,62 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTrailingTranslateSaveFilledRoundRectScopeAtStreamEnd() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(1, records.size)
+        assertEquals(78, records[0][0])
+        assertEquals(Color.Red.toArgb(), records[0][3])
+        assertEquals(6000, records[0][4])
+        assertEquals(8000, records[0][5])
+        assertEquals(16000, records[0][6])
+        assertEquals(28000, records[0][7])
+        assertEquals(0, commands.countCommand(10))
+        assertEquals(0, commands.countCommand(7))
+        assertEquals(0, commands.countCommand(8))
+    }
+
+    @Test
+    fun keepsTranslateSaveRoundRectScopeWithAdditionalScopedState() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(0f, 0f, 20f, 30f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(10, records[0][0])
+        assertEquals(7, records[1][0])
+        assertEquals(9, records[2][0])
+        assertEquals(78, records[3][0])
+        assertEquals(8, records[4][0])
+    }
+
+    @Test
     fun removesRedundantPlainSaveAroundDrawingAndBalancedNestedLayer() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()

@@ -5739,6 +5739,7 @@ object JbrSkiaCommandRecorder {
         }
 
         fun toIntArray(): IntArray {
+            foldTrailingTranslatedRoundRectSuffix()
             foldFullImageRefsOutOfPlainTranslatedLayers()
             compactAdjacentImageRefFullRoundRectRecords()
             return IntArray(streamSize).also { stream ->
@@ -5755,6 +5756,96 @@ object JbrSkiaCommandRecorder {
                     endIndex = payloadSize,
                 )
             }
+        }
+
+        private fun foldTrailingTranslatedRoundRectSuffix(): Boolean {
+            val trailingRoundRectStart = previousRecordStart(payloadSize) ?: return false
+            val trailingRoundRectOp = payload[trailingRoundRectStart]
+            if (trailingRoundRectOp == COMMAND_FILL_ROUND_RECT || trailingRoundRectOp == COMMAND_DRAW_ROUND_RECT) {
+                val trailingTranslateStart = previousRecordStart(trailingRoundRectStart) ?: return false
+                if (isTranslateRecord(trailingTranslateStart)) {
+                    translateRoundRectRecord(trailingTranslateStart, trailingRoundRectStart, trailingRoundRectOp)
+                    val roundRectLength = payload[trailingRoundRectStart + 1] / Int.SIZE_BYTES
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = trailingTranslateStart,
+                        startIndex = trailingRoundRectStart,
+                        endIndex = trailingRoundRectStart + roundRectLength,
+                    )
+                    payloadSize = trailingTranslateStart + roundRectLength
+                    decrementOp(COMMAND_TRANSLATE)
+                    return true
+                }
+            }
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            val roundRectStart = previousRecordStart(restoreStart) ?: return false
+            val roundRectOp = payload[roundRectStart]
+            if (roundRectOp != COMMAND_FILL_ROUND_RECT && roundRectOp != COMMAND_DRAW_ROUND_RECT) {
+                return false
+            }
+            val saveStart = previousRecordStart(roundRectStart) ?: return false
+            if (payload[saveStart] != COMMAND_SAVE ||
+                payload[saveStart + 1] != 3 * Int.SIZE_BYTES ||
+                payload[saveStart + 2] != COMMAND_RECORD_FLAGS_NONE
+            ) {
+                return false
+            }
+            val translateStart = previousRecordStart(saveStart) ?: return false
+            if (!isTranslateRecord(translateStart)) {
+                return false
+            }
+            val restoreCount = if (restoreOp == COMMAND_RESTORE_N) payload[restoreStart + 3] else 1
+            if (restoreCount <= 0) {
+                return false
+            }
+            translateRoundRectRecord(translateStart, roundRectStart, roundRectOp)
+            val roundRectLength = payload[roundRectStart + 1] / Int.SIZE_BYTES
+            payload.copyInto(
+                payload,
+                destinationOffset = translateStart,
+                startIndex = roundRectStart,
+                endIndex = roundRectStart + roundRectLength,
+            )
+            var writeOffset = translateStart + roundRectLength
+            when (restoreOp) {
+                COMMAND_RESTORE -> {
+                    decrementOp(COMMAND_RESTORE)
+                }
+                COMMAND_RESTORE_N -> {
+                    decrementOp(COMMAND_RESTORE_N)
+                    when (val remainingRestoreCount = restoreCount - 1) {
+                        0 -> Unit
+                        1 -> {
+                            payload[writeOffset++] = COMMAND_RESTORE
+                            payload[writeOffset++] = 3 * Int.SIZE_BYTES
+                            payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                            countOp(COMMAND_RESTORE)
+                        }
+                        else -> {
+                            payload[writeOffset++] = COMMAND_RESTORE_N
+                            payload[writeOffset++] = 4 * Int.SIZE_BYTES
+                            payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                            payload[writeOffset++] = remainingRestoreCount
+                            countOp(COMMAND_RESTORE_N)
+                        }
+                    }
+                }
+            }
+            val restoreLength = payload[restoreStart + 1] / Int.SIZE_BYTES
+            payload.copyInto(
+                payload,
+                destinationOffset = writeOffset,
+                startIndex = restoreStart + restoreLength,
+                endIndex = payloadSize,
+            )
+            payloadSize = writeOffset + payloadSize - restoreStart - restoreLength
+            decrementOp(COMMAND_TRANSLATE)
+            decrementOp(COMMAND_SAVE)
+            return true
         }
 
         private fun foldFullImageRefsOutOfPlainTranslatedLayers() {
