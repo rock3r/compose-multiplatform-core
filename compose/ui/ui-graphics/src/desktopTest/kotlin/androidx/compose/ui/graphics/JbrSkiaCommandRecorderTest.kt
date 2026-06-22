@@ -6331,6 +6331,46 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTrailingRestoreNIntoCompactRoundRectRestoreNRecord() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(0f, 0f, 100f, 100f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(23))
+        assertEquals(0, commands.countCommand(75))
+        assertEquals(1, commands.countCommand(88))
+        assertArrayEquals(
+            intArrayOf(
+                88, 64, 1,
+                1, Color.Red.toArgb(),
+                1000, 2000, 11000, 22000,
+                3000, 4000,
+                2, 0, 1, 0,
+                3,
+            ),
+            records.single { it[0] == 88 },
+        )
+    }
+
+    @Test
     fun writesCompactFullImageRefRunRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
