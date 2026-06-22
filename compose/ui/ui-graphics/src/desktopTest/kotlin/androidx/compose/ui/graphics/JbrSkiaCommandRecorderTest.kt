@@ -6055,6 +6055,86 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun definesSmallNativeBitmapAlphaFromMixedTransparentPixels() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = ImageBitmap(2, 2, hasAlpha = false)
+        Canvas(image).run {
+            drawRect(0f, 0f, 2f, 2f, Paint().apply {
+                color = Color.Transparent
+                blendMode = BlendMode.Src
+            })
+            drawRect(1f, 0f, 2f, 1f, Paint().apply {
+                color = Color.Red
+                blendMode = BlendMode.Src
+            })
+            drawRect(0f, 1f, 1f, 2f, Paint().apply {
+                color = Color.Blue
+                blendMode = BlendMode.Src
+            })
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 2f,
+                srcBottom = 2f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertDefineImageBitmapRecord(records[0], 2, 2)
+        assertEquals(1, records[0][10])
+    }
+
+    @Test
+    fun keepsClearBeforeFullNativeBitmapWithDiscoveredAlpha() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = ImageBitmap(2, 2, hasAlpha = false)
+        Canvas(image).run {
+            drawRect(0f, 0f, 2f, 2f, Paint().apply {
+                color = Color.Transparent
+                blendMode = BlendMode.Src
+            })
+            drawRect(1f, 0f, 2f, 1f, Paint().apply {
+                color = Color.Red
+                blendMode = BlendMode.Src
+            })
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { blendMode = BlendMode.Clear },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 2f,
+                srcBottom = 2f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+        }
+
+        assertEquals(1, commands!!.countCommand(6))
+        assertEquals(1, commands.countCommand(73))
+    }
+
+    @Test
     fun writesCompactFullImageRefRestoreRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
@@ -7487,6 +7567,40 @@ class JbrSkiaCommandRecorderTest {
                 85, 48, 0,
                 1000, 2000, 3, 4, 30, 40, 252,
                 5000, 6000,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
+    fun compactsAdjacentSaveLayerSaveTranslate() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.saveLayer(
+                Rect(1f, 2f, 31f, 42f),
+                Paint().apply { alpha = 0.5f },
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(3f, 4f)
+            JbrSkiaCommandRecorder.drawOval(
+                left = 7f,
+                top = 8f,
+                right = 17f,
+                bottom = 28f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(13))
+        assertEquals(0, commands.countCommand(74))
+        assertEquals(1, commands.countCommand(93))
+        assertArrayEquals(
+            intArrayOf(
+                93, 40, 0,
+                1, 2, 30, 40, 252,
+                3000, 4000,
             ),
             records.first(),
         )
