@@ -5854,6 +5854,7 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(74))
+        assertEquals(0, commands.countCommand(10))
         val translatedDraw = records.last { it[0] == 77 }
         assertArrayEquals(
             intArrayOf(
@@ -5978,6 +5979,77 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(26000, translatedRoundRect[6])
         assertEquals(35000, translatedRoundRect[7])
         assertEquals(46000, translatedRoundRect[8])
+        val restoreN = records.last { it[0] == 75 }
+        assertEquals(2, restoreN[3])
+    }
+
+    @Test
+    fun foldsNestedSaveTranslateAroundInnerTranslateScopeBeforeRestoreN() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 0f,
+                dstTop = 0f,
+                dstRight = 1f,
+                dstBottom = 1f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.translate(2f, 3f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(74))
+        assertEquals(0, commands.countCommand(10))
+        val translatedDraw = records.last { it[0] == 77 }
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                15000, 26000, 35000, 46000,
+                records[0][3], records[0][4],
+            ),
+            translatedDraw,
+        )
+        assertArrayEquals(
+            intArrayOf(
+                2, 36, 1,
+                Color.Red.toArgb(), 17, 29, 20, 20, 0,
+            ),
+            records.single { it[0] == 2 },
+        )
         val restoreN = records.last { it[0] == 75 }
         assertEquals(2, restoreN[3])
     }
