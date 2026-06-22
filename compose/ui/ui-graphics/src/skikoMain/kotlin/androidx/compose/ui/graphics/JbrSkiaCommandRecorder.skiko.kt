@@ -5037,6 +5037,7 @@ object JbrSkiaCommandRecorder {
             op == COMMAND_CLEAR_RECT ||
                 op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL ||
                 op == COMMAND_DRAW_IMAGE_REF_FULL ||
+                op == COMMAND_DRAW_IMAGE_REF_FULL_RUN ||
                 op == COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
                 op == COMMAND_DRAW_ROUND_RECT ||
                 op == COMMAND_FILL_ROUND_RECT ||
@@ -5062,6 +5063,17 @@ object JbrSkiaCommandRecorder {
                     payload[recordStart + 4] += dy
                     payload[recordStart + 5] += dx
                     payload[recordStart + 6] += dy
+                }
+                COMMAND_DRAW_IMAGE_REF_FULL_RUN -> {
+                    val count = payload[recordStart + 3]
+                    var argsOffset = recordStart + 4
+                    repeat(count) {
+                        payload[argsOffset] += dx
+                        payload[argsOffset + 1] += dy
+                        payload[argsOffset + 2] += dx
+                        payload[argsOffset + 3] += dy
+                        argsOffset += 6
+                    }
                 }
                 COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> {
                     payload[recordStart + 4] += dx
@@ -5755,6 +5767,7 @@ object JbrSkiaCommandRecorder {
             foldFullImageRefsOutOfPlainTranslatedLayers()
             compactAdjacentImageRefFullRoundRectRecords()
             compactAdjacentFullImageRefs()
+            foldTransformableRecordsOutOfPlainTranslatedLayers()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
