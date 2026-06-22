@@ -4648,6 +4648,9 @@ object JbrSkiaCommandRecorder {
             get() = COMMAND_STREAM_HEADER_SIZE + payloadSize
 
         fun addCommand(op: Int, recordFlags: Int = COMMAND_RECORD_FLAGS_NONE, vararg args: Int) {
+            if (tryAddDrawImageRefFullDrawRoundRect(op, recordFlags, args)) {
+                return
+            }
             countOp(op)
             addRecordHeader(op, recordFlags, args.size)
             addAll(args)
@@ -4938,6 +4941,7 @@ object JbrSkiaCommandRecorder {
             op == COMMAND_CLEAR_RECT ||
                 op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL ||
                 op == COMMAND_DRAW_IMAGE_REF_FULL ||
+                op == COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
                 op == COMMAND_DRAW_ROUND_RECT ||
                 op == COMMAND_FILL_ROUND_RECT ||
                 op == COMMAND_FILL_RECT
@@ -4961,6 +4965,16 @@ object JbrSkiaCommandRecorder {
                     payload[recordStart + 4] += dy
                     payload[recordStart + 5] += dx
                     payload[recordStart + 6] += dy
+                }
+                COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> {
+                    payload[recordStart + 4] += dx
+                    payload[recordStart + 5] += dy
+                    payload[recordStart + 6] += dx
+                    payload[recordStart + 7] += dy
+                    payload[recordStart + 12] += dx
+                    payload[recordStart + 13] += dy
+                    payload[recordStart + 14] += dx
+                    payload[recordStart + 15] += dy
                 }
                 COMMAND_DRAW_ROUND_RECT -> {
                     payload[recordStart + 5] += dx
@@ -5381,6 +5395,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_STROKE_RECT_IMAGE_SHADER,
                 COMMAND_DEFINE_IMAGE_BITMAP,
                 COMMAND_DRAW_IMAGE_REF_FULL,
+                COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT,
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> true
                 else -> false
             }
@@ -5527,6 +5542,28 @@ object JbrSkiaCommandRecorder {
             payloadSize += count
         }
 
+        private fun tryAddDrawImageRefFullDrawRoundRect(op: Int, recordFlags: Int, args: IntArray): Boolean {
+            if (op != COMMAND_DRAW_ROUND_RECT || args.size != 12) {
+                return false
+            }
+            val previous = previousRecordStart(payloadSize) ?: return false
+            if (payload[previous] != COMMAND_DRAW_IMAGE_REF_FULL ||
+                payload[previous + 1] != 9 * Int.SIZE_BYTES
+            ) {
+                return false
+            }
+            val imageFlags = payload[previous + 2]
+            val imageArgs = payload.copyOfRange(previous + 3, previous + 9)
+            payloadSize = previous
+            decrementOp(COMMAND_DRAW_IMAGE_REF_FULL)
+            countOp(COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT)
+            addRecordHeader(COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT, recordFlags, 1 + imageArgs.size + args.size)
+            addValue(imageFlags)
+            addAll(imageArgs)
+            addAll(args)
+            return true
+        }
+
         private fun matchingClearRectBeforeImageDefinitions(
             dstLeft1000: Int,
             dstTop1000: Int,
@@ -5608,8 +5645,9 @@ object JbrSkiaCommandRecorder {
             }
         }
 
-        fun toIntArray(): IntArray =
-            IntArray(streamSize).also { stream ->
+        fun toIntArray(): IntArray {
+            compactAdjacentImageRefFullRoundRectRecords()
+            return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
                 stream[2] = COMMAND_STREAM_FLAGS_NONE
@@ -5623,6 +5661,57 @@ object JbrSkiaCommandRecorder {
                     endIndex = payloadSize,
                 )
             }
+        }
+
+        private fun compactAdjacentImageRefFullRoundRectRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
+                    recordLength == 9 &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_DRAW_ROUND_RECT &&
+                    payload[nextOffset + 1] == 15 * Int.SIZE_BYTES
+                ) {
+                    payload[writeOffset++] = COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT
+                    payload[writeOffset++] = 22 * Int.SIZE_BYTES
+                    payload[writeOffset++] = payload[nextOffset + 2]
+                    payload[writeOffset++] = payload[readOffset + 2]
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset + 3,
+                        endIndex = readOffset + 9,
+                    )
+                    writeOffset += 6
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = nextOffset + 3,
+                        endIndex = nextOffset + 15,
+                    )
+                    writeOffset += 12
+                    decrementOp(COMMAND_DRAW_IMAGE_REF_FULL)
+                    decrementOp(COMMAND_DRAW_ROUND_RECT)
+                    countOp(COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT)
+                    readOffset = nextOffset + 15
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
 
         private fun addRecordHeader(op: Int, recordFlags: Int, argCount: Int) {
             ensureCapacity(payloadSize + argCount + 3)
@@ -5635,6 +5724,11 @@ object JbrSkiaCommandRecorder {
             ensureCapacity(payloadSize + values.size)
             values.copyInto(payload, destinationOffset = payloadSize)
             payloadSize += values.size
+        }
+
+        private fun addValue(value: Int) {
+            ensureCapacity(payloadSize + 1)
+            payload[payloadSize++] = value
         }
 
         private fun ensureCapacity(requiredSize: Int) {
@@ -5661,6 +5755,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_RESTORE_N -> "restoreN"
                 COMMAND_SAVE_TRANSLATE_LAYER -> "saveTranslateLayer"
                 COMMAND_DRAW_IMAGE_REF_FULL -> "drawImageRefFull"
+                COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> "drawImageRefFullDrawRoundRect"
                 COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> "clearDrawImageRefFull"
                 COMMAND_SCALE -> "scale"
@@ -5754,6 +5849,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_FULL = 77
     private const val COMMAND_FILL_ROUND_RECT = 78
     private const val COMMAND_CLEAR_DRAW_IMAGE_REF_FULL = 79
+    private const val COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT = 80
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13

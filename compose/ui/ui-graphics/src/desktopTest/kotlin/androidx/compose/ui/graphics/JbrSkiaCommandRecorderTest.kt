@@ -5896,6 +5896,98 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesCompactFullImageRefAndRoundRectRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(77))
+        assertEquals(0, commands.countCommand(23))
+        assertEquals(1, commands.countCommand(80))
+        assertEquals(73, records[0][0])
+        assertArrayEquals(
+            intArrayOf(
+                80, 88, 1,
+                1,
+                10000, 20000, 30000, 40000,
+                records[0][3], records[0][4],
+                1, Color.Blue.toArgb(), 1000, 2000, 11000, 12000, 3000, 4000, 2, 0, 1, 0,
+            ),
+            records[1],
+        )
+    }
+
+    @Test
+    fun preservesImageFlagsInCompactFullImageRefRoundRectRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                    isAntiAlias = false
+                },
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(77))
+        assertEquals(0, commands.countCommand(23))
+        assertEquals(1, commands.countCommand(80))
+        assertEquals(1, records[1][3])
+        assertEquals(0, records[1][2])
+    }
+
+    @Test
     fun keepsMismatchedClearBeforeCompactFullImageRef() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
