@@ -5425,7 +5425,8 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_SAVE_LAYER_COLOR_FILTER_REF ||
                 op == COMMAND_SAVE_LAYER_BLEND_COLOR_FILTER_REF ||
                 op == COMMAND_SAVE_LAYER_IMAGE_FILTER_REF ||
-                op == COMMAND_SAVE_TRANSLATE_LAYER
+                op == COMMAND_SAVE_TRANSLATE_LAYER ||
+                op == COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT
 
         private fun previousRecordStart(endOffset: Int): Int? {
             var offset = 0
@@ -5844,6 +5845,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentSaveLayerSaveTranslateRecords()
             compactAdjacentSaveSaveLayerSaveTranslateRecords()
             compactAdjacentSaveLayerClipRectRecords()
+            compactAdjacentFillRectSaveLayerClipRectRecords()
             compactAdjacentFullImageRefRestoreRecords()
             compactAdjacentFullImageRefRestoreNRecords()
             compactAdjacentFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
@@ -6789,6 +6791,56 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentFillRectSaveLayerClipRectRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_FILL_RECT &&
+                    recordLength == 9 &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_SAVE_LAYER_CLIP_RECT &&
+                    payload[nextOffset + 1] == 13 * Int.SIZE_BYTES
+                ) {
+                    payload[writeOffset++] = COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT
+                    payload[writeOffset++] = 20 * Int.SIZE_BYTES
+                    payload[writeOffset++] = payload[readOffset + 2]
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset + 3,
+                        endIndex = readOffset + 9,
+                    )
+                    writeOffset += 6
+                    payload[writeOffset++] = payload[nextOffset + 2]
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = nextOffset + 3,
+                        endIndex = nextOffset + 13,
+                    )
+                    writeOffset += 10
+                    decrementOp(COMMAND_FILL_RECT)
+                    decrementOp(COMMAND_SAVE_LAYER_CLIP_RECT)
+                    countOp(COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT)
+                    readOffset = nextOffset + 13
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun compactAdjacentSaveLayerSaveTranslateRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -7184,6 +7236,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_FILL_RECT_SAVE -> "saveFillRectSave"
                 COMMAND_SAVE_LAYER_SAVE_TRANSLATE -> "saveLayerSaveTranslate"
                 COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE -> "saveSaveLayerSaveTranslate"
+                COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT -> "fillRectSaveLayerClipRect"
                 COMMAND_STROKE_LINE -> "strokeLine"
                 COMMAND_FILL_OVAL -> "fillOval"
                 COMMAND_STROKE_OVAL -> "strokeOval"
@@ -7316,6 +7369,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_FILL_RECT_SAVE = 92
     private const val COMMAND_SAVE_LAYER_SAVE_TRANSLATE = 93
     private const val COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE = 94
+    private const val COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT = 95
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
