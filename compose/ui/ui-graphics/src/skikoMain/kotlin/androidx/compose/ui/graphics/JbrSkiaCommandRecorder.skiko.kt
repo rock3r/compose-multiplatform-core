@@ -2860,6 +2860,7 @@ object JbrSkiaCommandRecorder {
                 ) {
                     commands.addFullImageRefCommand(
                         paint.recordFlags(),
+                        image.hasAlpha,
                         dstLeft1000,
                         dstTop1000,
                         dstRight1000,
@@ -5591,6 +5592,7 @@ object JbrSkiaCommandRecorder {
 
         fun addFullImageRefCommand(
             recordFlags: Int,
+            imageHasAlpha: Boolean,
             dstLeft1000: Int,
             dstTop1000: Int,
             dstRight1000: Int,
@@ -5598,12 +5600,17 @@ object JbrSkiaCommandRecorder {
             cacheKeyHigh: Int,
             cacheKeyLow: Int,
         ) {
-            val clearStart = matchingClearRectBeforeImageDefinitions(
-                dstLeft1000,
-                dstTop1000,
-                dstRight1000,
-                dstBottom1000,
-            )
+            val clearStart =
+                if (imageHasAlpha) {
+                    null
+                } else {
+                    matchingClearRectBeforeImageDefinitions(
+                        dstLeft1000,
+                        dstTop1000,
+                        dstRight1000,
+                        dstBottom1000,
+                    )
+                }
             if (clearStart == null) {
                 addCommand(
                     COMMAND_DRAW_IMAGE_REF_FULL,
