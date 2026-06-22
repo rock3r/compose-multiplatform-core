@@ -95,6 +95,7 @@ private data class ImageCacheEntry(
     val width: Int,
     val height: Int,
     val cacheKey: Long,
+    val hasAlpha: Boolean,
 )
 
 private data class NativeBitmapImageDefinition(
@@ -3968,6 +3969,10 @@ object JbrSkiaCommandRecorder {
             return hash
         }
 
+        private fun IntArray.hasTransparentPixels(): Boolean = any { pixel ->
+            pixel ushr 24 != 0xff
+        }
+
         private fun nativeBitmapImageDefinition(image: ImageBitmap): NativeBitmapImageDefinition? {
             val bitmap = runCatching { image.asSkiaBitmap() }.getOrNull() ?: return null
             val ptr = bitmap.jbrSkiaNativePtrOrZero()
@@ -4039,6 +4044,7 @@ object JbrSkiaCommandRecorder {
             val pixelCount = image.width * image.height
             val useContentKeyForNativeBitmap =
                 nativeBitmapDefinition != null && pixelCount <= SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS
+            var nativeBitmapHasAlpha = nativeBitmapDefinition?.hasAlpha ?: false
 
             var evictedKey: Long? = null
             val cacheKey = synchronized(imageCacheLock) {
@@ -4046,10 +4052,18 @@ object JbrSkiaCommandRecorder {
                     if (useContentKeyForNativeBitmap) {
                         val entry = imageIdentityCache[image]
                         if (entry != null && entry.width == image.width && entry.height == image.height) {
+                            nativeBitmapHasAlpha = nativeBitmapDefinition.hasAlpha || entry.hasAlpha
                             entry.cacheKey
                         } else {
-                            val computedKey = readPixels().imageCacheKey(image.width, image.height)
-                            imageIdentityCache[image] = ImageCacheEntry(image.width, image.height, computedKey)
+                            val pixelData = readPixels()
+                            nativeBitmapHasAlpha = nativeBitmapDefinition.hasAlpha || pixelData.hasTransparentPixels()
+                            val computedKey = pixelData.imageCacheKey(image.width, image.height)
+                            imageIdentityCache[image] = ImageCacheEntry(
+                                image.width,
+                                image.height,
+                                computedKey,
+                                nativeBitmapHasAlpha,
+                            )
                             computedKey
                         }
                     } else {
@@ -4062,7 +4076,12 @@ object JbrSkiaCommandRecorder {
                     } else {
                         val readPixels = readPixels()
                         val computedKey = readPixels.imageCacheKey(image.width, image.height)
-                        imageIdentityCache[image] = ImageCacheEntry(image.width, image.height, computedKey)
+                        imageIdentityCache[image] = ImageCacheEntry(
+                            image.width,
+                            image.height,
+                            computedKey,
+                            image.hasAlpha || readPixels.hasTransparentPixels(),
+                        )
                         computedKey
                     }
                 }
@@ -4116,7 +4135,7 @@ object JbrSkiaCommandRecorder {
                         nativeBitmapDefinition.ptr.highInt(),
                         nativeBitmapDefinition.ptr.lowInt(),
                         nativeBitmapDefinition.generationId,
-                        if (nativeBitmapDefinition.hasAlpha) 1 else 0,
+                        if (nativeBitmapHasAlpha) 1 else 0,
                     )
                 } else {
                     val definePixels = readPixels()
