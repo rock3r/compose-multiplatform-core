@@ -6388,33 +6388,6 @@ object JbrSkiaCommandRecorder {
                     readOffset = nextOffset + 15
                     continue
                 }
-                if (payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
-                    recordLength == 9 &&
-                    nextOffset < payloadSize &&
-                    payload[nextOffset] == COMMAND_FILL_RECT &&
-                    payload[nextOffset + 1] == 9 * Int.SIZE_BYTES
-                ) {
-                    val imageFlags = payload[readOffset + 2]
-                    val imageArgs = payload.copyOfRange(readOffset + 3, readOffset + 9)
-                    payload[writeOffset++] = COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT
-                    payload[writeOffset++] = 16 * Int.SIZE_BYTES
-                    payload[writeOffset++] = payload[nextOffset + 2]
-                    payload[writeOffset++] = imageFlags
-                    imageArgs.copyInto(payload, destinationOffset = writeOffset)
-                    writeOffset += 6
-                    payload.copyInto(
-                        payload,
-                        destinationOffset = writeOffset,
-                        startIndex = nextOffset + 3,
-                        endIndex = nextOffset + 9,
-                    )
-                    writeOffset += 6
-                    decrementOp(COMMAND_DRAW_IMAGE_REF_FULL)
-                    decrementOp(COMMAND_FILL_RECT)
-                    countOp(COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT)
-                    readOffset = nextOffset + 9
-                    continue
-                }
                 if (writeOffset != readOffset) {
                     payload.copyInto(
                         payload,
@@ -6523,7 +6496,6 @@ object JbrSkiaCommandRecorder {
                 COMMAND_DRAW_IMAGE_REF_FULL_RUN -> "drawImageRefFullRun"
                 COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> "drawImageRefFullDrawRoundRect"
                 COMMAND_SAVE_LAYER_CLIP_RECT -> "saveLayerClipRect"
-                COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT -> "drawImageRefFullFillRect"
                 COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> "clearDrawImageRefFull"
                 COMMAND_SCALE -> "scale"
@@ -6620,7 +6592,6 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT = 80
     private const val COMMAND_DRAW_IMAGE_REF_FULL_RUN = 81
     private const val COMMAND_SAVE_LAYER_CLIP_RECT = 82
-    private const val COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT = 83
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
