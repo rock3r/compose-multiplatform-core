@@ -6852,6 +6852,65 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTranslatedLayerAroundStrokeLineAndImageRunBeforeRestoreN() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = Offset(1f, 2f),
+                p2 = Offset(11f, 12f),
+                paint = Paint().apply {
+                    color = Color.Red
+                    strokeWidth = 3f
+                },
+            )
+            repeat(2) { index ->
+                val offset = index * 40f
+                JbrSkiaCommandRecorder.drawImageRect(
+                    image = image,
+                    srcLeft = 0f,
+                    srcTop = 0f,
+                    srcRight = 1f,
+                    srcBottom = 1f,
+                    dstLeft = 10f + offset,
+                    dstTop = 20f + offset,
+                    dstRight = 30f + offset,
+                    dstBottom = 40f + offset,
+                    paint = Paint(),
+                )
+            }
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(76))
+        assertEquals(0, commands.countCommand(77))
+        val strokeLine = records.single { it[0] == 3 }
+        assertArrayEquals(
+            intArrayOf(
+                3, 48, 1,
+                Color.Red.toArgb(), 2, 4, 12, 14, 3, 0, 1, 0,
+            ),
+            strokeLine,
+        )
+        val imageRun = records.single { it[0] == 81 }
+        assertEquals(2, imageRun[3])
+        assertEquals(11000, imageRun[4])
+        assertEquals(22000, imageRun[5])
+        assertEquals(31000, imageRun[6])
+        assertEquals(42000, imageRun[7])
+        assertEquals(51000, imageRun[10])
+        assertEquals(62000, imageRun[11])
+        assertEquals(71000, imageRun[12])
+        assertEquals(82000, imageRun[13])
+    }
+
+    @Test
     fun keepsFractionalSaveTranslateBeforeFillRectRestore() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
