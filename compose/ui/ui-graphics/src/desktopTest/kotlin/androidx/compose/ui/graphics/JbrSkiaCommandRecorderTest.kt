@@ -6589,6 +6589,58 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsNestedSaveTranslateIntoStrokeLineAndImageBeforeRestoreN() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = Offset(1f, 2f),
+                p2 = Offset(11f, 12f),
+                paint = Paint().apply {
+                    color = Color.Red
+                    strokeWidth = 3f
+                },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        val strokeLine = records.single { it[0] == 3 }
+        assertArrayEquals(
+            intArrayOf(
+                3, 48, 1,
+                Color.Red.toArgb(), 6, 8, 16, 18, 3, 0, 1, 0,
+            ),
+            strokeLine,
+        )
+        val translatedDraw = records.last { it[0] == 77 }
+        assertEquals(15000, translatedDraw[3])
+        assertEquals(26000, translatedDraw[4])
+        assertEquals(35000, translatedDraw[5])
+        assertEquals(46000, translatedDraw[6])
+        assertEquals(0, commands.countCommand(74))
+    }
+
+    @Test
     fun keepsFractionalSaveTranslateBeforeFillRectRestore() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
@@ -6605,6 +6657,27 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(1, commands!!.countCommand(74))
         assertEquals(1, commands.countCommand(2))
+        assertEquals(1, commands.countCommand(8))
+    }
+
+    @Test
+    fun keepsFractionalSaveTranslateBeforeStrokeLineRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(0.5f, 1f)
+            JbrSkiaCommandRecorder.drawLine(
+                p1 = Offset(1f, 2f),
+                p2 = Offset(11f, 12f),
+                paint = Paint().apply {
+                    color = Color.Red
+                    strokeWidth = 3f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(74))
+        assertEquals(1, commands.countCommand(3))
         assertEquals(1, commands.countCommand(8))
     }
 
