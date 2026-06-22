@@ -5575,6 +5575,33 @@ object JbrSkiaCommandRecorder {
                 payload[payloadSize - 2] == 3 * Int.SIZE_BYTES &&
                 payload[payloadSize - 1] == COMMAND_RECORD_FLAGS_NONE
             ) {
+                val saveStart = payloadSize - 14
+                val layerStart = payloadSize - 11
+                if (saveStart >= 0 &&
+                    payload[saveStart] == COMMAND_SAVE &&
+                    payload[saveStart + 1] == 3 * Int.SIZE_BYTES &&
+                    payload[saveStart + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                    payload[layerStart] == COMMAND_SAVE_LAYER &&
+                    payload[layerStart + 1] == 8 * Int.SIZE_BYTES &&
+                    payload[layerStart + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    payload[saveStart] = COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE
+                    payload[saveStart + 1] = 10 * Int.SIZE_BYTES
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = saveStart + 3,
+                        startIndex = layerStart + 3,
+                        endIndex = layerStart + 8,
+                    )
+                    payload[saveStart + 8] = dx1000
+                    payload[saveStart + 9] = dy1000
+                    payloadSize = saveStart + 10
+                    decrementOp(COMMAND_SAVE)
+                    decrementOp(COMMAND_SAVE)
+                    decrementOp(COMMAND_SAVE_LAYER)
+                    countOp(COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE)
+                    return
+                }
                 ensureCapacity(payloadSize + 2)
                 payload[payloadSize - 3] = COMMAND_SAVE_TRANSLATE
                 payload[payloadSize - 2] = 5 * Int.SIZE_BYTES
@@ -5803,6 +5830,7 @@ object JbrSkiaCommandRecorder {
 
         fun toIntArray(): IntArray {
             foldTrailingTranslatedRoundRectSuffix()
+            compactAdjacentSaveSaveLayerSaveTranslateRecords()
             foldPlainSaveBeforeLayerClosedBySameRestore()
             foldTransformableRecordsOutOfPlainTranslatedLayers()
             foldFullImageRefsOutOfPlainTranslatedLayers()
@@ -5812,7 +5840,9 @@ object JbrSkiaCommandRecorder {
             compactAdjacentStrokeLineImageRefFullRunRecords()
             compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
             compactAdjacentSaveTranslateLayerSaveTranslateRecords()
+            compactAdjacentSaveSaveLayerSaveTranslateRecords()
             compactAdjacentSaveLayerSaveTranslateRecords()
+            compactAdjacentSaveSaveLayerSaveTranslateRecords()
             compactAdjacentSaveLayerClipRectRecords()
             compactAdjacentFullImageRefRestoreRecords()
             compactAdjacentFullImageRefRestoreNRecords()
@@ -6809,6 +6839,87 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentSaveSaveLayerSaveTranslateRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                val nextLength = if (nextOffset < payloadSize) payload[nextOffset + 1] / Int.SIZE_BYTES else 0
+                val thirdOffset = nextOffset + nextLength
+                if (payload[readOffset] == COMMAND_SAVE &&
+                    payload[readOffset + 1] == 3 * Int.SIZE_BYTES &&
+                    payload[readOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_SAVE_LAYER &&
+                    nextLength == 8 &&
+                    thirdOffset < payloadSize &&
+                    payload[thirdOffset] == COMMAND_SAVE_TRANSLATE &&
+                    payload[thirdOffset + 1] == 5 * Int.SIZE_BYTES &&
+                    payload[thirdOffset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    payload[writeOffset++] = COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE
+                    payload[writeOffset++] = 10 * Int.SIZE_BYTES
+                    payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = nextOffset + 3,
+                        endIndex = nextOffset + 8,
+                    )
+                    writeOffset += 5
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = thirdOffset + 3,
+                        endIndex = thirdOffset + 5,
+                    )
+                    writeOffset += 2
+                    decrementOp(COMMAND_SAVE)
+                    decrementOp(COMMAND_SAVE_LAYER)
+                    decrementOp(COMMAND_SAVE_TRANSLATE)
+                    countOp(COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE)
+                    readOffset = thirdOffset + 5
+                    continue
+                }
+                if (payload[readOffset] == COMMAND_SAVE &&
+                    payload[readOffset + 1] == 3 * Int.SIZE_BYTES &&
+                    payload[readOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_SAVE_LAYER_SAVE_TRANSLATE &&
+                    payload[nextOffset + 1] == 10 * Int.SIZE_BYTES &&
+                    payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    payload[writeOffset++] = COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE
+                    payload[writeOffset++] = 10 * Int.SIZE_BYTES
+                    payload[writeOffset++] = COMMAND_RECORD_FLAGS_NONE
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = nextOffset + 3,
+                        endIndex = nextOffset + 10,
+                    )
+                    writeOffset += 7
+                    decrementOp(COMMAND_SAVE)
+                    decrementOp(COMMAND_SAVE_LAYER_SAVE_TRANSLATE)
+                    countOp(COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE)
+                    readOffset = nextOffset + 10
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun compactAdjacentFullImageRefRestoreRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -7072,6 +7183,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_FILL_RECT_SAVE -> "fillRectSave"
                 COMMAND_SAVE_FILL_RECT_SAVE -> "saveFillRectSave"
                 COMMAND_SAVE_LAYER_SAVE_TRANSLATE -> "saveLayerSaveTranslate"
+                COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE -> "saveSaveLayerSaveTranslate"
                 COMMAND_STROKE_LINE -> "strokeLine"
                 COMMAND_FILL_OVAL -> "fillOval"
                 COMMAND_STROKE_OVAL -> "strokeOval"
@@ -7203,6 +7315,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_SAVE = 91
     private const val COMMAND_SAVE_FILL_RECT_SAVE = 92
     private const val COMMAND_SAVE_LAYER_SAVE_TRANSLATE = 93
+    private const val COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE = 94
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
