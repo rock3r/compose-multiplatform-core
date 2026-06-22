@@ -6449,7 +6449,7 @@ object JbrSkiaCommandRecorder {
                     var runOffset = nextOffset
                     while (runOffset < payloadSize && payload[runOffset] == COMMAND_DEFINE_IMAGE_BITMAP) {
                         val definitionLength = payload[runOffset + 1] / Int.SIZE_BYTES
-                        if (definitionLength != 10 || runOffset + definitionLength > payloadSize) break
+                        if (definitionLength != 11 || runOffset + definitionLength > payloadSize) break
                         runOffset += definitionLength
                     }
                     if (runOffset < payloadSize &&
