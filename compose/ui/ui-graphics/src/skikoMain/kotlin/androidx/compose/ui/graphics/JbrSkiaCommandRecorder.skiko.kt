@@ -5750,6 +5750,7 @@ object JbrSkiaCommandRecorder {
 
         fun toIntArray(): IntArray {
             foldTrailingTranslatedRoundRectSuffix()
+            foldPlainSaveBeforeLayerClosedBySameRestore()
             foldTransformableRecordsOutOfPlainTranslatedLayers()
             foldFullImageRefsOutOfPlainTranslatedLayers()
             compactAdjacentImageRefFullRoundRectRecords()
@@ -5857,6 +5858,76 @@ object JbrSkiaCommandRecorder {
             decrementOp(COMMAND_TRANSLATE)
             decrementOp(COMMAND_SAVE)
             return true
+        }
+
+        private fun foldPlainSaveBeforeLayerClosedBySameRestore(): Boolean {
+            var offset = 0
+            while (offset < payloadSize) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) return false
+                if (payload[offset] == COMMAND_RESTORE_N &&
+                    recordLength == 4 &&
+                    payload[offset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    val restoreCount = payload[offset + 3]
+                    val openSaves = openSaveStartsBefore(offset) ?: return false
+                    if (restoreCount >= 2 && restoreCount <= openSaves.size) {
+                        val closingStartIndex = openSaves.size - restoreCount
+                        for (index in openSaves.lastIndex downTo closingStartIndex + 1) {
+                            val layerStart = openSaves[index]
+                            val saveStart = openSaves[index - 1]
+                            if (isRedundantPlainSaveBeforeLayer(saveStart, layerStart)) {
+                                removePlainSaveBeforeJointRestore(saveStart, offset, restoreCount)
+                                return true
+                            }
+                        }
+                    }
+                }
+                offset += recordLength
+            }
+            return false
+        }
+
+        private fun isRedundantPlainSaveBeforeLayer(saveStart: Int, layerStart: Int): Boolean =
+            payload[saveStart] == COMMAND_SAVE &&
+                payload[saveStart + 1] == 3 * Int.SIZE_BYTES &&
+                payload[saveStart + 2] == COMMAND_RECORD_FLAGS_NONE &&
+                saveStart + 3 == layerStart &&
+                payload[layerStart] == COMMAND_SAVE_LAYER
+
+        private fun removePlainSaveBeforeJointRestore(saveStart: Int, restoreStart: Int, restoreCount: Int) {
+            payload.copyInto(
+                payload,
+                destinationOffset = saveStart,
+                startIndex = saveStart + 3,
+                endIndex = restoreStart + 4,
+            )
+            val shiftedRestoreStart = restoreStart - 3
+            val remainingRestoreCount = restoreCount - 1
+            if (remainingRestoreCount == 1) {
+                payload[shiftedRestoreStart] = COMMAND_RESTORE
+                payload[shiftedRestoreStart + 1] = 3 * Int.SIZE_BYTES
+                payload[shiftedRestoreStart + 2] = COMMAND_RECORD_FLAGS_NONE
+                payload.copyInto(
+                    payload,
+                    destinationOffset = shiftedRestoreStart + 3,
+                    startIndex = shiftedRestoreStart + 4,
+                    endIndex = payloadSize - 3,
+                )
+                payloadSize -= 4
+                decrementOp(COMMAND_RESTORE_N)
+                countOp(COMMAND_RESTORE)
+            } else {
+                payload[shiftedRestoreStart + 3] = remainingRestoreCount
+                payload.copyInto(
+                    payload,
+                    destinationOffset = shiftedRestoreStart + 4,
+                    startIndex = restoreStart + 4,
+                    endIndex = payloadSize,
+                )
+                payloadSize -= 3
+            }
+            decrementOp(COMMAND_SAVE)
         }
 
         private fun foldTransformableRecordsOutOfPlainTranslatedLayers() {
