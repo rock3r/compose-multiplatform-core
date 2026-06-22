@@ -5902,6 +5902,87 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsNestedSaveTranslateIntoTransformableScopeBeforeRestoreN() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 0f,
+                dstTop = 0f,
+                dstRight = 1f,
+                dstBottom = 1f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { blendMode = BlendMode.Clear },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                radiusX = 2f,
+                radiusY = 3f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 1f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(74))
+        assertArrayEquals(intArrayOf(6, 28, 0, 15, 26, 20, 20), records.single { it[0] == 6 })
+        val translatedDraw = records.last { it[0] == 77 }
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                15000, 26000, 35000, 46000,
+                records[0][3], records[0][4],
+            ),
+            translatedDraw,
+        )
+        val translatedRoundRect = records.single { it[0] == 23 }
+        assertEquals(15000, translatedRoundRect[5])
+        assertEquals(26000, translatedRoundRect[6])
+        assertEquals(35000, translatedRoundRect[7])
+        assertEquals(46000, translatedRoundRect[8])
+        val restoreN = records.last { it[0] == 75 }
+        assertEquals(2, restoreN[3])
+    }
+
+    @Test
     fun keepsFractionalSaveTranslateBeforeFillRectRestore() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
