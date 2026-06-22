@@ -5908,6 +5908,20 @@ class JbrSkiaCommandRecorderTest {
     fun writesCompactFullImageRefRecord() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
+        JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 0f,
+                dstTop = 0f,
+                dstRight = 1f,
+                dstBottom = 1f,
+                paint = Paint(),
+            )
+        }
 
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawImageRect(
@@ -5934,6 +5948,52 @@ class JbrSkiaCommandRecorderTest {
             ),
             records[1],
         )
+    }
+
+    @Test
+    fun writesCompactFullImageRefRunRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 50f,
+                dstTop = 60f,
+                dstRight = 70f,
+                dstBottom = 80f,
+                paint = Paint(),
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        val runRecord = records.last()
+        assertArrayEquals(
+            intArrayOf(
+                81, 64, 1, 2,
+                10000, 20000, 30000, 40000, runRecord[8], runRecord[9],
+                50000, 60000, 70000, 80000, runRecord[8], runRecord[9],
+            ),
+            runRecord,
+        )
+        assertEquals(0, commands.countCommand(77))
+        assertEquals(1, commands.countCommand(81))
     }
 
     @Test
@@ -6253,24 +6313,16 @@ class JbrSkiaCommandRecorderTest {
             JbrSkiaCommandRecorder.restore()
         }
 
-        val imageRecords = commands!!.commandRecords().filter { it[0] == 77 }
+        val imageRunRecord = commands!!.commandRecords().single { it[0] == 81 }
         assertEquals(0, commands.countCommand(6))
-        assertEquals(2, imageRecords.size)
+        assertEquals(0, commands.countCommand(77))
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
-                15000, 26000, 35000, 46000,
-                imageRecords[0][7], imageRecords[0][8],
+                81, 64, 1, 2,
+                15000, 26000, 35000, 46000, imageRunRecord[8], imageRunRecord[9],
+                62000, 74000, 82000, 94000, imageRunRecord[14], imageRunRecord[15],
             ),
-            imageRecords[0],
-        )
-        assertArrayEquals(
-            intArrayOf(
-                77, 36, 1,
-                62000, 74000, 82000, 94000,
-                imageRecords[1][7], imageRecords[1][8],
-            ),
-            imageRecords[1],
+            imageRunRecord,
         )
     }
 
