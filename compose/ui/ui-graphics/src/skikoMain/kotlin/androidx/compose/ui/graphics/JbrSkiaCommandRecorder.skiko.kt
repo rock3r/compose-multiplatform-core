@@ -5754,6 +5754,7 @@ object JbrSkiaCommandRecorder {
             foldTransformableRecordsOutOfPlainTranslatedLayers()
             foldFullImageRefsOutOfPlainTranslatedLayers()
             compactAdjacentImageRefFullRoundRectRecords()
+            compactAdjacentFullImageRefs()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
@@ -5769,6 +5770,96 @@ object JbrSkiaCommandRecorder {
                 )
             }
         }
+
+        private fun compactAdjacentFullImageRefs(): Boolean {
+            var readOffset = 0
+            var writeOffset = 0
+            var compacted = false
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                if (canStartFullImageRefRun(readOffset)) {
+                    val recordFlags = payload[readOffset + 2]
+                    val runArgs = mutableListOf<IntArray>()
+                    val prefixRecords = mutableListOf<IntArray>()
+                    runArgs += payload.copyOfRange(readOffset + 3, readOffset + 9)
+                    var scanOffset = readOffset + recordLength
+                    var runEnd = scanOffset
+                    while (scanOffset < payloadSize) {
+                        val scanLength = payload[scanOffset + 1] / Int.SIZE_BYTES
+                        if (canAppendFullImageRefRun(scanOffset, recordFlags)) {
+                            runArgs += payload.copyOfRange(scanOffset + 3, scanOffset + 9)
+                            runEnd = scanOffset + scanLength
+                            scanOffset = runEnd
+                            continue
+                        }
+                        if (isFullImageRefRunPrefixRecord(scanOffset)) {
+                            prefixRecords += payload.copyOfRange(scanOffset, scanOffset + scanLength)
+                            scanOffset += scanLength
+                            continue
+                        }
+                        break
+                    }
+                    val runCount = runArgs.size
+                    if (runCount > 1) {
+                        prefixRecords.forEach { prefixRecord ->
+                            prefixRecord.copyInto(payload, destinationOffset = writeOffset)
+                            writeOffset += prefixRecord.size
+                        }
+                        ensureCapacity(writeOffset + 3 + 1 + runCount * 6 + payloadSize - runEnd)
+                        payload[writeOffset++] = COMMAND_DRAW_IMAGE_REF_FULL_RUN
+                        payload[writeOffset++] = (4 + runCount * 6) * Int.SIZE_BYTES
+                        payload[writeOffset++] = recordFlags
+                        payload[writeOffset++] = runCount
+                        runArgs.forEach { imageArgs ->
+                            imageArgs.copyInto(payload, destinationOffset = writeOffset)
+                            writeOffset += imageArgs.size
+                        }
+                        repeat(runCount) {
+                            decrementOp(COMMAND_DRAW_IMAGE_REF_FULL)
+                        }
+                        countOp(COMMAND_DRAW_IMAGE_REF_FULL_RUN)
+                        readOffset = runEnd
+                        compacted = true
+                        continue
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = readOffset + recordLength,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset += recordLength
+            }
+            if (compacted) {
+                payloadSize = writeOffset
+            }
+            return compacted
+        }
+
+        private fun isFullImageRefRunPrefixRecord(recordStart: Int): Boolean {
+            if (recordStart + 3 > payloadSize) {
+                return false
+            }
+            val recordLength = payload[recordStart + 1] / Int.SIZE_BYTES
+            if (recordStart + recordLength > payloadSize) {
+                return false
+            }
+            return payload[recordStart] == COMMAND_DEFINE_IMAGE_BITMAP ||
+                payload[recordStart] == COMMAND_DEFINE_IMAGE_ARGB
+        }
+
+        private fun canStartFullImageRefRun(recordStart: Int): Boolean =
+            canAppendFullImageRefRun(recordStart, payload[recordStart + 2])
+
+        private fun canAppendFullImageRefRun(recordStart: Int, recordFlags: Int): Boolean =
+            recordStart + 9 <= payloadSize &&
+                payload[recordStart] == COMMAND_DRAW_IMAGE_REF_FULL &&
+                payload[recordStart + 1] == 9 * Int.SIZE_BYTES &&
+                payload[recordStart + 2] == recordFlags
 
         private fun foldTrailingTranslatedRoundRectSuffix(): Boolean {
             val trailingRoundRectStart = previousRecordStart(payloadSize) ?: return false
@@ -6292,6 +6383,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_RESTORE_N -> "restoreN"
                 COMMAND_SAVE_TRANSLATE_LAYER -> "saveTranslateLayer"
                 COMMAND_DRAW_IMAGE_REF_FULL -> "drawImageRefFull"
+                COMMAND_DRAW_IMAGE_REF_FULL_RUN -> "drawImageRefFullRun"
                 COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> "drawImageRefFullDrawRoundRect"
                 COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> "clearDrawImageRefFull"
@@ -6387,6 +6479,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_ROUND_RECT = 78
     private const val COMMAND_CLEAR_DRAW_IMAGE_REF_FULL = 79
     private const val COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT = 80
+    private const val COMMAND_DRAW_IMAGE_REF_FULL_RUN = 81
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
