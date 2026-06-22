@@ -7493,6 +7493,67 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsFullImageRefRestoreNBeforeSaveTranslateLayerSaveTranslate() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(0f, 0f, 100f, 100f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.clipRect(1f, 2f, 90f, 80f, ClipOp.Intersect)
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(
+                Rect(3f, 4f, 33f, 44f),
+                Paint().apply { alpha = 0.5f },
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawOval(
+                left = 7f,
+                top = 8f,
+                right = 17f,
+                bottom = 28f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(85))
+        assertEquals(0, commands.countCommand(87))
+        assertEquals(1, commands.countCommand(90))
+        val compactRecord = records.single { it[0] == 90 }
+        assertArrayEquals(
+            intArrayOf(
+                90, 76, 1,
+                10000, 20000, 30000, 40000,
+                compactRecord[7], compactRecord[8], 1,
+                1000, 2000, 3, 4, 30, 40, 252,
+                5000, 6000,
+            ),
+            compactRecord,
+        )
+    }
+
+    @Test
     fun keepsSeparatedSaveTranslateLayerSaveTranslateRecords() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
