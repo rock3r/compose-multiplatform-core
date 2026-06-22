@@ -5813,6 +5813,56 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun foldsTrailingTranslateIntoCompactFullImageRefBeforeRestore() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 0f,
+                dstTop = 0f,
+                dstRight = 1f,
+                dstBottom = 1f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.saveLayer(Rect(0f, 0f, 100f, 100f), Paint())
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(10))
+        val translatedDraw = records.last { it[0] == 77 }
+        assertArrayEquals(
+            intArrayOf(
+                77, 36, 1,
+                15000, 26000, 35000, 46000,
+                records[0][3], records[0][4],
+            ),
+            translatedDraw,
+        )
+    }
+
+    @Test
     fun foldsNestedSaveTranslateIntoCompactFullImageRefBeforeRestoreN() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
