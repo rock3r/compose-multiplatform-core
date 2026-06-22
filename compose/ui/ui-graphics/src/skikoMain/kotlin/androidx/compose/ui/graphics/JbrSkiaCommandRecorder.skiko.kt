@@ -2858,8 +2858,7 @@ object JbrSkiaCommandRecorder {
                     srcRight1000 == image.width * 1000 &&
                     srcBottom1000 == image.height * 1000
                 ) {
-                    commands.addCommand(
-                        COMMAND_DRAW_IMAGE_REF_FULL,
+                    commands.addFullImageRefCommand(
                         paint.recordFlags(),
                         dstLeft1000,
                         dstTop1000,
@@ -4833,7 +4832,7 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun requiresWholePixelTranslation(op: Int): Boolean =
-            op == COMMAND_CLEAR_RECT || op == COMMAND_FILL_RECT
+            op == COMMAND_CLEAR_RECT || op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL || op == COMMAND_FILL_RECT
 
         private fun isTranslateRecord(recordStart: Int): Boolean =
             payload[recordStart] == COMMAND_TRANSLATE &&
@@ -4937,6 +4936,7 @@ object JbrSkiaCommandRecorder {
 
         private fun isTranslateScopeTransformableRecord(op: Int): Boolean =
             op == COMMAND_CLEAR_RECT ||
+                op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL ||
                 op == COMMAND_DRAW_IMAGE_REF_FULL ||
                 op == COMMAND_DRAW_ROUND_RECT ||
                 op == COMMAND_FILL_ROUND_RECT ||
@@ -4947,6 +4947,14 @@ object JbrSkiaCommandRecorder {
                 COMMAND_CLEAR_RECT -> {
                     payload[recordStart + 3] += dx / 1000
                     payload[recordStart + 4] += dy / 1000
+                }
+                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> {
+                    payload[recordStart + 3] += dx / 1000
+                    payload[recordStart + 4] += dy / 1000
+                    payload[recordStart + 7] += dx
+                    payload[recordStart + 8] += dy
+                    payload[recordStart + 9] += dx
+                    payload[recordStart + 10] += dy
                 }
                 COMMAND_DRAW_IMAGE_REF_FULL -> {
                     payload[recordStart + 3] += dx
@@ -5346,7 +5354,8 @@ object JbrSkiaCommandRecorder {
                 COMMAND_STROKE_RECT_SHADER_REF,
                 COMMAND_STROKE_RECT_IMAGE_SHADER,
                 COMMAND_DEFINE_IMAGE_BITMAP,
-                COMMAND_DRAW_IMAGE_REF_FULL -> true
+                COMMAND_DRAW_IMAGE_REF_FULL,
+                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> true
                 else -> false
             }
 
@@ -5424,6 +5433,62 @@ object JbrSkiaCommandRecorder {
             addCommand(COMMAND_SAVE_LAYER, COMMAND_RECORD_FLAGS_NONE, x, y, width, height, alpha1000)
         }
 
+        fun addFullImageRefCommand(
+            recordFlags: Int,
+            dstLeft1000: Int,
+            dstTop1000: Int,
+            dstRight1000: Int,
+            dstBottom1000: Int,
+            cacheKeyHigh: Int,
+            cacheKeyLow: Int,
+        ) {
+            val clearStart = matchingClearRectBeforeImageDefinitions(
+                dstLeft1000,
+                dstTop1000,
+                dstRight1000,
+                dstBottom1000,
+            )
+            if (clearStart == null) {
+                addCommand(
+                    COMMAND_DRAW_IMAGE_REF_FULL,
+                    recordFlags,
+                    dstLeft1000,
+                    dstTop1000,
+                    dstRight1000,
+                    dstBottom1000,
+                    cacheKeyHigh,
+                    cacheKeyLow,
+                )
+                return
+            }
+            val clearX = payload[clearStart + 3]
+            val clearY = payload[clearStart + 4]
+            val clearWidth = payload[clearStart + 5]
+            val clearHeight = payload[clearStart + 6]
+            payload.copyInto(
+                payload,
+                destinationOffset = clearStart,
+                startIndex = clearStart + 7,
+                endIndex = payloadSize,
+            )
+            payloadSize -= 7
+            decrementOp(COMMAND_CLEAR_RECT)
+            addCommand(
+                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL,
+                recordFlags,
+                clearX,
+                clearY,
+                clearWidth,
+                clearHeight,
+                dstLeft1000,
+                dstTop1000,
+                dstRight1000,
+                dstBottom1000,
+                cacheKeyHigh,
+                cacheKeyLow,
+            )
+        }
+
         fun addCommand(
             op: Int,
             recordFlags: Int = COMMAND_RECORD_FLAGS_NONE,
@@ -5442,6 +5507,52 @@ object JbrSkiaCommandRecorder {
             ensureCapacity(payloadSize + count)
             records.copyInto(payload, destinationOffset = payloadSize, startIndex = startIndex, endIndex = endIndex)
             payloadSize += count
+        }
+
+        private fun matchingClearRectBeforeImageDefinitions(
+            dstLeft1000: Int,
+            dstTop1000: Int,
+            dstRight1000: Int,
+            dstBottom1000: Int,
+        ): Int? {
+            if (dstLeft1000 % 1000 != 0 ||
+                dstTop1000 % 1000 != 0 ||
+                dstRight1000 % 1000 != 0 ||
+                dstBottom1000 % 1000 != 0
+            ) {
+                return null
+            }
+            val clearStart = clearRectBeforeImageDefinitions(payloadSize) ?: return null
+            return if (payload[clearStart + 3] == dstLeft1000 / 1000 &&
+                payload[clearStart + 4] == dstTop1000 / 1000 &&
+                payload[clearStart + 5] == (dstRight1000 - dstLeft1000) / 1000 &&
+                payload[clearStart + 6] == (dstBottom1000 - dstTop1000) / 1000
+            ) {
+                clearStart
+            } else {
+                null
+            }
+        }
+
+        private fun clearRectBeforeImageDefinitions(endOffset: Int): Int? {
+            var offset = endOffset
+            while (true) {
+                val previous = previousRecordStart(offset) ?: return null
+                if (previous >= offset) {
+                    return null
+                }
+                val op = payload[previous]
+                if (op == COMMAND_CLEAR_RECT &&
+                    payload[previous + 1] == 7 * Int.SIZE_BYTES &&
+                    payload[previous + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    return previous
+                }
+                if (!isTranslateScopePassThroughRecord(op)) {
+                    return null
+                }
+                offset = previous
+            }
         }
 
         fun opSummary(): String =
@@ -5533,6 +5644,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_TRANSLATE_LAYER -> "saveTranslateLayer"
                 COMMAND_DRAW_IMAGE_REF_FULL -> "drawImageRefFull"
                 COMMAND_FILL_ROUND_RECT -> "fillRoundRect"
+                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> "clearDrawImageRefFull"
                 COMMAND_SCALE -> "scale"
                 COMMAND_ROTATE -> "rotate"
                 COMMAND_SAVE_LAYER -> "saveLayer"
@@ -5623,6 +5735,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_TRANSLATE_LAYER = 76
     private const val COMMAND_DRAW_IMAGE_REF_FULL = 77
     private const val COMMAND_FILL_ROUND_RECT = 78
+    private const val COMMAND_CLEAR_DRAW_IMAGE_REF_FULL = 79
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13

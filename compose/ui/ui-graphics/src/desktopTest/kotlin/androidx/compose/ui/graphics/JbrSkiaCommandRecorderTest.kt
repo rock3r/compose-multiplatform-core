@@ -5801,6 +5801,81 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesCompactClearAndFullImageRefRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 30f,
+                bottom = 40f,
+                paint = Paint().apply { blendMode = BlendMode.Clear },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(6))
+        assertEquals(73, records[0][0])
+        assertArrayEquals(
+            intArrayOf(
+                79, 52, 1,
+                10, 20, 20, 20,
+                10000, 20000, 30000, 40000,
+                records[0][3], records[0][4],
+            ),
+            records[1],
+        )
+    }
+
+    @Test
+    fun keepsMismatchedClearBeforeCompactFullImageRef() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 10f,
+                top = 20f,
+                right = 31f,
+                bottom = 40f,
+                paint = Paint().apply { blendMode = BlendMode.Clear },
+            )
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(1, commands.countCommand(6))
+        assertEquals(6, records[0][0])
+        assertEquals(73, records[1][0])
+        assertEquals(77, records[2][0])
+    }
+
+    @Test
     fun foldsSaveTranslateIntoCompactFullImageRefBeforeRestore() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = onePixelImage(0x55)
@@ -6053,11 +6128,12 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(74))
-        assertArrayEquals(intArrayOf(6, 28, 0, 15, 26, 20, 20), records.single { it[0] == 6 })
-        val translatedDraw = records.last { it[0] == 77 }
+        assertEquals(0, commands.countCommand(6))
+        val translatedDraw = records.last { it[0] == 79 }
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
+                79, 52, 1,
+                15, 26, 20, 20,
                 15000, 26000, 35000, 46000,
                 records[0][3], records[0][4],
             ),
