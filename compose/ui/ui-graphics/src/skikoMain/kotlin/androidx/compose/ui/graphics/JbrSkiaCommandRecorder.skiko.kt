@@ -4663,6 +4663,8 @@ object JbrSkiaCommandRecorder {
             foldSaveTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldSaveTranslateIntoFillRectBeforeTrailingRestore()
             foldSaveTranslateTransformableScopeBeforeTrailingRestore()
+            foldTrailingTranslatedImageRefSuffix(payloadSize)
+            foldTrailingTranslatedImageRefSuffixBeforeTrailingRestore()
             foldTrailingTranslateIntoDrawImageRefFullBeforeTrailingRestore()
             foldTrailingTranslateIntoRoundRectBeforeTrailingRestore()
             if (removeRedundantSaveBeforeLayerBeforeCurrentRestore()) {
@@ -4841,6 +4843,97 @@ object JbrSkiaCommandRecorder {
             payload[recordStart] == COMMAND_TRANSLATE &&
                 payload[recordStart + 1] == 5 * Int.SIZE_BYTES &&
                 payload[recordStart + 2] == COMMAND_RECORD_FLAGS_NONE
+
+        private fun foldTrailingTranslatedImageRefSuffixBeforeTrailingRestore(): Boolean {
+            val restoreStart = previousRecordStart(payloadSize) ?: return false
+            val restoreOp = payload[restoreStart]
+            if (restoreOp != COMMAND_RESTORE && restoreOp != COMMAND_RESTORE_N) {
+                return false
+            }
+            return foldTrailingTranslatedImageRefSuffix(restoreStart)
+        }
+
+        private fun foldTrailingTranslatedImageRefSuffix(endOffset: Int): Boolean {
+            var offset = 0
+            var suffixStart = endOffset
+            var hasTranslate = false
+            var hasImageAfterTranslate = false
+            var sawTranslateInCurrentSuffix = false
+            while (offset < endOffset) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > endOffset) return false
+                val op = payload[offset]
+                when {
+                    isTranslateRecord(offset) -> {
+                        hasTranslate = true
+                        sawTranslateInCurrentSuffix = true
+                    }
+                    op == COMMAND_DRAW_IMAGE_REF_FULL && recordLength == 9 -> {
+                        if (sawTranslateInCurrentSuffix) {
+                            hasImageAfterTranslate = true
+                        }
+                    }
+                    isTranslateScopePassThroughRecord(op) -> Unit
+                    else -> {
+                        suffixStart = offset + recordLength
+                        hasTranslate = false
+                        hasImageAfterTranslate = false
+                        sawTranslateInCurrentSuffix = false
+                    }
+                }
+                offset += recordLength
+            }
+            if (suffixStart >= endOffset || !hasTranslate || !hasImageAfterTranslate) {
+                return false
+            }
+
+            var readOffset = suffixStart
+            var writeOffset = suffixStart
+            var accumulatedDx = 0
+            var accumulatedDy = 0
+            var removedTranslateCount = 0
+            while (readOffset < endOffset) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                if (isTranslateRecord(readOffset)) {
+                    accumulatedDx += payload[readOffset + 3]
+                    accumulatedDy += payload[readOffset + 4]
+                    removedTranslateCount++
+                    readOffset += recordLength
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = readOffset + recordLength,
+                    )
+                }
+                if (payload[writeOffset] == COMMAND_DRAW_IMAGE_REF_FULL) {
+                    payload[writeOffset + 3] += accumulatedDx
+                    payload[writeOffset + 4] += accumulatedDy
+                    payload[writeOffset + 5] += accumulatedDx
+                    payload[writeOffset + 6] += accumulatedDy
+                }
+                writeOffset += recordLength
+                readOffset += recordLength
+            }
+            if (removedTranslateCount == 0) {
+                return false
+            }
+            val removedWords = endOffset - writeOffset
+            payload.copyInto(
+                payload,
+                destinationOffset = writeOffset,
+                startIndex = endOffset,
+                endIndex = payloadSize,
+            )
+            payloadSize -= removedWords
+            repeat(removedTranslateCount) {
+                decrementOp(COMMAND_TRANSLATE)
+            }
+            return true
+        }
 
         private fun foldSaveTranslateIntoDrawImageRefFullBeforeRestore(): Boolean {
             val imageStart = previousRecordStart(payloadSize) ?: return false
