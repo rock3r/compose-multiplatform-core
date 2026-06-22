@@ -7023,6 +7023,70 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsAdjacentSaveTranslateLayerSaveTranslate() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(
+                Rect(3f, 4f, 33f, 44f),
+                Paint().apply { alpha = 0.5f },
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawOval(
+                left = 7f,
+                top = 8f,
+                right = 17f,
+                bottom = 28f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(74))
+        assertEquals(commands.joinToString(), 1, commands.countCommand(85))
+        assertArrayEquals(
+            intArrayOf(
+                85, 48, 0,
+                1000, 2000, 3, 4, 30, 40, 252,
+                5000, 6000,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
+    fun keepsSeparatedSaveTranslateLayerSaveTranslateRecords() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.saveLayer(
+                Rect(3f, 4f, 33f, 44f),
+                Paint().apply { alpha = 0.5f },
+            )
+            JbrSkiaCommandRecorder.drawRect(
+                left = 7f,
+                top = 8f,
+                right = 17f,
+                bottom = 28f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        assertEquals(1, commands!!.countCommand(74))
+        assertEquals(1, commands.countCommand(76))
+        assertEquals(0, commands.countCommand(85))
+    }
+
+    @Test
     fun keepsSeparatedSaveLayerClipRectRecords() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(Rect(1f, 2f, 31f, 42f), Paint())
