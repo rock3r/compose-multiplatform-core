@@ -6149,6 +6149,7 @@ object JbrSkiaCommandRecorder {
 
         private fun isTranslatedLayerFoldTransformableRecord(op: Int): Boolean =
             op == COMMAND_DRAW_ROUND_RECT ||
+                op == COMMAND_DRAW_IMAGE_REF_FULL_RUN ||
                 op == COMMAND_FILL_ROUND_RECT ||
                 op == COMMAND_FILL_RECT ||
                 op == COMMAND_STROKE_LINE
@@ -6180,6 +6181,27 @@ object JbrSkiaCommandRecorder {
                         top1000 >= layerTop1000 &&
                         left1000 + payload[recordStart + 6] * 1000 <= layerRight1000 &&
                         top1000 + payload[recordStart + 7] * 1000 <= layerBottom1000
+                }
+                COMMAND_DRAW_IMAGE_REF_FULL_RUN -> {
+                    val recordEnd = recordStart + payload[recordStart + 1] / Int.SIZE_BYTES
+                    val count = payload[recordStart + 3]
+                    if (count <= 1 || recordStart + 4 + count * 6 != recordEnd) {
+                        false
+                    } else {
+                        var argOffset = recordStart + 4
+                        var inside = true
+                        repeat(count) {
+                            if (payload[argOffset] < layerLeft1000 ||
+                                payload[argOffset + 1] < layerTop1000 ||
+                                payload[argOffset + 2] > layerRight1000 ||
+                                payload[argOffset + 3] > layerBottom1000
+                            ) {
+                                inside = false
+                            }
+                            argOffset += 6
+                        }
+                        inside
+                    }
                 }
                 COMMAND_STROKE_LINE -> {
                     payload[recordStart + 4] * 1000 >= layerLeft1000 &&
