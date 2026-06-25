@@ -7787,6 +7787,40 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsAdjacentSaveTranslateRotateTranslateFillOvalRestoreRun() {
+        val commands = JbrSkiaCommandRecorder.record {
+            repeat(3) { index ->
+                val delta = index.toFloat()
+                JbrSkiaCommandRecorder.save()
+                JbrSkiaCommandRecorder.translate(1f + delta, 2f + delta)
+                JbrSkiaCommandRecorder.rotate(18f + delta)
+                JbrSkiaCommandRecorder.translate(5f + delta, 6f + delta)
+                JbrSkiaCommandRecorder.drawOval(
+                    left = 3f + delta,
+                    top = 4f + delta,
+                    right = 13f + delta,
+                    bottom = 24f + delta,
+                    paint = Paint().apply { color = Color.Red },
+                )
+                JbrSkiaCommandRecorder.restore()
+            }
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(100))
+        assertEquals(1, commands.countCommand(106))
+        assertArrayEquals(
+            intArrayOf(
+                106, 136, 1, 3,
+                1000, 2000, 18000, 5000, 6000, Color.Red.toArgb(), 3, 4, 10, 20,
+                2000, 3000, 19000, 6000, 7000, Color.Red.toArgb(), 4, 5, 10, 20,
+                3000, 4000, 20000, 7000, 8000, Color.Red.toArgb(), 5, 6, 10, 20,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
     fun compactsAdjacentSaveLayerSaveTranslate() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(
