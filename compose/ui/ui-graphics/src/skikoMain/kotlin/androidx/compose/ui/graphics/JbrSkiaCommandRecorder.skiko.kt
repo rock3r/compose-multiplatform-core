@@ -5896,6 +5896,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
             compactAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestoreRecords()
             compactAdjacentStrokeOvalRuns()
+            compactAdjacentFillRectRuns()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
@@ -7353,6 +7354,59 @@ object JbrSkiaCommandRecorder {
                 payload[recordStart + 1] == 12 * Int.SIZE_BYTES &&
                 payload[recordStart + 2] == recordFlags
 
+        private fun compactAdjacentFillRectRuns() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                if (canAppendFillRectRun(readOffset, payload[readOffset + 2])) {
+                    val recordFlags = payload[readOffset + 2]
+                    val rectArgs = mutableListOf<IntArray>()
+                    rectArgs += payload.copyOfRange(readOffset + 3, readOffset + 9)
+                    var scanOffset = readOffset + recordLength
+                    while (canAppendFillRectRun(scanOffset, recordFlags)) {
+                        rectArgs += payload.copyOfRange(scanOffset + 3, scanOffset + 9)
+                        scanOffset += payload[scanOffset + 1] / Int.SIZE_BYTES
+                    }
+                    val runCount = rectArgs.size
+                    if (runCount > 1) {
+                        payload[writeOffset++] = COMMAND_FILL_RECT_RUN
+                        payload[writeOffset++] = (4 + runCount * 6) * Int.SIZE_BYTES
+                        payload[writeOffset++] = recordFlags
+                        payload[writeOffset++] = runCount
+                        rectArgs.forEach { args ->
+                            args.copyInto(payload, destinationOffset = writeOffset)
+                            writeOffset += args.size
+                        }
+                        repeat(runCount) {
+                            decrementOp(COMMAND_FILL_RECT)
+                        }
+                        countOp(COMMAND_FILL_RECT_RUN)
+                        readOffset = scanOffset
+                        continue
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = readOffset + recordLength,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset += recordLength
+            }
+            payloadSize = writeOffset
+        }
+
+        private fun canAppendFillRectRun(recordStart: Int, recordFlags: Int): Boolean =
+            recordStart + 9 <= payloadSize &&
+                payload[recordStart] == COMMAND_FILL_RECT &&
+                payload[recordStart + 1] == 9 * Int.SIZE_BYTES &&
+                payload[recordStart + 2] == recordFlags &&
+                (recordFlags == COMMAND_RECORD_FLAGS_NONE || recordFlags == COMMAND_RECORD_FLAG_ANTIALIAS)
+
         private fun compactAdjacentSaveLayerSaveTranslateRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -7772,6 +7826,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_FILL_OVAL -> "fillOval"
                 COMMAND_STROKE_OVAL -> "strokeOval"
                 COMMAND_STROKE_OVAL_RUN -> "strokeOvalRun"
+                COMMAND_FILL_RECT_RUN -> "fillRectRun"
                 COMMAND_CLEAR_RECT -> "clearRect"
                 COMMAND_SAVE -> "save"
                 COMMAND_RESTORE -> "restore"
@@ -7927,6 +7982,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_OVAL_RUN = 103
     private const val COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RUN = 106
     private const val COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_STROKE_CLOSED_POLYLINE_DELTA_RESTORE = 107
+    private const val COMMAND_FILL_RECT_RUN = 108
     private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS = 13
     private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_BODY_INTS = 10
     private const val COMMAND_SCALE = 11
