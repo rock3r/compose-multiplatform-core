@@ -7821,6 +7821,53 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestore() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.rotate(18f)
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 4f
+                    strokeCap = StrokeCap.Round
+                    strokeJoin = StrokeJoin.Bevel
+                    strokeMiterLimit = 6f
+                },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(99))
+        assertEquals(0, commands.countCommand(10))
+        assertEquals(0, commands.countCommand(102))
+        assertEquals(0, commands.countCommand(8))
+        assertEquals(1, commands.countCommand(107))
+        assertArrayEquals(
+            intArrayOf(
+                107, 72, 1,
+                1000, 2000, 18000, 5000, 6000,
+                Color.Red.toArgb(), 4, 1, 2, 6000, 3,
+                1000, 2000,
+                (10000 shl 16) or 10000,
+                (10000 shl 16) or (-10000 and 0xffff),
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
     fun compactsAdjacentSaveLayerSaveTranslate() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.saveLayer(
