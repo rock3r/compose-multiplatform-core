@@ -2335,6 +2335,44 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun writesCompactClosedPolylineStrokePathRecord() {
+        val path = Path().apply {
+            moveTo(1f, 2f)
+            lineTo(11f, 12f)
+            lineTo(21f, 2f)
+            close()
+        }
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawPath(
+                path,
+                Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 4f
+                    strokeCap = StrokeCap.Round
+                    strokeJoin = StrokeJoin.Bevel
+                    strokeMiterLimit = 6f
+                },
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(21))
+        assertEquals(1, commands.countCommand(101))
+        assertArrayEquals(
+            intArrayOf(
+                101, 60, 1,
+                Color.Red.toArgb(), 4, 1, 2, 6000, 3,
+                1000, 2000,
+                11000, 12000,
+                21000, 2000,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
     fun writesFillRectTintColorFilterRecord() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.drawRect(

@@ -2478,6 +2478,25 @@ object JbrSkiaCommandRecorder {
                 bottom = bounds.bottom + outset,
                 paint = paint,
             ) {
+                val closedPolylinePoints = if (paint.style == PaintingStyle.Stroke) {
+                    pathData.closedPolylinePoints()
+                } else {
+                    null
+                }
+                if (closedPolylinePoints != null) {
+                    commands.addCommand(
+                        COMMAND_STROKE_CLOSED_POLYLINE,
+                        paint.recordFlags(),
+                        commandColor,
+                        state.stroke(paint.strokeWidth),
+                        paint.strokeCap.commandValue(),
+                        paint.strokeJoin.commandValue(),
+                        paint.strokeMiter1000(),
+                        closedPolylinePoints.size / 2,
+                        *closedPolylinePoints,
+                    )
+                    return@withSolidColorBlendLayer
+                }
                 commands.addCommand(
                     COMMAND_DRAW_PATH,
                     paint.recordFlags(),
@@ -7562,6 +7581,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_TRANSLATE_ROTATE -> "saveTranslateRotate"
                 COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE ->
                     "saveTranslateRotateTranslateFillOvalRestore"
+                COMMAND_STROKE_CLOSED_POLYLINE -> "strokeClosedPolyline"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> "drawImageRefFullRestore"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> "drawImageRefFullRestoreN"
                 COMMAND_DRAW_ROUND_RECT_RESTORE_N -> "drawRoundRectRestoreN"
@@ -7679,6 +7699,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT_SAVE_SAVE_LAYER_SAVE_TRANSLATE = 98
     private const val COMMAND_SAVE_TRANSLATE_ROTATE = 99
     private const val COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE = 100
+    private const val COMMAND_STROKE_CLOSED_POLYLINE = 101
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
@@ -7802,4 +7823,36 @@ object JbrSkiaCommandRecorder {
     private const val PATH_VERB_QUAD = 2
     private const val PATH_VERB_CUBIC = 3
     private const val PATH_VERB_CLOSE = 4
+
+    private fun IntArray.closedPolylinePoints(): IntArray? {
+        if (size < 7 || this[0] != PATH_VERB_MOVE || this[size - 1] != PATH_VERB_CLOSE) {
+            return null
+        }
+        val lineCount = (size - 4) / 3
+        if (lineCount <= 0 || size != 4 + lineCount * 3) {
+            return null
+        }
+        val points = IntArray((lineCount + 1) * 2)
+        points[0] = this[1]
+        points[1] = this[2]
+        var sourceOffset = 3
+        var pointOffset = 2
+        repeat(lineCount) {
+            if (this[sourceOffset] != PATH_VERB_LINE) {
+                return null
+            }
+            points[pointOffset++] = this[sourceOffset + 1]
+            points[pointOffset++] = this[sourceOffset + 2]
+            sourceOffset += 3
+        }
+        if (sourceOffset != size - 1) {
+            return null
+        }
+        val lastPointOffset = points.size - 2
+        return if (points.size > 4 && points[lastPointOffset] == points[0] && points[lastPointOffset + 1] == points[1]) {
+            points.copyOf(points.size - 2)
+        } else {
+            points
+        }
+    }
 }
