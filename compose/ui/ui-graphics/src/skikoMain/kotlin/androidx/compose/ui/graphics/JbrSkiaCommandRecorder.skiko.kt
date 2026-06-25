@@ -115,6 +115,7 @@ object JbrSkiaCommandRecorder {
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
     private const val LOG_COMMAND_OP_COUNTS_PROPERTY = "compose.jbr.skia.command.logOpCounts"
     private const val LOG_COMMAND_OP_WORDS_PROPERTY = "compose.jbr.skia.command.logOpWords"
+    private const val LOG_COMMAND_OP_PAIRS_PROPERTY = "compose.jbr.skia.command.logOpPairs"
     private const val MAX_COMMAND_IMAGE_DIMENSION = 4096
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
@@ -653,6 +654,9 @@ object JbrSkiaCommandRecorder {
             }
             if (java.lang.Boolean.getBoolean(LOG_COMMAND_OP_WORDS_PROPERTY)) {
                 System.err.println("CMP_JBR_COMMAND_RECORDER_OP_WORDS ${commands.opWordSummary()}")
+            }
+            if (java.lang.Boolean.getBoolean(LOG_COMMAND_OP_PAIRS_PROPERTY)) {
+                System.err.println("CMP_JBR_COMMAND_RECORDER_OP_PAIRS ${commands.opPairWordSummary()}")
             }
         }
 
@@ -5875,6 +5879,34 @@ object JbrSkiaCommandRecorder {
                 .joinToString(separator = " ") { (op, words) -> "${opName(op)}=$words" }
         }
 
+        fun opPairWordSummary(): String {
+            if (payloadSize == 0) return "none"
+            val totals = linkedMapOf<Long, Int>()
+            var previousOp: Int? = null
+            var previousLength = 0
+            var offset = 0
+            while (offset < payloadSize) {
+                val op = payload[offset]
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) {
+                    return "invalid"
+                }
+                previousOp?.let { before ->
+                    val key = opPairKey(before, op)
+                    totals[key] = (totals[key] ?: 0) + previousLength + recordLength
+                }
+                previousOp = op
+                previousLength = recordLength
+                offset += recordLength
+            }
+            if (totals.isEmpty()) return "none"
+            return totals.entries
+                .sortedWith(compareByDescending<Map.Entry<Long, Int>> { it.value }.thenBy { it.key })
+                .joinToString(separator = " ") { (key, words) ->
+                    "${opName(opPairFirst(key))}>${opName(opPairSecond(key))}=$words"
+                }
+        }
+
         private fun countOp(op: Int) {
             opCounts[op] = (opCounts[op] ?: 0) + 1
         }
@@ -5900,6 +5932,13 @@ object JbrSkiaCommandRecorder {
                 index += recordIntSize
             }
         }
+
+        private fun opPairKey(first: Int, second: Int): Long =
+            (first.toLong() shl 32) or (second.toLong() and 0xffffffffL)
+
+        private fun opPairFirst(key: Long): Int = (key shr 32).toInt()
+
+        private fun opPairSecond(key: Long): Int = key.toInt()
 
         fun toIntArray(): IntArray {
             foldTrailingTranslatedRoundRectSuffix()
