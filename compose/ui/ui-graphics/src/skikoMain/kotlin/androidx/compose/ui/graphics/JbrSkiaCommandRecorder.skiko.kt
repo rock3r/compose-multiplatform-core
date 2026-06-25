@@ -5854,6 +5854,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentRoundRectRestoreNRecords()
             compactAdjacentFillRectSaveRecords()
             compactAdjacentSaveFillRectSaveRecords()
+            compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
@@ -6946,6 +6947,56 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (payload[readOffset] == COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT &&
+                    recordLength == 20 &&
+                    nextOffset < payloadSize &&
+                    payload[nextOffset] == COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE &&
+                    payload[nextOffset + 1] == 10 * Int.SIZE_BYTES &&
+                    payload[nextOffset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    payload[writeOffset++] = COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT_SAVE_SAVE_LAYER_SAVE_TRANSLATE
+                    payload[writeOffset++] = 27 * Int.SIZE_BYTES
+                    payload[writeOffset++] = payload[readOffset + 2]
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset + 3,
+                        endIndex = readOffset + 20,
+                    )
+                    writeOffset += 17
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = nextOffset + 3,
+                        endIndex = nextOffset + 10,
+                    )
+                    writeOffset += 7
+                    decrementOp(COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT)
+                    decrementOp(COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE)
+                    countOp(COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT_SAVE_SAVE_LAYER_SAVE_TRANSLATE)
+                    readOffset = nextOffset + 10
+                    continue
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
         private fun compactAdjacentSaveLayerSaveTranslateRecords() {
             var readOffset = 0
             var writeOffset = 0
@@ -7386,6 +7437,8 @@ object JbrSkiaCommandRecorder {
                     "saveTranslateLayerSaveTranslateDrawImageRefFullRestoreN"
                 COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE_DRAW_IMAGE_REF_FULL_RESTORE_N_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE ->
                     "saveTranslateLayerSaveTranslateDrawImageRefFullRestoreNSaveTranslateLayerSaveTranslate"
+                COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT_SAVE_SAVE_LAYER_SAVE_TRANSLATE ->
+                    "fillRectSaveLayerClipRectSaveSaveLayerSaveTranslate"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> "drawImageRefFullRestore"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> "drawImageRefFullRestoreN"
                 COMMAND_DRAW_ROUND_RECT_RESTORE_N -> "drawRoundRectRestoreN"
@@ -7500,6 +7553,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT = 95
     private const val COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE_DRAW_IMAGE_REF_FULL_RESTORE_N = 96
     private const val COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE_DRAW_IMAGE_REF_FULL_RESTORE_N_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE = 97
+    private const val COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT_SAVE_SAVE_LAYER_SAVE_TRANSLATE = 98
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
