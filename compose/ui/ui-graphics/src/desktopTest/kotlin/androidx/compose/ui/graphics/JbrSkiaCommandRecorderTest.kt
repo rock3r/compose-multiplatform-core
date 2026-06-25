@@ -2270,6 +2270,35 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsAdjacentStrokeOvalRun() {
+        val commands = JbrSkiaCommandRecorder.record {
+            val paint = Paint().apply {
+                color = Color.Red
+                style = PaintingStyle.Stroke
+                strokeWidth = 4f
+                strokeCap = StrokeCap.Round
+                strokeJoin = StrokeJoin.Bevel
+                strokeMiterLimit = 6f
+            }
+            JbrSkiaCommandRecorder.drawOval(1f, 2f, 11f, 12f, paint)
+            JbrSkiaCommandRecorder.drawOval(3f, 4f, 13f, 14f, paint)
+            JbrSkiaCommandRecorder.drawOval(5f, 6f, 15f, 16f, paint)
+        }
+
+        assertEquals(0, commands!!.countCommand(5))
+        assertEquals(1, commands.countCommand(103))
+        assertArrayEquals(
+            intArrayOf(
+                103, 124, 1, 3,
+                Color.Red.toArgb(), 1, 2, 10, 10, 4, 1, 2, 6000,
+                Color.Red.toArgb(), 3, 4, 10, 10, 4, 1, 2, 6000,
+                Color.Red.toArgb(), 5, 6, 10, 10, 4, 1, 2, 6000,
+            ),
+            commands.commandRecords().first(),
+        )
+    }
+
+    @Test
     fun wrapsDashedPrimitiveBlendModesInLayerRecords() {
         val path = Path().apply {
             moveTo(1f, 2f)
