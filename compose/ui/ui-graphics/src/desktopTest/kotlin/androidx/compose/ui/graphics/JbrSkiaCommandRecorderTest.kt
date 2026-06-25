@@ -119,6 +119,44 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun compactsAdjacentFillRectsIntoRun() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 22f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.drawRect(
+                left = 3f,
+                top = 4f,
+                right = 13f,
+                bottom = 24f,
+                paint = Paint().apply { color = Color.Blue },
+            )
+            JbrSkiaCommandRecorder.drawRect(
+                left = 5f,
+                top = 6f,
+                right = 15f,
+                bottom = 26f,
+                paint = Paint().apply { color = Color.Green },
+            )
+        }
+
+        assertArrayEquals(
+            intArrayOf(
+                1246972723, 111, 0, 22, 1, 1,
+                108, 88, 1, 3,
+                Color.Red.toArgb(), 1, 2, 10, 20, 0,
+                Color.Blue.toArgb(), 3, 4, 10, 20, 0,
+                Color.Green.toArgb(), 5, 6, 10, 20, 0,
+            ),
+            commands,
+        )
+    }
+
+    @Test
     fun keepsSaveAroundStateChangingRecords() {
         val commands = JbrSkiaCommandRecorder.record {
             JbrSkiaCommandRecorder.save()
