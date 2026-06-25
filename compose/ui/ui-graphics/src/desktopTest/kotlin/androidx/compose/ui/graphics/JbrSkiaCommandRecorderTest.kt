@@ -7663,7 +7663,11 @@ class JbrSkiaCommandRecorderTest {
                 top = 4f,
                 right = 13f,
                 bottom = 24f,
-                paint = Paint().apply { color = Color.Red },
+                paint = Paint().apply {
+                    color = Color.Red
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
             )
             JbrSkiaCommandRecorder.restore()
         }
@@ -7676,6 +7680,39 @@ class JbrSkiaCommandRecorderTest {
             intArrayOf(
                 99, 24, 0,
                 1000, 2000, 18000,
+            ),
+            records.first(),
+        )
+    }
+
+    @Test
+    fun compactsAdjacentSaveTranslateRotateTranslateFillOvalRestore() {
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.save()
+            JbrSkiaCommandRecorder.translate(1f, 2f)
+            JbrSkiaCommandRecorder.rotate(18f)
+            JbrSkiaCommandRecorder.translate(5f, 6f)
+            JbrSkiaCommandRecorder.drawOval(
+                left = 3f,
+                top = 4f,
+                right = 13f,
+                bottom = 24f,
+                paint = Paint().apply { color = Color.Red },
+            )
+            JbrSkiaCommandRecorder.restore()
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(0, commands.countCommand(99))
+        assertEquals(0, commands.countCommand(10))
+        assertEquals(0, commands.countCommand(4))
+        assertEquals(0, commands.countCommand(8))
+        assertEquals(1, commands.countCommand(100))
+        assertArrayEquals(
+            intArrayOf(
+                100, 52, 1,
+                1000, 2000, 18000, 5000, 6000,
+                Color.Red.toArgb(), 3, 4, 10, 20,
             ),
             records.first(),
         )
