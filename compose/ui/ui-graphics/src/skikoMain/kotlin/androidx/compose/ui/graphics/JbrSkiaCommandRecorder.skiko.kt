@@ -5893,6 +5893,7 @@ object JbrSkiaCommandRecorder {
             compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
             compactAdjacentSaveTranslateRotateRecords()
             compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRecords()
+            compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
             compactAdjacentStrokeOvalRuns()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
@@ -7154,6 +7155,64 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                if (canAppendSaveTranslateRotateTranslateFillOvalRestoreRun(readOffset, payload[readOffset + 2])) {
+                    val recordFlags = payload[readOffset + 2]
+                    val runArgs = mutableListOf<IntArray>()
+                    var runEnd = readOffset
+                    while (runEnd < payloadSize &&
+                        canAppendSaveTranslateRotateTranslateFillOvalRestoreRun(runEnd, recordFlags)
+                    ) {
+                        runArgs += payload.copyOfRange(
+                            runEnd + 3,
+                            runEnd + SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS,
+                        )
+                        runEnd += SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS
+                    }
+                    val runCount = runArgs.size
+                    if (runCount > 1) {
+                        payload[writeOffset++] = COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RUN
+                        payload[writeOffset++] =
+                            (4 + runCount * SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_BODY_INTS) *
+                            Int.SIZE_BYTES
+                        payload[writeOffset++] = recordFlags
+                        payload[writeOffset++] = runCount
+
+                        runArgs.forEach { args ->
+                            args.copyInto(payload, destinationOffset = writeOffset)
+                            writeOffset += args.size
+                            decrementOp(COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE)
+                        }
+                        countOp(COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RUN)
+                        readOffset = runEnd
+                        continue
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = readOffset + recordLength,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset += recordLength
+            }
+            payloadSize = writeOffset
+        }
+
+        private fun canAppendSaveTranslateRotateTranslateFillOvalRestoreRun(recordStart: Int, recordFlags: Int): Boolean =
+            recordStart + SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS <= payloadSize &&
+                payload[recordStart] == COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE &&
+                payload[recordStart + 1] ==
+                    SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS * Int.SIZE_BYTES &&
+                payload[recordStart + 2] == recordFlags
+
         private fun compactAdjacentStrokeOvalRuns() {
             var readOffset = 0
             var writeOffset = 0
@@ -7662,6 +7721,8 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_TRANSLATE_ROTATE -> "saveTranslateRotate"
                 COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE ->
                     "saveTranslateRotateTranslateFillOvalRestore"
+                COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RUN ->
+                    "saveTranslateRotateTranslateFillOvalRestoreRun"
                 COMMAND_STROKE_CLOSED_POLYLINE -> "strokeClosedPolyline"
                 COMMAND_STROKE_CLOSED_POLYLINE_DELTA -> "strokeClosedPolylineDelta"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> "drawImageRefFullRestore"
@@ -7784,6 +7845,9 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_STROKE_CLOSED_POLYLINE = 101
     private const val COMMAND_STROKE_CLOSED_POLYLINE_DELTA = 102
     private const val COMMAND_STROKE_OVAL_RUN = 103
+    private const val COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RUN = 106
+    private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS = 13
+    private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_BODY_INTS = 10
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
