@@ -114,6 +114,7 @@ object JbrSkiaCommandRecorder {
     private const val STRICT_PROPERTY = "compose.jbr.skia.command.strict"
     private const val COLOR_FILTER_HANDLES_PROPERTY = "compose.jbr.skia.command.colorFilterHandles"
     private const val LOG_COMMAND_OP_COUNTS_PROPERTY = "compose.jbr.skia.command.logOpCounts"
+    private const val LOG_COMMAND_OP_WORDS_PROPERTY = "compose.jbr.skia.command.logOpWords"
     private const val MAX_COMMAND_IMAGE_DIMENSION = 4096
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
@@ -649,6 +650,9 @@ object JbrSkiaCommandRecorder {
             )
             if (java.lang.Boolean.getBoolean(LOG_COMMAND_OP_COUNTS_PROPERTY)) {
                 System.err.println("CMP_JBR_COMMAND_RECORDER_OPS ${commands.opSummary()}")
+            }
+            if (java.lang.Boolean.getBoolean(LOG_COMMAND_OP_WORDS_PROPERTY)) {
+                System.err.println("CMP_JBR_COMMAND_RECORDER_OP_WORDS ${commands.opWordSummary()}")
             }
         }
 
@@ -5852,6 +5856,24 @@ object JbrSkiaCommandRecorder {
                     .sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
                     .joinToString(separator = " ") { (op, count) -> "${opName(op)}=$count" }
             }
+
+        fun opWordSummary(): String {
+            if (payloadSize == 0) return "none"
+            val totals = linkedMapOf<Int, Int>()
+            var offset = 0
+            while (offset < payloadSize) {
+                val op = payload[offset]
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) {
+                    return "invalid"
+                }
+                totals[op] = (totals[op] ?: 0) + recordLength
+                offset += recordLength
+            }
+            return totals.entries
+                .sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
+                .joinToString(separator = " ") { (op, words) -> "${opName(op)}=$words" }
+        }
 
         private fun countOp(op: Int) {
             opCounts[op] = (opCounts[op] ?: 0) + 1
