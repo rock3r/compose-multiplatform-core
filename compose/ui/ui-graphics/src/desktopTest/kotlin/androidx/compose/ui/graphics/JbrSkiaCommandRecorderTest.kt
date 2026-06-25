@@ -2335,7 +2335,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun writesCompactClosedPolylineStrokePathRecord() {
+    fun writesDeltaPackedClosedPolylineStrokePathRecord() {
         val path = Path().apply {
             moveTo(1f, 2f)
             lineTo(11f, 12f)
@@ -2359,14 +2359,15 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(21))
-        assertEquals(1, commands.countCommand(101))
+        assertEquals(0, commands.countCommand(101))
+        assertEquals(1, commands.countCommand(102))
         assertArrayEquals(
             intArrayOf(
-                101, 60, 1,
+                102, 52, 1,
                 Color.Red.toArgb(), 4, 1, 2, 6000, 3,
                 1000, 2000,
-                11000, 12000,
-                21000, 2000,
+                (10000 shl 16) or 10000,
+                (10000 shl 16) or (-10000 and 0xffff),
             ),
             records.first(),
         )

@@ -2484,17 +2484,34 @@ object JbrSkiaCommandRecorder {
                     null
                 }
                 if (closedPolylinePoints != null) {
-                    commands.addCommand(
-                        COMMAND_STROKE_CLOSED_POLYLINE,
-                        paint.recordFlags(),
-                        commandColor,
-                        state.stroke(paint.strokeWidth),
-                        paint.strokeCap.commandValue(),
-                        paint.strokeJoin.commandValue(),
-                        paint.strokeMiter1000(),
-                        closedPolylinePoints.size / 2,
-                        *closedPolylinePoints,
-                    )
+                    val packedDeltas = closedPolylinePoints.packedShortDeltas()
+                    if (packedDeltas != null) {
+                        commands.addCommand(
+                            COMMAND_STROKE_CLOSED_POLYLINE_DELTA,
+                            paint.recordFlags(),
+                            commandColor,
+                            state.stroke(paint.strokeWidth),
+                            paint.strokeCap.commandValue(),
+                            paint.strokeJoin.commandValue(),
+                            paint.strokeMiter1000(),
+                            closedPolylinePoints.size / 2,
+                            closedPolylinePoints[0],
+                            closedPolylinePoints[1],
+                            *packedDeltas,
+                        )
+                    } else {
+                        commands.addCommand(
+                            COMMAND_STROKE_CLOSED_POLYLINE,
+                            paint.recordFlags(),
+                            commandColor,
+                            state.stroke(paint.strokeWidth),
+                            paint.strokeCap.commandValue(),
+                            paint.strokeJoin.commandValue(),
+                            paint.strokeMiter1000(),
+                            closedPolylinePoints.size / 2,
+                            *closedPolylinePoints,
+                        )
+                    }
                     return@withSolidColorBlendLayer
                 }
                 commands.addCommand(
@@ -7582,6 +7599,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE ->
                     "saveTranslateRotateTranslateFillOvalRestore"
                 COMMAND_STROKE_CLOSED_POLYLINE -> "strokeClosedPolyline"
+                COMMAND_STROKE_CLOSED_POLYLINE_DELTA -> "strokeClosedPolylineDelta"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE -> "drawImageRefFullRestore"
                 COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N -> "drawImageRefFullRestoreN"
                 COMMAND_DRAW_ROUND_RECT_RESTORE_N -> "drawRoundRectRestoreN"
@@ -7700,6 +7718,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_TRANSLATE_ROTATE = 99
     private const val COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE = 100
     private const val COMMAND_STROKE_CLOSED_POLYLINE = 101
+    private const val COMMAND_STROKE_CLOSED_POLYLINE_DELTA = 102
     private const val COMMAND_SCALE = 11
     private const val COMMAND_ROTATE = 12
     private const val COMMAND_SAVE_LAYER = 13
@@ -7854,5 +7873,29 @@ object JbrSkiaCommandRecorder {
         } else {
             points
         }
+    }
+
+    private fun IntArray.packedShortDeltas(): IntArray? {
+        val pointCount = size / 2
+        if (pointCount < 2 || size != pointCount * 2) {
+            return null
+        }
+        val deltas = IntArray(pointCount - 1)
+        var previousX = this[0]
+        var previousY = this[1]
+        var sourceOffset = 2
+        for (index in deltas.indices) {
+            val x = this[sourceOffset++]
+            val y = this[sourceOffset++]
+            val dx = x - previousX
+            val dy = y - previousY
+            if (dx < Short.MIN_VALUE || dx > Short.MAX_VALUE || dy < Short.MIN_VALUE || dy > Short.MAX_VALUE) {
+                return null
+            }
+            deltas[index] = ((dx and 0xffff) shl 16) or (dy and 0xffff)
+            previousX = x
+            previousY = y
+        }
+        return deltas
     }
 }
