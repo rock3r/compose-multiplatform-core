@@ -5941,9 +5941,10 @@ object JbrSkiaCommandRecorder {
         private fun opPairSecond(key: Long): Int = key.toInt()
 
         private val defaultCompactionGroupMask: Int = 0b1111
-        // Keep the adjacent image-ref/roundrect passes off by default for now:
-        // combined with the structural layer group they can erase Jewel markdown editor content.
-        private val defaultCompactionGroup1PassMask: Int = 0xf3
+        private val defaultCompactionGroup1PassMask: Int = 0xff
+        // Keep the image+roundrect branch off by default for now: combined with
+        // the structural layer group it can erase Jewel markdown editor content.
+        private val defaultImageRefRoundRectCompactionMask: Int = 0b01
         private val maxTranslatedLayerFoldScanWords: Int = 4096
 
         private fun isCompactionGroupEnabled(group: Int): Boolean {
@@ -5958,6 +5959,15 @@ object JbrSkiaCommandRecorder {
                     defaultCompactionGroup1PassMask,
                 )
             return mask < 0 || (mask and (1 shl pass)) != 0
+        }
+
+        private fun isImageRefRoundRectCompactionEnabled(branch: Int): Boolean {
+            val mask =
+                java.lang.Integer.getInteger(
+                    "compose.jbr.skia.command.imageRefRoundRectCompactionMask",
+                    defaultImageRefRoundRectCompactionMask,
+                )
+            return mask < 0 || (mask and (1 shl branch)) != 0
         }
 
         fun toIntArray(): IntArray {
@@ -6603,11 +6613,13 @@ object JbrSkiaCommandRecorder {
         private fun compactAdjacentImageRefFullRoundRectRecords() {
             var readOffset = 0
             var writeOffset = 0
+            val allowDirectClearImageRoundRect = directClearImageRoundRectCandidateCount() >= 2
             while (readOffset < payloadSize) {
                 val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
                 val nextOffset = readOffset + recordLength
                 if (recordLength < 3 || nextOffset > payloadSize) return
-                if (payload[readOffset] == COMMAND_CLEAR_RECT &&
+                if (isImageRefRoundRectCompactionEnabled(0) &&
+                    payload[readOffset] == COMMAND_CLEAR_RECT &&
                     recordLength == 7 &&
                     payload[readOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
                     nextOffset < payloadSize
@@ -6620,10 +6632,16 @@ object JbrSkiaCommandRecorder {
                         if (imageDefinitionLength < 3 || imageOffset + imageDefinitionLength > payloadSize) return
                         imageOffset += imageDefinitionLength
                     }
-                    if (imageOffset >= payloadSize ||
-                        payload[imageOffset] != COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
-                        payload[imageOffset + 1] != 22 * Int.SIZE_BYTES
-                    ) {
+                    val foldedImageRoundRect = imageOffset < payloadSize &&
+                        payload[imageOffset] == COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT &&
+                        payload[imageOffset + 1] == 22 * Int.SIZE_BYTES
+                    val imageOffsetEnd = imageOffset + 9
+                    val directImageRoundRect = imageOffsetEnd < payloadSize &&
+                        payload[imageOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
+                        payload[imageOffset + 1] == 9 * Int.SIZE_BYTES &&
+                        payload[imageOffsetEnd] == COMMAND_DRAW_ROUND_RECT &&
+                        payload[imageOffsetEnd + 1] == 15 * Int.SIZE_BYTES
+                    if (!foldedImageRoundRect && !(allowDirectClearImageRoundRect && directImageRoundRect)) {
                         if (writeOffset != readOffset) {
                             payload.copyInto(
                                 payload,
@@ -6651,25 +6669,50 @@ object JbrSkiaCommandRecorder {
                     }
                     payload[writeOffset++] = COMMAND_CLEAR_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT
                     payload[writeOffset++] = 26 * Int.SIZE_BYTES
-                    payload[writeOffset++] = payload[imageOffset + 2]
+                    payload[writeOffset++] =
+                        if (foldedImageRoundRect) payload[imageOffset + 2] else payload[imageOffsetEnd + 2]
                     payload[writeOffset++] = clearX
                     payload[writeOffset++] = clearY
                     payload[writeOffset++] = clearWidth
                     payload[writeOffset++] = clearHeight
-                    payload.copyInto(
-                        payload,
-                        destinationOffset = writeOffset,
-                        startIndex = imageOffset + 3,
-                        endIndex = imageOffset + 22,
-                    )
-                    writeOffset += 19
+                    if (foldedImageRoundRect) {
+                        payload.copyInto(
+                            payload,
+                            destinationOffset = writeOffset,
+                            startIndex = imageOffset + 3,
+                            endIndex = imageOffset + 22,
+                        )
+                        writeOffset += 19
+                    } else {
+                        payload[writeOffset++] = payload[imageOffset + 2]
+                        payload.copyInto(
+                            payload,
+                            destinationOffset = writeOffset,
+                            startIndex = imageOffset + 3,
+                            endIndex = imageOffset + 9,
+                        )
+                        writeOffset += 6
+                        payload.copyInto(
+                            payload,
+                            destinationOffset = writeOffset,
+                            startIndex = imageOffsetEnd + 3,
+                            endIndex = imageOffsetEnd + 15,
+                        )
+                        writeOffset += 12
+                    }
                     decrementOp(COMMAND_CLEAR_RECT)
-                    decrementOp(COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT)
+                    if (foldedImageRoundRect) {
+                        decrementOp(COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT)
+                    } else {
+                        decrementOp(COMMAND_DRAW_IMAGE_REF_FULL)
+                        decrementOp(COMMAND_DRAW_ROUND_RECT)
+                    }
                     countOp(COMMAND_CLEAR_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT)
-                    readOffset = imageOffset + 22
+                    readOffset = if (foldedImageRoundRect) imageOffset + 22 else imageOffsetEnd + 15
                     continue
                 }
-                if (payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
+                if (isImageRefRoundRectCompactionEnabled(1) &&
+                    payload[readOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
                     recordLength == 9 &&
                     nextOffset < payloadSize &&
                     payload[nextOffset] == COMMAND_DRAW_ROUND_RECT &&
@@ -6738,6 +6781,48 @@ object JbrSkiaCommandRecorder {
                 readOffset = nextOffset
             }
             payloadSize = writeOffset
+        }
+
+        private fun directClearImageRoundRectCandidateCount(): Int {
+            var offset = 0
+            var count = 0
+            while (offset < payloadSize) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                val nextOffset = offset + recordLength
+                if (recordLength < 3 || nextOffset > payloadSize) return count
+                if (payload[offset] == COMMAND_CLEAR_RECT &&
+                    recordLength == 7 &&
+                    payload[offset + 2] == COMMAND_RECORD_FLAGS_NONE
+                ) {
+                    var imageOffset = nextOffset
+                    while (imageOffset < payloadSize &&
+                        payload[imageOffset] == COMMAND_DEFINE_IMAGE_BITMAP
+                    ) {
+                        val imageDefinitionLength = payload[imageOffset + 1] / Int.SIZE_BYTES
+                        if (imageDefinitionLength < 3 ||
+                            imageOffset + imageDefinitionLength > payloadSize
+                        ) {
+                            return count
+                        }
+                        imageOffset += imageDefinitionLength
+                    }
+                    val imageRecordEnd = imageOffset + 9
+                    if (imageRecordEnd <= payloadSize &&
+                        payload[imageOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
+                        payload[imageOffset + 1] == 9 * Int.SIZE_BYTES
+                    ) {
+                        val roundRectEnd = imageRecordEnd + 15
+                        if (roundRectEnd <= payloadSize &&
+                            payload[imageRecordEnd] == COMMAND_DRAW_ROUND_RECT &&
+                            payload[imageRecordEnd + 1] == 15 * Int.SIZE_BYTES
+                        ) {
+                            count++
+                        }
+                    }
+                }
+                offset = nextOffset
+            }
+            return count
         }
 
         private fun compactAdjacentStrokeLineImageRefFullRunRecords() {
