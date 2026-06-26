@@ -6012,32 +6012,35 @@ object JbrSkiaCommandRecorder {
         // non-clear image+roundrect branch enabled for transparent icons/logos.
         private val defaultImageRefRoundRectCompactionMask: Int = 0b11
         private val maxTranslatedLayerFoldScanWords: Int = 4096
+        private val compactionEnabled: Boolean =
+            !java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableCompaction")
+        private val compactionGroupMask: Int =
+            java.lang.Integer.getInteger("compose.jbr.skia.command.compactionGroupMask", defaultCompactionGroupMask)
+        private val compactionGroup1PassMask: Int =
+            java.lang.Integer.getInteger(
+                "compose.jbr.skia.command.compactionGroup1PassMask",
+                defaultCompactionGroup1PassMask,
+            )
+        private val imageRefRoundRectCompactionMask: Int =
+            java.lang.Integer.getInteger(
+                "compose.jbr.skia.command.imageRefRoundRectCompactionMask",
+                defaultImageRefRoundRectCompactionMask,
+            )
 
         private fun isCompactionGroupEnabled(group: Int): Boolean {
-            val mask = java.lang.Integer.getInteger("compose.jbr.skia.command.compactionGroupMask", defaultCompactionGroupMask)
-            return mask < 0 || (mask and (1 shl group)) != 0
+            return compactionGroupMask < 0 || (compactionGroupMask and (1 shl group)) != 0
         }
 
         private fun isCompactionGroup1PassEnabled(pass: Int): Boolean {
-            val mask =
-                java.lang.Integer.getInteger(
-                    "compose.jbr.skia.command.compactionGroup1PassMask",
-                    defaultCompactionGroup1PassMask,
-                )
-            return mask < 0 || (mask and (1 shl pass)) != 0
+            return compactionGroup1PassMask < 0 || (compactionGroup1PassMask and (1 shl pass)) != 0
         }
 
         private fun isImageRefRoundRectCompactionEnabled(branch: Int): Boolean {
-            val mask =
-                java.lang.Integer.getInteger(
-                    "compose.jbr.skia.command.imageRefRoundRectCompactionMask",
-                    defaultImageRefRoundRectCompactionMask,
-                )
-            return mask < 0 || (mask and (1 shl branch)) != 0
+            return imageRefRoundRectCompactionMask < 0 || (imageRefRoundRectCompactionMask and (1 shl branch)) != 0
         }
 
         fun toIntArray(): IntArray {
-            if (!java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableCompaction")) {
+            if (compactionEnabled) {
                 if (isCompactionGroupEnabled(0)) {
                     foldTrailingTranslatedRoundRectSuffix()
                     compactAdjacentSaveSaveLayerSaveTranslateRecords()
