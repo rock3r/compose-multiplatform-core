@@ -5506,7 +5506,7 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT
 
         private fun previousRecordStart(endOffset: Int): Int? {
-            if (java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableRecordStartIndex")) {
+            if (!recordStartIndexEnabled) {
                 return previousRecordStartLinear(endOffset)
             }
             ensureRecordIndex()
@@ -5976,6 +5976,12 @@ object JbrSkiaCommandRecorder {
             }
         }
 
+        private fun hasOp(op: Int): Boolean =
+            op in opCounts.indices && opCounts[op] > 0
+
+        private fun hasOpAtLeast(op: Int, count: Int): Boolean =
+            op in opCounts.indices && opCounts[op] >= count
+
         private fun ensureRecordIndex() {
             if (!recordIndexDirty) return
             recordStartCount = 0
@@ -6026,6 +6032,10 @@ object JbrSkiaCommandRecorder {
                 "compose.jbr.skia.command.imageRefRoundRectCompactionMask",
                 defaultImageRefRoundRectCompactionMask,
             )
+        private val recordStartIndexEnabled: Boolean =
+            !java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableRecordStartIndex")
+        private val compactionOpPrerequisiteGatesEnabled: Boolean =
+            !java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableCompactionOpPrerequisiteGates")
 
         private fun isCompactionGroupEnabled(group: Int): Boolean {
             return compactionGroupMask < 0 || (compactionGroupMask and (1 shl group)) != 0
@@ -6075,12 +6085,41 @@ object JbrSkiaCommandRecorder {
                     compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
                 }
                 if (isCompactionGroupEnabled(3)) {
-                    compactAdjacentSaveTranslateRotateRecords()
-                    compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRecords()
-                    compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
-                    compactAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestoreRecords()
-                    compactAdjacentStrokeOvalRuns()
-                    compactAdjacentFillRectRuns()
+                    if (!compactionOpPrerequisiteGatesEnabled) {
+                        compactAdjacentSaveTranslateRotateRecords()
+                        compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRecords()
+                        compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
+                        compactAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestoreRecords()
+                        compactAdjacentStrokeOvalRuns()
+                        compactAdjacentFillRectRuns()
+                    } else {
+                        if (hasOp(COMMAND_SAVE_TRANSLATE) && hasOp(COMMAND_ROTATE)) {
+                            compactAdjacentSaveTranslateRotateRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE_TRANSLATE_ROTATE) &&
+                            hasOp(COMMAND_TRANSLATE) &&
+                            hasOp(COMMAND_FILL_OVAL) &&
+                            hasOp(COMMAND_RESTORE)
+                        ) {
+                            compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRecords()
+                        }
+                        if (hasOpAtLeast(COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE, 2)) {
+                            compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
+                        }
+                        if (hasOp(COMMAND_SAVE_TRANSLATE_ROTATE) &&
+                            hasOp(COMMAND_TRANSLATE) &&
+                            hasOp(COMMAND_STROKE_CLOSED_POLYLINE_DELTA) &&
+                            hasOp(COMMAND_RESTORE)
+                        ) {
+                            compactAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestoreRecords()
+                        }
+                        if (hasOpAtLeast(COMMAND_STROKE_OVAL, 2)) {
+                            compactAdjacentStrokeOvalRuns()
+                        }
+                        if (hasOpAtLeast(COMMAND_FILL_RECT, 2)) {
+                            compactAdjacentFillRectRuns()
+                        }
+                    }
                 }
             }
             return IntArray(streamSize).also { stream ->
