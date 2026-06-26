@@ -4721,6 +4721,9 @@ object JbrSkiaCommandRecorder {
     private class CommandStreamWriter {
         private var payload = IntArray(1024)
         private var payloadSize = 0
+        private var recordStarts = IntArray(128)
+        private var recordStartCount = 0
+        private var recordIndexDirty = false
         private val opCounts = IntArray(OP_COUNT_CAPACITY)
         private var opCountEntries = 0
         private val imageAlphaByCacheKey = mutableMapOf<Long, Boolean>()
@@ -5502,6 +5505,18 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT
 
         private fun previousRecordStart(endOffset: Int): Int? {
+            if (java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableRecordStartIndex")) {
+                return previousRecordStartLinear(endOffset)
+            }
+            ensureRecordIndex()
+            if (endOffset == payloadSize) {
+                return if (recordStartCount == 0) null else recordStarts[recordStartCount - 1]
+            }
+            val index = recordStarts.binarySearch(endOffset, fromIndex = 0, toIndex = recordStartCount)
+            return if (index > 0) recordStarts[index - 1] else null
+        }
+
+        private fun previousRecordStartLinear(endOffset: Int): Int? {
             var offset = 0
             var previous = 0
             while (offset < endOffset) {
@@ -5799,6 +5814,7 @@ object JbrSkiaCommandRecorder {
             ensureCapacity(payloadSize + count)
             records.copyInto(payload, destinationOffset = payloadSize, startIndex = startIndex, endIndex = endIndex)
             payloadSize += count
+            recordIndexDirty = true
         }
 
         private fun tryAddDrawImageRefFullDrawRoundRect(op: Int, recordFlags: Int, args: IntArray): Boolean {
@@ -5936,6 +5952,7 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun decrementOp(op: Int) {
+            recordIndexDirty = true
             if (op !in opCounts.indices) return
             val count = opCounts[op]
             if (count <= 0) return
@@ -5956,6 +5973,29 @@ object JbrSkiaCommandRecorder {
                 countOp(op)
                 index += recordIntSize
             }
+        }
+
+        private fun ensureRecordIndex() {
+            if (!recordIndexDirty) return
+            recordStartCount = 0
+            var offset = 0
+            while (offset < payloadSize) {
+                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || offset + recordLength > payloadSize) {
+                    recordIndexDirty = false
+                    return
+                }
+                appendRecordStart(offset)
+                offset += recordLength
+            }
+            recordIndexDirty = false
+        }
+
+        private fun appendRecordStart(recordStart: Int) {
+            if (recordStartCount == recordStarts.size) {
+                recordStarts = recordStarts.copyOf(recordStarts.size * 2)
+            }
+            recordStarts[recordStartCount++] = recordStart
         }
 
         private fun opPairKey(first: Int, second: Int): Long =
@@ -8249,6 +8289,8 @@ object JbrSkiaCommandRecorder {
 
         private fun addRecordHeader(op: Int, recordFlags: Int, argCount: Int) {
             ensureCapacity(payloadSize + argCount + 3)
+            ensureRecordIndex()
+            appendRecordStart(payloadSize)
             payload[payloadSize++] = op
             payload[payloadSize++] = (argCount + 3) * Int.SIZE_BYTES
             payload[payloadSize++] = recordFlags
