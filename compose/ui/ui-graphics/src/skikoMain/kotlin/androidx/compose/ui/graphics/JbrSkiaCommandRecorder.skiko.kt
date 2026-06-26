@@ -6989,6 +6989,10 @@ object JbrSkiaCommandRecorder {
                         scanOffset += 12
                     }
                     if (runCount > 1) {
+                        val firstX1 = payload[readOffset + 4]
+                        val firstY1 = payload[readOffset + 5]
+                        val firstX2 = payload[readOffset + 6]
+                        val firstY2 = payload[readOffset + 7]
                         payload[writeOffset++] = COMMAND_STROKE_LINE_RUN
                         payload[writeOffset++] = (9 + runCount * 4) * Int.SIZE_BYTES
                         payload[writeOffset++] = recordFlags
@@ -6999,14 +7003,21 @@ object JbrSkiaCommandRecorder {
                         payload[writeOffset++] = strokeMiter
                         payload[writeOffset++] = runCount
                         var lineOffset = readOffset
-                        repeat(runCount) {
-                            payload.copyInto(
-                                payload,
-                                destinationOffset = writeOffset,
-                                startIndex = lineOffset + 4,
-                                endIndex = lineOffset + 8,
-                            )
-                            writeOffset += 4
+                        repeat(runCount) { index ->
+                            if (index == 0) {
+                                payload[writeOffset++] = firstX1
+                                payload[writeOffset++] = firstY1
+                                payload[writeOffset++] = firstX2
+                                payload[writeOffset++] = firstY2
+                            } else {
+                                payload.copyInto(
+                                    payload,
+                                    destinationOffset = writeOffset,
+                                    startIndex = lineOffset + 4,
+                                    endIndex = lineOffset + 8,
+                                )
+                                writeOffset += 4
+                            }
                             lineOffset += 12
                             decrementOp(COMMAND_STROKE_LINE)
                         }
