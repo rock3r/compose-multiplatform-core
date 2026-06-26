@@ -6068,21 +6068,89 @@ object JbrSkiaCommandRecorder {
                     if (isCompactionGroup1PassEnabled(8)) compactAdjacentStrokeLineRunRecords()
                 }
                 if (isCompactionGroupEnabled(2)) {
-                    compactAdjacentSaveTranslateLayerSaveTranslateRecords()
-                    compactAdjacentSaveSaveLayerSaveTranslateRecords()
-                    compactAdjacentSaveLayerSaveTranslateRecords()
-                    compactAdjacentSaveSaveLayerSaveTranslateRecords()
-                    compactAdjacentSaveLayerClipRectRecords()
-                    compactAdjacentFillRectSaveLayerClipRectRecords()
-                    compactAdjacentFullImageRefRestoreRecords()
-                    compactAdjacentFullImageRefRestoreNRecords()
-                    compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNRecords()
-                    compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
-                    compactAdjacentFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
-                    compactAdjacentRoundRectRestoreNRecords()
-                    compactAdjacentFillRectSaveRecords()
-                    compactAdjacentSaveFillRectSaveRecords()
-                    compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
+                    if (!compactionOpPrerequisiteGatesEnabled) {
+                        compactAdjacentSaveTranslateLayerSaveTranslateRecords()
+                        compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                        compactAdjacentSaveLayerSaveTranslateRecords()
+                        compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                        compactAdjacentSaveLayerClipRectRecords()
+                        compactAdjacentFillRectSaveLayerClipRectRecords()
+                        compactAdjacentFullImageRefRestoreRecords()
+                        compactAdjacentFullImageRefRestoreNRecords()
+                        compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNRecords()
+                        compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
+                        compactAdjacentFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
+                        compactAdjacentRoundRectRestoreNRecords()
+                        compactAdjacentFillRectSaveRecords()
+                        compactAdjacentSaveFillRectSaveRecords()
+                        compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
+                    } else {
+                        if (hasOp(COMMAND_SAVE_TRANSLATE_LAYER) && hasOp(COMMAND_SAVE_TRANSLATE)) {
+                            compactAdjacentSaveTranslateLayerSaveTranslateRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE) &&
+                            ((hasOp(COMMAND_SAVE_LAYER) && hasOp(COMMAND_SAVE_TRANSLATE)) ||
+                                hasOp(COMMAND_SAVE_LAYER_SAVE_TRANSLATE))
+                        ) {
+                            compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE_LAYER) && hasOp(COMMAND_SAVE_TRANSLATE)) {
+                            compactAdjacentSaveLayerSaveTranslateRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE) &&
+                            ((hasOp(COMMAND_SAVE_LAYER) && hasOp(COMMAND_SAVE_TRANSLATE)) ||
+                                hasOp(COMMAND_SAVE_LAYER_SAVE_TRANSLATE))
+                        ) {
+                            compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE_LAYER) && hasOp(COMMAND_CLIP_RECT)) {
+                            compactAdjacentSaveLayerClipRectRecords()
+                        }
+                        if (hasOp(COMMAND_FILL_RECT) && hasOp(COMMAND_SAVE_LAYER_CLIP_RECT)) {
+                            compactAdjacentFillRectSaveLayerClipRectRecords()
+                        }
+                        if (hasOp(COMMAND_DRAW_IMAGE_REF_FULL) && hasOp(COMMAND_RESTORE)) {
+                            compactAdjacentFullImageRefRestoreRecords()
+                        }
+                        if ((hasOp(COMMAND_DRAW_IMAGE_REF_FULL) ||
+                            hasOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE) ||
+                            hasOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N)) &&
+                            (hasOp(COMMAND_RESTORE) || hasOp(COMMAND_RESTORE_N))
+                        ) {
+                            compactAdjacentFullImageRefRestoreNRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE) &&
+                            hasOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N)
+                        ) {
+                            compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE_DRAW_IMAGE_REF_FULL_RESTORE_N) &&
+                            hasOp(COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE)
+                        ) {
+                            compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
+                        }
+                        if (hasOp(COMMAND_DRAW_IMAGE_REF_FULL_RESTORE_N) &&
+                            hasOp(COMMAND_SAVE_TRANSLATE_LAYER_SAVE_TRANSLATE)
+                        ) {
+                            compactAdjacentFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
+                        }
+                        if ((hasOp(COMMAND_DRAW_ROUND_RECT) || hasOp(COMMAND_DRAW_ROUND_RECT_RESTORE_N)) &&
+                            hasOp(COMMAND_RESTORE_N)
+                        ) {
+                            compactAdjacentRoundRectRestoreNRecords()
+                        }
+                        if (hasOp(COMMAND_FILL_RECT) && hasOp(COMMAND_SAVE)) {
+                            compactAdjacentFillRectSaveRecords()
+                        }
+                        if (hasOp(COMMAND_SAVE) && hasOp(COMMAND_FILL_RECT_SAVE)) {
+                            compactAdjacentSaveFillRectSaveRecords()
+                        }
+                        if (hasOp(COMMAND_FILL_RECT_SAVE_LAYER_CLIP_RECT) &&
+                            hasOp(COMMAND_SAVE_SAVE_LAYER_SAVE_TRANSLATE)
+                        ) {
+                            compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
+                        }
+                    }
                 }
                 if (isCompactionGroupEnabled(3)) {
                     if (!compactionOpPrerequisiteGatesEnabled) {
