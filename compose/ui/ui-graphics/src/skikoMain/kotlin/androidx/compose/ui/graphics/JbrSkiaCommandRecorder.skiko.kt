@@ -5944,9 +5944,9 @@ object JbrSkiaCommandRecorder {
 
         private val defaultCompactionGroupMask: Int = 0b1111
         private val defaultCompactionGroup1PassMask: Int = 0xff
-        // Keep the image+roundrect branch off by default for now: combined with
-        // the structural layer group it can erase Jewel markdown editor content.
-        private val defaultImageRefRoundRectCompactionMask: Int = 0b01
+        // The clear+image+roundrect branch is guarded by image alpha; keep the
+        // non-clear image+roundrect branch enabled for transparent icons/logos.
+        private val defaultImageRefRoundRectCompactionMask: Int = 0b11
         private val maxTranslatedLayerFoldScanWords: Int = 4096
 
         private fun isCompactionGroupEnabled(group: Int): Boolean {
