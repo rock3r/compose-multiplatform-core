@@ -115,7 +115,8 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(0, commands!!.countCommand(7))
         assertEquals(0, commands.countCommand(8))
-        assertEquals(2, commands.countCommand(2))
+        assertEquals(0, commands.countCommand(2))
+        assertEquals(1, commands.countCommand(108))
     }
 
     @Test
@@ -563,7 +564,7 @@ class JbrSkiaCommandRecorderTest {
         val records = recording.commands!!.commandRecords()
         assertEquals(2, records[0][0])
         assertEquals(Color.Blue.toArgb(), records[0][3])
-        assertEquals(74, records[1][0])
+        assertEquals(99, records[1][0])
         assertEquals(120000, records[1][3])
         assertEquals(226000, records[1][4])
         val saveLayer = records.first { it[0] == 13 }
@@ -874,9 +875,8 @@ class JbrSkiaCommandRecorderTest {
         assertEquals(76, records[0][0])
         assertEquals(500, records[0][9])
         assertEquals(73, records[1][0])
-        assertEquals(77, records[2][0])
-        assertEquals(75, records[3][0])
-        assertEquals(2, records[3][3])
+        assertEquals(87, records[2][0])
+        assertEquals(1, records[2][9])
         assertEquals(0, recording.unsupportedCount)
     }
 
@@ -6991,20 +6991,20 @@ class JbrSkiaCommandRecorderTest {
         }
 
         val records = commands!!.commandRecords()
-        assertEquals(0, commands.countCommand(6))
-        assertEquals(0, commands.countCommand(80))
-        assertEquals(1, commands.countCommand(109))
-        assertEquals(73, records[0][0])
+        assertEquals(1, commands.countCommand(6))
+        assertEquals(0, commands.countCommand(109))
+        assertEquals(1, commands.countCommand(80))
+        assertEquals(6, records[0][0])
+        assertEquals(73, records[1][0])
         assertArrayEquals(
             intArrayOf(
-                109, 104, 1,
-                10, 20, 20, 20,
+                80, 88, 1,
                 1,
                 10000, 20000, 30000, 40000,
-                records[0][3], records[0][4],
+                records[1][3], records[1][4],
                 1, Color.Blue.toArgb(), 1000, 2000, 11000, 12000, 3000, 4000, 2, 0, 1, 0,
             ),
-            records[1],
+            records[2],
         )
     }
 
@@ -7201,15 +7201,14 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(73, records[0][0])
-        assertEquals(77, records[1][0])
-        val translatedDraw = records.last { it[0] == 77 }
+        val imageRun = records.single { it[0] == 81 }
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
-                15000, 26000, 35000, 46000,
-                records[0][3], records[0][4],
+                81, 64, 1, 2,
+                0, 0, 1000, 1000, records[0][3], records[0][4],
+                15000, 26000, 35000, 46000, records[0][3], records[0][4],
             ),
-            translatedDraw,
+            imageRun,
         )
         assertEquals(0, commands.countCommand(74))
         assertEquals(0, commands.countCommand(8))
@@ -7306,12 +7305,12 @@ class JbrSkiaCommandRecorderTest {
             JbrSkiaCommandRecorder.restore()
         }
 
-        val imageRecord = commands!!.commandRecords().last { it[0] == 77 }
+        val imageRecord = commands!!.commandRecords().last { it[0] == 86 }
         assertEquals(1, commands.countCommand(74))
         assertEquals(0, commands.countCommand(6))
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
+                86, 36, 1,
                 17000, 28000, 37000, 48000,
                 imageRecord[7], imageRecord[8],
             ),
@@ -7358,10 +7357,10 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(10))
-        val translatedDraw = records.last { it[0] == 77 }
+        val translatedDraw = records.last { it[0] == 86 }
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
+                86, 36, 1,
                 15000, 26000, 35000, 46000,
                 records[0][3], records[0][4],
             ),
@@ -7412,17 +7411,15 @@ class JbrSkiaCommandRecorderTest {
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(74))
         assertEquals(0, commands.countCommand(10))
-        val translatedDraw = records.last { it[0] == 77 }
+        val imageRun = records.single { it[0] == 81 }
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
-                15000, 26000, 35000, 46000,
-                records[0][3], records[0][4],
+                81, 64, 1, 2,
+                0, 0, 1000, 1000, records[0][3], records[0][4],
+                16000, 28000, 36000, 48000, records[0][3], records[0][4],
             ),
-            translatedDraw,
+            imageRun,
         )
-        val restoreN = records.last { it[0] == 75 }
-        assertEquals(2, restoreN[3])
     }
 
     @Test
@@ -7519,22 +7516,18 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(74))
-        assertEquals(0, commands.countCommand(6))
-        val translatedDraw = records.last { it[0] == 79 }
+        assertEquals(1, commands.countCommand(6))
+        val translatedDraw = records.last { it[0] == 80 }
         assertArrayEquals(
             intArrayOf(
-                79, 52, 1,
-                15, 26, 20, 20,
+                80, 88, 1,
+                1,
                 15000, 26000, 35000, 46000,
                 records[0][3], records[0][4],
+                1, Color.Blue.toArgb(), 15000, 26000, 35000, 46000, 2000, 3000, 1, 0, 1, 0,
             ),
             translatedDraw,
         )
-        val translatedRoundRect = records.single { it[0] == 23 }
-        assertEquals(15000, translatedRoundRect[5])
-        assertEquals(26000, translatedRoundRect[6])
-        assertEquals(35000, translatedRoundRect[7])
-        assertEquals(46000, translatedRoundRect[8])
         val restoreN = records.last { it[0] == 75 }
         assertEquals(2, restoreN[3])
     }
@@ -7590,24 +7583,17 @@ class JbrSkiaCommandRecorderTest {
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(74))
         assertEquals(0, commands.countCommand(10))
-        val translatedDraw = records.last { it[0] == 77 }
+        val translatedDraw = records.last { it[0] == 83 }
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
-                15000, 26000, 35000, 46000,
+                83, 64, 1,
+                1,
+                16000, 28000, 36000, 48000,
                 records[0][3], records[0][4],
+                Color.Red.toArgb(), 18, 31, 20, 20, 0,
             ),
             translatedDraw,
         )
-        assertArrayEquals(
-            intArrayOf(
-                2, 36, 1,
-                Color.Red.toArgb(), 17, 29, 20, 20, 0,
-            ),
-            records.single { it[0] == 2 },
-        )
-        val restoreN = records.last { it[0] == 75 }
-        assertEquals(2, restoreN[3])
     }
 
     @Test
@@ -7644,21 +7630,16 @@ class JbrSkiaCommandRecorderTest {
 
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(76))
-        val translatedDraw = records.single { it[0] == 77 }
+        val translatedDraw = records.single { it[0] == 83 }
         assertArrayEquals(
             intArrayOf(
-                77, 36, 1,
+                83, 64, 1,
+                1,
                 11000, 22000, 31000, 42000,
-                translatedDraw[7], translatedDraw[8],
-            ),
-            translatedDraw,
-        )
-        assertArrayEquals(
-            intArrayOf(
-                2, 36, 1,
+                translatedDraw[8], translatedDraw[9],
                 Color.Red.toArgb(), 11, 22, 20, 20, 0,
             ),
-            records.single { it[0] == 2 },
+            translatedDraw,
         )
     }
 
@@ -8227,7 +8208,7 @@ class JbrSkiaCommandRecorderTest {
             ),
             strokeLine,
         )
-        val translatedDraw = records.last { it[0] == 77 }
+        val translatedDraw = records.last { it[0] == 86 }
         assertEquals(15000, translatedDraw[3])
         assertEquals(26000, translatedDraw[4])
         assertEquals(35000, translatedDraw[5])
@@ -8274,24 +8255,17 @@ class JbrSkiaCommandRecorderTest {
         }
 
         val records = commands!!.commandRecords()
-        val strokeLine = records.single { it[0] == 3 }
+        val strokeImageRun = records.single { it[0] == 84 }
         assertArrayEquals(
             intArrayOf(
-                3, 48, 1,
-                Color.Red.toArgb(), 6, 8, 16, 18, 3, 0, 1, 0,
+                84, 104, 0,
+                1, Color.Red.toArgb(), 6, 8, 16, 18, 3, 0, 1, 0,
+                2,
+                15000, 26000, 35000, 46000, strokeImageRun[18], strokeImageRun[19],
+                55000, 66000, 75000, 86000, strokeImageRun[24], strokeImageRun[25],
             ),
-            strokeLine,
+            strokeImageRun,
         )
-        val imageRun = records.single { it[0] == 81 }
-        assertEquals(2, imageRun[3])
-        assertEquals(15000, imageRun[4])
-        assertEquals(26000, imageRun[5])
-        assertEquals(35000, imageRun[6])
-        assertEquals(46000, imageRun[7])
-        assertEquals(55000, imageRun[10])
-        assertEquals(66000, imageRun[11])
-        assertEquals(75000, imageRun[12])
-        assertEquals(86000, imageRun[13])
         assertEquals(0, commands.countCommand(74))
         assertEquals(0, commands.countCommand(77))
     }
@@ -8335,24 +8309,17 @@ class JbrSkiaCommandRecorderTest {
         val records = commands!!.commandRecords()
         assertEquals(0, commands.countCommand(76))
         assertEquals(0, commands.countCommand(77))
-        val strokeLine = records.single { it[0] == 3 }
+        val strokeImageRun = records.single { it[0] == 84 }
         assertArrayEquals(
             intArrayOf(
-                3, 48, 1,
-                Color.Red.toArgb(), 2, 4, 12, 14, 3, 0, 1, 0,
+                84, 104, 0,
+                1, Color.Red.toArgb(), 2, 4, 12, 14, 3, 0, 1, 0,
+                2,
+                11000, 22000, 31000, 42000, strokeImageRun[18], strokeImageRun[19],
+                51000, 62000, 71000, 82000, strokeImageRun[24], strokeImageRun[25],
             ),
-            strokeLine,
+            strokeImageRun,
         )
-        val imageRun = records.single { it[0] == 81 }
-        assertEquals(2, imageRun[3])
-        assertEquals(11000, imageRun[4])
-        assertEquals(22000, imageRun[5])
-        assertEquals(31000, imageRun[6])
-        assertEquals(42000, imageRun[7])
-        assertEquals(51000, imageRun[10])
-        assertEquals(62000, imageRun[11])
-        assertEquals(71000, imageRun[12])
-        assertEquals(82000, imageRun[13])
     }
 
     @Test
@@ -8477,7 +8444,7 @@ class JbrSkiaCommandRecorderTest {
         }
 
         assertEquals(0, commands!!.countCommand(7))
-        assertEquals(1, commands.countCommand(13))
+        assertEquals(0, commands.countCommand(13))
         assertEquals(1, commands.countCommand(8))
     }
 
@@ -8528,8 +8495,7 @@ class JbrSkiaCommandRecorderTest {
         val records = recording.commands!!.commandRecords()
         assertEquals(73, records[0][0])
         assertArrayEquals(intArrayOf(50, 36, 0, 10, 20, 20, 20, 1000, 1), records[1])
-        assertEquals(77, records[2][0])
-        assertArrayEquals(intArrayOf(8, 12, 0), records[3])
+        assertEquals(86, records[2][0])
         assertEquals(0, recording.unsupportedCount)
     }
 
@@ -8638,7 +8604,7 @@ class JbrSkiaCommandRecorderTest {
             )
         }!!
 
-        assertEquals(63, commands.size)
+        assertEquals(64, commands.size)
         val records = commands.commandRecords()
         assertDefineImageBitmapRecord(records[0], 2, 2)
         assertEquals(49, records[1][0])
@@ -8849,12 +8815,14 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(260, firstFrame.countCommand(73))
         assertEquals(0, firstFrame.countCommand(16))
-        assertEquals(260, firstFrame.countCommand(77))
+        assertEquals(0, firstFrame.countCommand(77))
+        assertEquals(1, firstFrame.countCommand(81))
         assertEquals(0, firstFrame.countCommand(18))
         assertEquals(0, firstFrame.countCommand(33))
         assertEquals(0, secondFrame.countCommand(73))
         assertEquals(0, secondFrame.countCommand(16))
-        assertEquals(260, secondFrame.countCommand(77))
+        assertEquals(0, secondFrame.countCommand(77))
+        assertEquals(1, secondFrame.countCommand(81))
         assertEquals(0, secondFrame.countCommand(18))
         assertEquals(0, secondFrame.countCommand(33))
     }
