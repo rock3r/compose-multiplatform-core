@@ -5940,14 +5940,24 @@ object JbrSkiaCommandRecorder {
 
         private fun opPairSecond(key: Long): Int = key.toInt()
 
-        // Keep the image/layer fold group off by default for now: combined with
-        // the structural layer group it can erase Jewel markdown editor content.
-        private val defaultCompactionGroupMask: Int = 0b1101
+        private val defaultCompactionGroupMask: Int = 0b1111
+        // Keep the adjacent image-ref/roundrect passes off by default for now:
+        // combined with the structural layer group they can erase Jewel markdown editor content.
+        private val defaultCompactionGroup1PassMask: Int = 0xf3
         private val maxTranslatedLayerFoldScanWords: Int = 4096
 
         private fun isCompactionGroupEnabled(group: Int): Boolean {
             val mask = java.lang.Integer.getInteger("compose.jbr.skia.command.compactionGroupMask", defaultCompactionGroupMask)
             return mask < 0 || (mask and (1 shl group)) != 0
+        }
+
+        private fun isCompactionGroup1PassEnabled(pass: Int): Boolean {
+            val mask =
+                java.lang.Integer.getInteger(
+                    "compose.jbr.skia.command.compactionGroup1PassMask",
+                    defaultCompactionGroup1PassMask,
+                )
+            return mask < 0 || (mask and (1 shl pass)) != 0
         }
 
         fun toIntArray(): IntArray {
@@ -5958,14 +5968,14 @@ object JbrSkiaCommandRecorder {
                     foldPlainSaveBeforeLayerClosedBySameRestore()
                 }
                 if (isCompactionGroupEnabled(1)) {
-                    foldTransformableRecordsOutOfPlainTranslatedLayers()
-                    foldFullImageRefsOutOfPlainTranslatedLayers()
-                    compactAdjacentImageRefFullRoundRectRecords()
-                    compactAdjacentImageRefFullRoundRectRecords()
-                    compactAdjacentFullImageRefs()
-                    foldTransformableRecordsOutOfPlainTranslatedLayers()
-                    compactAdjacentStrokeLineImageRefFullRunRecords()
-                    compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
+                    if (isCompactionGroup1PassEnabled(0)) foldTransformableRecordsOutOfPlainTranslatedLayers()
+                    if (isCompactionGroup1PassEnabled(1)) foldFullImageRefsOutOfPlainTranslatedLayers()
+                    if (isCompactionGroup1PassEnabled(2)) compactAdjacentImageRefFullRoundRectRecords()
+                    if (isCompactionGroup1PassEnabled(3)) compactAdjacentImageRefFullRoundRectRecords()
+                    if (isCompactionGroup1PassEnabled(4)) compactAdjacentFullImageRefs()
+                    if (isCompactionGroup1PassEnabled(5)) foldTransformableRecordsOutOfPlainTranslatedLayers()
+                    if (isCompactionGroup1PassEnabled(6)) compactAdjacentStrokeLineImageRefFullRunRecords()
+                    if (isCompactionGroup1PassEnabled(7)) compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
                 }
                 if (isCompactionGroupEnabled(2)) {
                     compactAdjacentSaveTranslateLayerSaveTranslateRecords()
