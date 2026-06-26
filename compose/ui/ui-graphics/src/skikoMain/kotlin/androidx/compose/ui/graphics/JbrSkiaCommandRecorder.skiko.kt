@@ -4921,7 +4921,8 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL ||
                 op == COMMAND_CLEAR_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
                 op == COMMAND_FILL_RECT ||
-                op == COMMAND_STROKE_LINE
+                op == COMMAND_STROKE_LINE ||
+                op == COMMAND_STROKE_LINE_RUN
 
         private fun isTranslateRecord(recordStart: Int): Boolean =
             payload[recordStart] == COMMAND_TRANSLATE &&
@@ -5124,7 +5125,8 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_DRAW_ROUND_RECT ||
                 op == COMMAND_FILL_ROUND_RECT ||
                 op == COMMAND_FILL_RECT ||
-                op == COMMAND_STROKE_LINE
+                op == COMMAND_STROKE_LINE ||
+                op == COMMAND_STROKE_LINE_RUN
 
         private fun translateScopeRecord(recordStart: Int, dx: Int, dy: Int) {
             when (payload[recordStart]) {
@@ -5200,6 +5202,17 @@ object JbrSkiaCommandRecorder {
                     payload[recordStart + 5] += dy / 1000
                     payload[recordStart + 6] += dx / 1000
                     payload[recordStart + 7] += dy / 1000
+                }
+                COMMAND_STROKE_LINE_RUN -> {
+                    val count = payload[recordStart + 8]
+                    var argsOffset = recordStart + 9
+                    repeat(count) {
+                        payload[argsOffset] += dx / 1000
+                        payload[argsOffset + 1] += dy / 1000
+                        payload[argsOffset + 2] += dx / 1000
+                        payload[argsOffset + 3] += dy / 1000
+                        argsOffset += 4
+                    }
                 }
             }
         }
@@ -5606,7 +5619,8 @@ object JbrSkiaCommandRecorder {
                 COMMAND_DEFINE_IMAGE_BITMAP,
                 COMMAND_DRAW_IMAGE_REF_FULL,
                 COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT,
-                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL -> true
+                COMMAND_CLEAR_DRAW_IMAGE_REF_FULL,
+                COMMAND_STROKE_LINE_RUN -> true
                 else -> false
             }
 
@@ -5943,7 +5957,7 @@ object JbrSkiaCommandRecorder {
         private fun opPairSecond(key: Long): Int = key.toInt()
 
         private val defaultCompactionGroupMask: Int = 0b1111
-        private val defaultCompactionGroup1PassMask: Int = 0xff
+        private val defaultCompactionGroup1PassMask: Int = 0x1ff
         // The clear+image+roundrect branch is guarded by image alpha; keep the
         // non-clear image+roundrect branch enabled for transparent icons/logos.
         private val defaultImageRefRoundRectCompactionMask: Int = 0b11
@@ -5988,6 +6002,7 @@ object JbrSkiaCommandRecorder {
                     if (isCompactionGroup1PassEnabled(5)) foldTransformableRecordsOutOfPlainTranslatedLayers()
                     if (isCompactionGroup1PassEnabled(6)) compactAdjacentStrokeLineImageRefFullRunRecords()
                     if (isCompactionGroup1PassEnabled(7)) compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
+                    if (isCompactionGroup1PassEnabled(8)) compactAdjacentStrokeLineRunRecords()
                 }
                 if (isCompactionGroupEnabled(2)) {
                     compactAdjacentSaveTranslateLayerSaveTranslateRecords()
@@ -6397,7 +6412,8 @@ object JbrSkiaCommandRecorder {
                 op == COMMAND_DRAW_IMAGE_REF_FULL_RUN ||
                 op == COMMAND_FILL_ROUND_RECT ||
                 op == COMMAND_FILL_RECT ||
-                op == COMMAND_STROKE_LINE
+                op == COMMAND_STROKE_LINE ||
+                op == COMMAND_STROKE_LINE_RUN
 
         private fun isRecordInsideLayerBounds(
             recordStart: Int,
@@ -6491,6 +6507,31 @@ object JbrSkiaCommandRecorder {
                         payload[recordStart + 7] * 1000 >= layerTop1000 &&
                         payload[recordStart + 6] * 1000 <= layerRight1000 &&
                         payload[recordStart + 7] * 1000 <= layerBottom1000
+                }
+                COMMAND_STROKE_LINE_RUN -> {
+                    val recordEnd = recordStart + payload[recordStart + 1] / Int.SIZE_BYTES
+                    val count = payload[recordStart + 8]
+                    if (count <= 1 || recordStart + 9 + count * 4 != recordEnd) {
+                        false
+                    } else {
+                        var argOffset = recordStart + 9
+                        var inside = true
+                        repeat(count) {
+                            if (payload[argOffset] * 1000 < layerLeft1000 ||
+                                payload[argOffset + 1] * 1000 < layerTop1000 ||
+                                payload[argOffset] * 1000 > layerRight1000 ||
+                                payload[argOffset + 1] * 1000 > layerBottom1000 ||
+                                payload[argOffset + 2] * 1000 < layerLeft1000 ||
+                                payload[argOffset + 3] * 1000 < layerTop1000 ||
+                                payload[argOffset + 2] * 1000 > layerRight1000 ||
+                                payload[argOffset + 3] * 1000 > layerBottom1000
+                            ) {
+                                inside = false
+                            }
+                            argOffset += 4
+                        }
+                        inside
+                    }
                 }
                 else -> false
             }
@@ -6917,6 +6958,109 @@ object JbrSkiaCommandRecorder {
             }
             payloadSize = writeOffset
         }
+
+        private fun compactAdjacentStrokeLineRunRecords() {
+            var readOffset = 0
+            var writeOffset = 0
+            while (readOffset < payloadSize) {
+                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val nextOffset = readOffset + recordLength
+                if (isStrokeLineRunCandidate(readOffset)) {
+                    val recordFlags = payload[readOffset + 2]
+                    val color = payload[readOffset + 3]
+                    val strokeWidth = payload[readOffset + 8]
+                    val strokeCap = payload[readOffset + 9]
+                    val strokeJoin = payload[readOffset + 10]
+                    val strokeMiter = payload[readOffset + 11]
+                    var runCount = 1
+                    var scanOffset = nextOffset
+                    while (scanOffset < payloadSize &&
+                        isStrokeLineRunCandidate(
+                            scanOffset,
+                            recordFlags,
+                            color,
+                            strokeWidth,
+                            strokeCap,
+                            strokeJoin,
+                            strokeMiter,
+                        )
+                    ) {
+                        runCount++
+                        scanOffset += 12
+                    }
+                    if (runCount > 1) {
+                        payload[writeOffset++] = COMMAND_STROKE_LINE_RUN
+                        payload[writeOffset++] = (9 + runCount * 4) * Int.SIZE_BYTES
+                        payload[writeOffset++] = recordFlags
+                        payload[writeOffset++] = color
+                        payload[writeOffset++] = strokeWidth
+                        payload[writeOffset++] = strokeCap
+                        payload[writeOffset++] = strokeJoin
+                        payload[writeOffset++] = strokeMiter
+                        payload[writeOffset++] = runCount
+                        var lineOffset = readOffset
+                        repeat(runCount) {
+                            payload.copyInto(
+                                payload,
+                                destinationOffset = writeOffset,
+                                startIndex = lineOffset + 4,
+                                endIndex = lineOffset + 8,
+                            )
+                            writeOffset += 4
+                            lineOffset += 12
+                            decrementOp(COMMAND_STROKE_LINE)
+                        }
+                        countOp(COMMAND_STROKE_LINE_RUN)
+                        readOffset = scanOffset
+                        continue
+                    }
+                }
+                if (writeOffset != readOffset) {
+                    payload.copyInto(
+                        payload,
+                        destinationOffset = writeOffset,
+                        startIndex = readOffset,
+                        endIndex = nextOffset,
+                    )
+                }
+                writeOffset += recordLength
+                readOffset = nextOffset
+            }
+            payloadSize = writeOffset
+        }
+
+        private fun isStrokeLineRunCandidate(recordStart: Int): Boolean {
+            if (recordStart + 12 > payloadSize) return false
+            return isStrokeLineRunCandidate(
+                recordStart,
+                payload[recordStart + 2],
+                payload[recordStart + 3],
+                payload[recordStart + 8],
+                payload[recordStart + 9],
+                payload[recordStart + 10],
+                payload[recordStart + 11],
+            )
+        }
+
+        private fun isStrokeLineRunCandidate(
+            recordStart: Int,
+            recordFlags: Int,
+            color: Int,
+            strokeWidth: Int,
+            strokeCap: Int,
+            strokeJoin: Int,
+            strokeMiter: Int,
+        ): Boolean =
+            recordStart + 12 <= payloadSize &&
+                payload[recordStart] == COMMAND_STROKE_LINE &&
+                payload[recordStart + 1] == 12 * Int.SIZE_BYTES &&
+                payload[recordStart + 2] == recordFlags &&
+                (recordFlags == COMMAND_RECORD_FLAGS_NONE || recordFlags == COMMAND_RECORD_FLAG_ANTIALIAS) &&
+                payload[recordStart + 3] == color &&
+                payload[recordStart + 8] == strokeWidth &&
+                payload[recordStart + 9] == strokeCap &&
+                payload[recordStart + 10] == strokeJoin &&
+                payload[recordStart + 11] == strokeMiter
 
         private fun compactAdjacentStrokeLineImageRefFullRunRestoreNRecords() {
             var readOffset = 0
@@ -8135,6 +8279,7 @@ object JbrSkiaCommandRecorder {
                 COMMAND_DRAW_IMAGE_REF_FULL_RUN -> "drawImageRefFullRun"
                 COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> "drawImageRefFullDrawRoundRect"
                 COMMAND_CLEAR_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT -> "clearDrawImageRefFullDrawRoundRect"
+                COMMAND_STROKE_LINE_RUN -> "strokeLineRun"
                 COMMAND_SAVE_LAYER_CLIP_RECT -> "saveLayerClipRect"
                 COMMAND_DRAW_IMAGE_REF_FULL_FILL_RECT -> "drawImageRefFullFillRect"
                 COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN -> "strokeLineDrawImageRefFullRun"
@@ -8281,6 +8426,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_SAVE_TRANSLATE_ROTATE_TRANSLATE_STROKE_CLOSED_POLYLINE_DELTA_RESTORE = 107
     private const val COMMAND_FILL_RECT_RUN = 108
     private const val COMMAND_CLEAR_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT = 109
+    private const val COMMAND_STROKE_LINE_RUN = 110
     private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS = 13
     private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_BODY_INTS = 10
     private const val COMMAND_SCALE = 11
