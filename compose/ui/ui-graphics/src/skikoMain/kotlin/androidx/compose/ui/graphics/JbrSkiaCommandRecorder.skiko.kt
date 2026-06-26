@@ -5940,39 +5940,59 @@ object JbrSkiaCommandRecorder {
 
         private fun opPairSecond(key: Long): Int = key.toInt()
 
+        // Keep the image/layer fold group off by default for now: combined with
+        // the structural layer group it can erase Jewel markdown editor content.
+        private val defaultCompactionGroupMask: Int = 0b1101
+        private val maxTranslatedLayerFoldScanWords: Int = 4096
+
+        private fun isCompactionGroupEnabled(group: Int): Boolean {
+            val mask = java.lang.Integer.getInteger("compose.jbr.skia.command.compactionGroupMask", defaultCompactionGroupMask)
+            return mask < 0 || (mask and (1 shl group)) != 0
+        }
+
         fun toIntArray(): IntArray {
-            foldTrailingTranslatedRoundRectSuffix()
-            compactAdjacentSaveSaveLayerSaveTranslateRecords()
-            foldPlainSaveBeforeLayerClosedBySameRestore()
-            foldTransformableRecordsOutOfPlainTranslatedLayers()
-            foldFullImageRefsOutOfPlainTranslatedLayers()
-            compactAdjacentImageRefFullRoundRectRecords()
-            compactAdjacentImageRefFullRoundRectRecords()
-            compactAdjacentFullImageRefs()
-            foldTransformableRecordsOutOfPlainTranslatedLayers()
-            compactAdjacentStrokeLineImageRefFullRunRecords()
-            compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
-            compactAdjacentSaveTranslateLayerSaveTranslateRecords()
-            compactAdjacentSaveSaveLayerSaveTranslateRecords()
-            compactAdjacentSaveLayerSaveTranslateRecords()
-            compactAdjacentSaveSaveLayerSaveTranslateRecords()
-            compactAdjacentSaveLayerClipRectRecords()
-            compactAdjacentFillRectSaveLayerClipRectRecords()
-            compactAdjacentFullImageRefRestoreRecords()
-            compactAdjacentFullImageRefRestoreNRecords()
-            compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNRecords()
-            compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
-            compactAdjacentFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
-            compactAdjacentRoundRectRestoreNRecords()
-            compactAdjacentFillRectSaveRecords()
-            compactAdjacentSaveFillRectSaveRecords()
-            compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
-            compactAdjacentSaveTranslateRotateRecords()
-            compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRecords()
-            compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
-            compactAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestoreRecords()
-            compactAdjacentStrokeOvalRuns()
-            compactAdjacentFillRectRuns()
+            if (!java.lang.Boolean.getBoolean("compose.jbr.skia.command.disableCompaction")) {
+                if (isCompactionGroupEnabled(0)) {
+                    foldTrailingTranslatedRoundRectSuffix()
+                    compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                    foldPlainSaveBeforeLayerClosedBySameRestore()
+                }
+                if (isCompactionGroupEnabled(1)) {
+                    foldTransformableRecordsOutOfPlainTranslatedLayers()
+                    foldFullImageRefsOutOfPlainTranslatedLayers()
+                    compactAdjacentImageRefFullRoundRectRecords()
+                    compactAdjacentImageRefFullRoundRectRecords()
+                    compactAdjacentFullImageRefs()
+                    foldTransformableRecordsOutOfPlainTranslatedLayers()
+                    compactAdjacentStrokeLineImageRefFullRunRecords()
+                    compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
+                }
+                if (isCompactionGroupEnabled(2)) {
+                    compactAdjacentSaveTranslateLayerSaveTranslateRecords()
+                    compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                    compactAdjacentSaveLayerSaveTranslateRecords()
+                    compactAdjacentSaveSaveLayerSaveTranslateRecords()
+                    compactAdjacentSaveLayerClipRectRecords()
+                    compactAdjacentFillRectSaveLayerClipRectRecords()
+                    compactAdjacentFullImageRefRestoreRecords()
+                    compactAdjacentFullImageRefRestoreNRecords()
+                    compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNRecords()
+                    compactAdjacentSaveTranslateLayerSaveTranslateFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
+                    compactAdjacentFullImageRefRestoreNSaveTranslateLayerSaveTranslateRecords()
+                    compactAdjacentRoundRectRestoreNRecords()
+                    compactAdjacentFillRectSaveRecords()
+                    compactAdjacentSaveFillRectSaveRecords()
+                    compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
+                }
+                if (isCompactionGroupEnabled(3)) {
+                    compactAdjacentSaveTranslateRotateRecords()
+                    compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRecords()
+                    compactAdjacentSaveTranslateRotateTranslateFillOvalRestoreRuns()
+                    compactAdjacentSaveTranslateRotateTranslateStrokeClosedPolylineDeltaRestoreRecords()
+                    compactAdjacentStrokeOvalRuns()
+                    compactAdjacentFillRectRuns()
+                }
+            }
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
@@ -5995,6 +6015,7 @@ object JbrSkiaCommandRecorder {
             var compacted = false
             while (readOffset < payloadSize) {
                 val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                if (recordLength < 3 || readOffset + recordLength > payloadSize) return false
                 if (canStartFullImageRefRun(readOffset)) {
                     val recordFlags = payload[readOffset + 2]
                     val runArgs = mutableListOf<IntArray>()
@@ -6301,6 +6322,7 @@ object JbrSkiaCommandRecorder {
             var offset = startOffset
             var transformableRecordCount = 0
             while (offset < payloadSize) {
+                if (offset - startOffset > maxTranslatedLayerFoldScanWords) return null
                 val recordLength = payload[offset + 1] / Int.SIZE_BYTES
                 if (recordLength < 3 || offset + recordLength > payloadSize) return null
                 val op = payload[offset]
@@ -6574,6 +6596,7 @@ object JbrSkiaCommandRecorder {
             while (readOffset < payloadSize) {
                 val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
                 val nextOffset = readOffset + recordLength
+                if (recordLength < 3 || nextOffset > payloadSize) return
                 if (payload[readOffset] == COMMAND_CLEAR_RECT &&
                     recordLength == 7 &&
                     payload[readOffset + 2] == COMMAND_RECORD_FLAGS_NONE &&
@@ -6583,7 +6606,9 @@ object JbrSkiaCommandRecorder {
                     while (imageOffset < payloadSize &&
                         payload[imageOffset] == COMMAND_DEFINE_IMAGE_BITMAP
                     ) {
-                        imageOffset += payload[imageOffset + 1] / Int.SIZE_BYTES
+                        val imageDefinitionLength = payload[imageOffset + 1] / Int.SIZE_BYTES
+                        if (imageDefinitionLength < 3 || imageOffset + imageDefinitionLength > payloadSize) return
+                        imageOffset += imageDefinitionLength
                     }
                     if (imageOffset >= payloadSize ||
                         payload[imageOffset] != COMMAND_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT ||
