@@ -4721,7 +4721,8 @@ object JbrSkiaCommandRecorder {
     private class CommandStreamWriter {
         private var payload = IntArray(1024)
         private var payloadSize = 0
-        private val opCounts = linkedMapOf<Int, Int>()
+        private val opCounts = IntArray(OP_COUNT_CAPACITY)
+        private var opCountEntries = 0
         private val imageAlphaByCacheKey = mutableMapOf<Long, Boolean>()
 
         val streamSize: Int
@@ -5869,12 +5870,15 @@ object JbrSkiaCommandRecorder {
         }
 
         fun opSummary(): String =
-            if (opCounts.isEmpty()) {
+            if (opCountEntries == 0) {
                 "none"
             } else {
-                opCounts.entries
-                    .sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
-                    .joinToString(separator = " ") { (op, count) -> "${opName(op)}=$count" }
+                opCounts
+                    .indices
+                    .asSequence()
+                    .filter { opCounts[it] > 0 }
+                    .sortedWith(compareByDescending<Int> { opCounts[it] }.thenBy { it })
+                    .joinToString(separator = " ") { op -> "${opName(op)}=${opCounts[op]}" }
             }
 
         fun opWordSummary(): String {
@@ -5924,15 +5928,20 @@ object JbrSkiaCommandRecorder {
         }
 
         private fun countOp(op: Int) {
-            opCounts[op] = (opCounts[op] ?: 0) + 1
+            if (op !in opCounts.indices) return
+            if (opCounts[op] == 0) {
+                opCountEntries++
+            }
+            opCounts[op]++
         }
 
         private fun decrementOp(op: Int) {
-            val count = opCounts[op] ?: return
-            if (count <= 1) {
-                opCounts.remove(op)
-            } else {
-                opCounts[op] = count - 1
+            if (op !in opCounts.indices) return
+            val count = opCounts[op]
+            if (count <= 0) return
+            opCounts[op] = count - 1
+            if (count == 1) {
+                opCountEntries--
             }
         }
 
@@ -8438,6 +8447,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_FILL_RECT_RUN = 108
     private const val COMMAND_CLEAR_DRAW_IMAGE_REF_FULL_DRAW_ROUND_RECT = 109
     private const val COMMAND_STROKE_LINE_RUN = 110
+    private const val OP_COUNT_CAPACITY = 128
     private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_RECORD_INTS = 13
     private const val SAVE_TRANSLATE_ROTATE_TRANSLATE_FILL_OVAL_RESTORE_BODY_INTS = 10
     private const val COMMAND_SCALE = 11
