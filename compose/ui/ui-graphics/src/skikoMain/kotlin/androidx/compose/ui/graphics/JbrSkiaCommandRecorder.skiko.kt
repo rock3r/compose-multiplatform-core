@@ -116,6 +116,7 @@ object JbrSkiaCommandRecorder {
     private const val LOG_COMMAND_OP_COUNTS_PROPERTY = "compose.jbr.skia.command.logOpCounts"
     private const val LOG_COMMAND_OP_WORDS_PROPERTY = "compose.jbr.skia.command.logOpWords"
     private const val LOG_COMMAND_OP_PAIRS_PROPERTY = "compose.jbr.skia.command.logOpPairs"
+    private const val NATIVE_BITMAP_CONTENT_KEY_PIXELS_PROPERTY = "compose.jbr.skia.command.nativeBitmapContentKeyPixels"
     private const val MAX_COMMAND_IMAGE_DIMENSION = 4096
     private const val MAX_DEFINED_IMAGE_KEYS = 1024
     private const val MAX_DEFINED_COLOR_FILTER_HANDLES = 1024
@@ -4093,7 +4094,7 @@ object JbrSkiaCommandRecorder {
             }
             val pixelCount = image.width * image.height
             val useContentKeyForNativeBitmap =
-                nativeBitmapDefinition != null && pixelCount <= SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS
+                nativeBitmapDefinition != null && pixelCount <= nativeBitmapContentKeyPixels()
             var nativeBitmapHasAlpha = nativeBitmapDefinition?.hasAlpha ?: false
             var effectiveHasAlpha = image.hasAlpha
 
@@ -8606,7 +8607,7 @@ object JbrSkiaCommandRecorder {
     private const val COMMAND_RECORD_FLAG_ANTIALIAS = 1
     private const val COMMAND_PAINT_STYLE_FILL = 0
     private const val COMMAND_PAINT_STYLE_STROKE = 1
-    private const val SMALL_NATIVE_BITMAP_CONTENT_KEY_PIXELS = 262_144
+    private const val DEFAULT_NATIVE_BITMAP_CONTENT_KEY_PIXELS = 1_048_576
     private const val MAX_PATH_DATA_INTS = 4096
     private const val PATH_FILL_TYPE_NON_ZERO = 0
     private const val PATH_FILL_TYPE_EVEN_ODD = 1
@@ -8615,6 +8616,12 @@ object JbrSkiaCommandRecorder {
     private const val PATH_VERB_QUAD = 2
     private const val PATH_VERB_CUBIC = 3
     private const val PATH_VERB_CLOSE = 4
+
+    private fun nativeBitmapContentKeyPixels(): Int =
+        java.lang.Integer.getInteger(
+            NATIVE_BITMAP_CONTENT_KEY_PIXELS_PROPERTY,
+            DEFAULT_NATIVE_BITMAP_CONTENT_KEY_PIXELS,
+        ).coerceAtLeast(0)
 
     private fun IntArray.closedPolylinePoints(): IntArray? {
         if (size < 7 || this[0] != PATH_VERB_MOVE || this[size - 1] != PATH_VERB_CLOSE) {
