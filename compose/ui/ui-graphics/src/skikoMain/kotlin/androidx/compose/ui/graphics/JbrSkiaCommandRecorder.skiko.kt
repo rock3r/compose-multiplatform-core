@@ -4722,6 +4722,7 @@ object JbrSkiaCommandRecorder {
         private var payload = IntArray(1024)
         private var payloadSize = 0
         private val opCounts = linkedMapOf<Int, Int>()
+        private val imageAlphaByCacheKey = mutableMapOf<Long, Boolean>()
 
         val streamSize: Int
             get() = COMMAND_STREAM_HEADER_SIZE + payloadSize
@@ -5720,6 +5721,7 @@ object JbrSkiaCommandRecorder {
             cacheKeyHigh: Int,
             cacheKeyLow: Int,
         ) {
+            imageAlphaByCacheKey[cacheKey(cacheKeyHigh, cacheKeyLow)] = imageHasAlpha
             val clearStart =
                 if (imageHasAlpha) {
                     null
@@ -6641,7 +6643,17 @@ object JbrSkiaCommandRecorder {
                         payload[imageOffset + 1] == 9 * Int.SIZE_BYTES &&
                         payload[imageOffsetEnd] == COMMAND_DRAW_ROUND_RECT &&
                         payload[imageOffsetEnd + 1] == 15 * Int.SIZE_BYTES
-                    if (!foldedImageRoundRect && !(allowDirectClearImageRoundRect && directImageRoundRect)) {
+                    val imageHasAlpha =
+                        if (foldedImageRoundRect) {
+                            imageRefHasAlpha(imageOffset + 8)
+                        } else if (directImageRoundRect) {
+                            imageRefHasAlpha(imageOffset + 7)
+                        } else {
+                            true
+                        }
+                    if (imageHasAlpha ||
+                        !foldedImageRoundRect && !(allowDirectClearImageRoundRect && directImageRoundRect)
+                    ) {
                         if (writeOffset != readOffset) {
                             payload.copyInto(
                                 payload,
@@ -6783,6 +6795,14 @@ object JbrSkiaCommandRecorder {
             payloadSize = writeOffset
         }
 
+        private fun imageRefHasAlpha(keyHighIndex: Int): Boolean {
+            if (keyHighIndex + 1 >= payloadSize) return true
+            return imageAlphaByCacheKey[cacheKey(payload[keyHighIndex], payload[keyHighIndex + 1])] ?: true
+        }
+
+        private fun cacheKey(high: Int, low: Int): Long =
+            (high.toLong() shl Int.SIZE_BITS) or (low.toLong() and 0xffffffffL)
+
         private fun directClearImageRoundRectCandidateCount(): Int {
             var offset = 0
             var count = 0
@@ -6809,7 +6829,8 @@ object JbrSkiaCommandRecorder {
                     val imageRecordEnd = imageOffset + 9
                     if (imageRecordEnd <= payloadSize &&
                         payload[imageOffset] == COMMAND_DRAW_IMAGE_REF_FULL &&
-                        payload[imageOffset + 1] == 9 * Int.SIZE_BYTES
+                        payload[imageOffset + 1] == 9 * Int.SIZE_BYTES &&
+                        !imageRefHasAlpha(imageOffset + 7)
                     ) {
                         val roundRectEnd = imageRecordEnd + 15
                         if (roundRectEnd <= payloadSize &&
