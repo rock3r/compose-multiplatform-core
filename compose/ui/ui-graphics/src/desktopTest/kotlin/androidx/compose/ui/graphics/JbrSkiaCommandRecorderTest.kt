@@ -6134,7 +6134,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun definesSmallNativeBitmapAlphaFromPixels() {
+    fun definesArgbImageWhenNativeBitmapAlphaIsDiscoveredFromPixels() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(1, 1, hasAlpha = false)
         Canvas(image).drawRect(0f, 0f, 1f, 1f, Paint().apply {
@@ -6158,12 +6158,14 @@ class JbrSkiaCommandRecorderTest {
         }
 
         val records = commands!!.commandRecords()
-        assertDefineImageBitmapRecord(records[0], 1, 1)
-        assertEquals(1, records[0][10])
+        assertFalse(records.any { it[0] == 73 })
+        assertTrue(records.any { record ->
+            record.any { it == Color.Transparent.toArgb() }
+        })
     }
 
     @Test
-    fun definesSmallNativeBitmapAlphaFromMixedTransparentPixels() {
+    fun definesArgbImageWhenNativeBitmapHasMixedTransparentPixels() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(2, 2, hasAlpha = false)
         Canvas(image).run {
@@ -6197,8 +6199,10 @@ class JbrSkiaCommandRecorderTest {
         }
 
         val records = commands!!.commandRecords()
-        assertDefineImageBitmapRecord(records[0], 2, 2)
-        assertEquals(1, records[0][10])
+        assertFalse(records.any { it[0] == 73 })
+        assertTrue(records.any { record ->
+            record.any { it == Color.Transparent.toArgb() }
+        })
     }
 
     @Test
@@ -6239,7 +6243,7 @@ class JbrSkiaCommandRecorderTest {
         }
 
         assertEquals(1, commands!!.countCommand(6))
-        assertEquals(1, commands.countCommand(73))
+        assertEquals(0, commands.countCommand(73))
     }
 
     @Test
