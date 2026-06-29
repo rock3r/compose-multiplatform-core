@@ -4192,7 +4192,7 @@ object JbrSkiaCommandRecorder {
                 )
             }
             if (shouldDefinePixels) {
-                if (nativeBitmapDefinition != null) {
+                if (nativeBitmapDefinition != null && (nativeBitmapDefinition.hasAlpha || !effectiveHasAlpha)) {
                     nativeImageReferences += image
                     imageDefineCount++
                     imageDefineWordCount += 7
