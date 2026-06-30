@@ -5984,8 +5984,7 @@ object JbrSkiaCommandRecorder {
             recordStartCount = 0
             var offset = 0
             while (offset < payloadSize) {
-                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
-                if (recordLength < 3 || offset + recordLength > payloadSize) {
+                val recordLength = validRecordLengthAt(offset) ?: run {
                     recordIndexDirty = false
                     return
                 }
@@ -6047,11 +6046,13 @@ object JbrSkiaCommandRecorder {
         }
 
         fun toIntArray(): IntArray {
+            dropInvalidPayload()
             if (compactionEnabled) {
                 if (isCompactionGroupEnabled(0)) {
                     foldTrailingTranslatedRoundRectSuffix()
                     compactAdjacentSaveSaveLayerSaveTranslateRecords()
                     foldPlainSaveBeforeLayerClosedBySameRestore()
+                    dropInvalidPayload()
                 }
                 if (isCompactionGroupEnabled(1)) {
                     if (isCompactionGroup1PassEnabled(0)) foldTransformableRecordsOutOfPlainTranslatedLayers()
@@ -6063,6 +6064,7 @@ object JbrSkiaCommandRecorder {
                     if (isCompactionGroup1PassEnabled(6)) compactAdjacentStrokeLineImageRefFullRunRecords()
                     if (isCompactionGroup1PassEnabled(7)) compactAdjacentStrokeLineImageRefFullRunRestoreNRecords()
                     if (isCompactionGroup1PassEnabled(8)) compactAdjacentStrokeLineRunRecords()
+                    dropInvalidPayload()
                 }
                 if (isCompactionGroupEnabled(2)) {
                     if (!compactionOpPrerequisiteGatesEnabled) {
@@ -6152,6 +6154,7 @@ object JbrSkiaCommandRecorder {
                             compactAdjacentFillRectSaveLayerClipRectSaveSaveLayerSaveTranslateRecords()
                         }
                     }
+                    dropInvalidPayload()
                 }
                 if (isCompactionGroupEnabled(3)) {
                     if (!compactionOpPrerequisiteGatesEnabled) {
@@ -6189,6 +6192,7 @@ object JbrSkiaCommandRecorder {
                             compactAdjacentFillRectRuns()
                         }
                     }
+                    dropInvalidPayload()
                 }
             }
             return IntArray(streamSize).also { stream ->
@@ -6205,6 +6209,21 @@ object JbrSkiaCommandRecorder {
                     endIndex = payloadSize,
                 )
             }
+        }
+
+        private fun dropInvalidPayload() {
+            if (hasValidRecordSequence()) return
+            payloadSize = 0
+            recordIndexDirty = true
+        }
+
+        private fun hasValidRecordSequence(): Boolean {
+            var offset = 0
+            while (offset < payloadSize) {
+                val recordLength = validRecordLengthAt(offset) ?: return false
+                offset += recordLength
+            }
+            return offset == payloadSize
         }
 
         private fun compactAdjacentFullImageRefs(): Boolean {
@@ -6462,7 +6481,7 @@ object JbrSkiaCommandRecorder {
             var readOffset = 0
             var writeOffset = 0
             while (readOffset < payloadSize) {
-                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val recordLength = validRecordLengthAt(readOffset) ?: return
                 val nextOffset = readOffset + recordLength
                 if (payload[readOffset] == COMMAND_SAVE_TRANSLATE_LAYER && recordLength == 10) {
                     val layerEnd = plainTranslatedLayerContentEnd(nextOffset)
@@ -6521,8 +6540,7 @@ object JbrSkiaCommandRecorder {
             var transformableRecordCount = 0
             while (offset < payloadSize) {
                 if (offset - startOffset > maxTranslatedLayerFoldScanWords) return null
-                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
-                if (recordLength < 3 || offset + recordLength > payloadSize) return null
+                val recordLength = validRecordLengthAt(offset) ?: return null
                 val op = payload[offset]
                 if (op == COMMAND_RESTORE_N && recordLength == 4 && payload[offset + 2] == COMMAND_RECORD_FLAGS_NONE) {
                     return if (payload[offset + 3] >= 2 && transformableRecordCount > 0) offset else null
@@ -6553,7 +6571,7 @@ object JbrSkiaCommandRecorder {
             var offset = contentStart
             while (offset < contentEnd) {
                 val op = payload[offset]
-                val recordLength = payload[offset + 1] / Int.SIZE_BYTES
+                val recordLength = validRecordLengthAt(offset) ?: return false
                 if (isTranslatedLayerFoldTransformableRecord(op)) {
                     if (requiresWholePixelTranslation(op) && (dx % 1000 != 0 || dy % 1000 != 0)) return false
                     if (!isRecordInsideLayerBounds(offset, layerLeft1000, layerTop1000, layerRight1000, layerBottom1000)) {
@@ -6563,6 +6581,15 @@ object JbrSkiaCommandRecorder {
                 offset += recordLength
             }
             return offset == contentEnd
+        }
+
+        private fun validRecordLengthAt(recordStart: Int): Int? {
+            if (recordStart < 0 || recordStart + 2 > payloadSize) return null
+            val recordLengthBytes = payload[recordStart + 1]
+            if (recordLengthBytes <= 0 || recordLengthBytes % Int.SIZE_BYTES != 0) return null
+            val recordLength = recordLengthBytes / Int.SIZE_BYTES
+            if (recordLength < 3 || recordStart + recordLength > payloadSize) return null
+            return recordLength
         }
 
         private fun isTranslatedLayerFoldTransformableRecord(op: Int): Boolean =
@@ -7052,22 +7079,22 @@ object JbrSkiaCommandRecorder {
             var readOffset = 0
             var writeOffset = 0
             while (readOffset < payloadSize) {
-                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val recordLength = validRecordLengthAt(readOffset) ?: return
                 val nextOffset = readOffset + recordLength
                 if (payload[readOffset] == COMMAND_STROKE_LINE &&
                     recordLength == 12
                 ) {
                     var runOffset = nextOffset
                     while (runOffset < payloadSize && payload[runOffset] == COMMAND_DEFINE_IMAGE_BITMAP) {
-                        val definitionLength = payload[runOffset + 1] / Int.SIZE_BYTES
-                        if (definitionLength != 11 || runOffset + definitionLength > payloadSize) break
+                        val definitionLength = validRecordLengthAt(runOffset) ?: break
+                        if (definitionLength != 11) break
                         runOffset += definitionLength
                     }
                     if (runOffset < payloadSize &&
                         payload[runOffset] == COMMAND_DRAW_IMAGE_REF_FULL_RUN
                     ) {
-                        val runRecordLength = payload[runOffset + 1] / Int.SIZE_BYTES
-                        if (runRecordLength < 16 || runOffset + runRecordLength > payloadSize) {
+                        val runRecordLength = validRecordLengthAt(runOffset)
+                        if (runRecordLength == null || runRecordLength < 16) {
                             if (writeOffset != readOffset) {
                                 payload.copyInto(
                                     payload,
@@ -7124,7 +7151,7 @@ object JbrSkiaCommandRecorder {
             var readOffset = 0
             var writeOffset = 0
             while (readOffset < payloadSize) {
-                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val recordLength = validRecordLengthAt(readOffset) ?: return
                 val nextOffset = readOffset + recordLength
                 if (isStrokeLineRunCandidate(readOffset)) {
                     val recordFlags = payload[readOffset + 2]
@@ -7239,7 +7266,7 @@ object JbrSkiaCommandRecorder {
             var writeOffset = 0
             while (readOffset < payloadSize) {
                 val op = payload[readOffset]
-                val recordLength = payload[readOffset + 1] / Int.SIZE_BYTES
+                val recordLength = validRecordLengthAt(readOffset) ?: return
                 val nextOffset = readOffset + recordLength
                 val isRunRecord =
                     (op == COMMAND_STROKE_LINE_DRAW_IMAGE_REF_FULL_RUN && recordLength >= 26) ||
