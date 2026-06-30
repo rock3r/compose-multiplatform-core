@@ -5770,16 +5770,12 @@ object JbrSkiaCommandRecorder {
         ) {
             imageAlphaByCacheKey[cacheKey(cacheKeyHigh, cacheKeyLow)] = imageHasAlpha
             val clearStart =
-                if (imageHasAlpha) {
-                    null
-                } else {
-                    matchingClearRectBeforeImageDefinitions(
-                        dstLeft1000,
-                        dstTop1000,
-                        dstRight1000,
-                        dstBottom1000,
-                    )
-                }
+                matchingClearRectBeforeImageDefinitions(
+                    dstLeft1000,
+                    dstTop1000,
+                    dstRight1000,
+                    dstBottom1000,
+                )
             if (clearStart == null) {
                 addCommand(
                     COMMAND_DRAW_IMAGE_REF_FULL,
