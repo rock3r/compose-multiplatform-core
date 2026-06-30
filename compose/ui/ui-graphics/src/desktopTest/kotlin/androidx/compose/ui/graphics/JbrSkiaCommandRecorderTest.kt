@@ -6206,7 +6206,7 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
-    fun keepsClearBeforeFullNativeBitmapWithDiscoveredAlpha() {
+    fun removesClearBeforeFullImageWithDiscoveredAlpha() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val image = ImageBitmap(2, 2, hasAlpha = false)
         Canvas(image).run {
@@ -6242,7 +6242,8 @@ class JbrSkiaCommandRecorderTest {
             )
         }
 
-        assertEquals(1, commands!!.countCommand(6))
+        assertEquals(0, commands!!.countCommand(6))
+        assertEquals(1, commands.countCommand(15))
         assertEquals(0, commands.countCommand(73))
     }
 
