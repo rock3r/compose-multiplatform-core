@@ -4891,6 +4891,94 @@ class JbrSkiaCommandRecorderTest {
     }
 
     @Test
+    fun redefinesCompositeShaderDescriptorForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val shader = CompositeShader(
+            dst = LinearGradientShader(
+                from = Offset(1f, 2f),
+                to = Offset(11f, 12f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+            src = RadialGradientShader(
+                center = Offset(6f, 7f),
+                radius = 8f,
+                colors = listOf(Color.Green, Color.White),
+                colorStops = listOf(0.2f, 0.8f),
+                tileMode = TileMode.Clamp,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    this.shader = shader
+                },
+            )
+        }
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+
+        val afterClear = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    this.shader = shader
+                },
+            )
+        }
+
+        assertEquals(1, afterClear.imageCacheClearCount)
+        assertEquals(1, afterClear.commands!!.countCommand(18))
+        assertEquals(3, afterClear.commands.countCommand(56))
+        assertEquals(1, afterClear.commands.countCommand(58))
+    }
+
+    @Test
+    fun redefinesNestedCompositeShaderDescriptorForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val shader = CompositeShader(
+            dst = LinearGradientShader(
+                from = Offset(1f, 2f),
+                to = Offset(11f, 12f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+            src = RadialGradientShader(
+                center = Offset(6f, 7f),
+                radius = 8f,
+                colors = listOf(Color.Green, Color.White),
+                colorStops = listOf(0.2f, 0.8f),
+                tileMode = TileMode.Clamp,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        JbrSkiaCommandRecorder.recordFrame {
+            replayCompositeShaderLayer(shader)
+        }
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+
+        val afterClear = JbrSkiaCommandRecorder.recordFrame {
+            replayCompositeShaderLayer(shader)
+        }
+
+        assertEquals(1, afterClear.imageCacheClearCount)
+        assertEquals(1, afterClear.commands!!.countCommand(18))
+        assertEquals(3, afterClear.commands.countCommand(56))
+        assertEquals(1, afterClear.commands.countCommand(58))
+    }
+
+    @Test
     fun writesCompositeShaderWithColorFilterDescriptorRectInStrictMode() {
         JbrSkiaCommandRecorder.clearImageCacheForTesting()
         val shader = CompositeShader(
@@ -9082,6 +9170,40 @@ class JbrSkiaCommandRecorderTest {
             clipPath = null,
             blendMode = null,
         )
+
+    private fun replayCompositeShaderLayer(shader: Shader) {
+        val nested = JbrSkiaCommandRecorder.recordNested {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    this.shader = shader
+                },
+            )
+        }
+        assertTrue(
+            JbrSkiaCommandRecorder.replayRecordedLayer(
+                recording = nested,
+                left = 0f,
+                top = 0f,
+                width = 20f,
+                height = 20f,
+                pivotX = 0f,
+                pivotY = 0f,
+                alpha = 1f,
+                scaleX = 1f,
+                scaleY = 1f,
+                rotationZ = 0f,
+                translationX = 0f,
+                translationY = 0f,
+                clipRect = null,
+                clipPath = null,
+                blendMode = null,
+            )
+        )
+    }
 
     private fun replayRedLayerWithImageFilter(imageFilter: JbrSkiaCommandRecorder.ImageFilterDescriptor) {
         val nested = JbrSkiaCommandRecorder.recordNested {

@@ -150,10 +150,11 @@ object JbrSkiaCommandRecorder {
         block: () -> Unit,
     ): JbrSkiaCommandRecording {
         val previous = active.get()
+        val emitPendingImageCacheClear = pendingImageCacheClear.getAndSet(false)
         val recorder = Recorder(
             shadowContext = shadowContext,
-            emitPendingImageCacheClear = pendingImageCacheClear.getAndSet(false),
-            forceResourceDefinitions = false,
+            emitPendingImageCacheClear = emitPendingImageCacheClear,
+            forceResourceDefinitions = emitPendingImageCacheClear,
             updateSharedResourceCaches = true,
         )
         active.set(recorder)
@@ -182,7 +183,7 @@ object JbrSkiaCommandRecorder {
         val recorder = Recorder(
             shadowContext = previous?.shadowContext ?: JbrSkiaCommandShadowContext(),
             emitPendingImageCacheClear = false,
-            forceResourceDefinitions = false,
+            forceResourceDefinitions = previous?.forceResourceDefinitions ?: false,
             updateSharedResourceCaches = false,
         )
         active.set(recorder)
@@ -601,7 +602,7 @@ object JbrSkiaCommandRecorder {
     private class Recorder(
         val shadowContext: JbrSkiaCommandShadowContext,
         emitPendingImageCacheClear: Boolean,
-        private val forceResourceDefinitions: Boolean,
+        val forceResourceDefinitions: Boolean,
         private val updateSharedResourceCaches: Boolean,
     ) {
         private val commands = CommandStreamWriter()
