@@ -6196,6 +6196,7 @@ object JbrSkiaCommandRecorder {
                     dropInvalidPayload()
                 }
             }
+            moveImageCacheClearsToFront()
             return IntArray(streamSize).also { stream ->
                 stream[0] = COMMAND_STREAM_MAGIC
                 stream[1] = COMMAND_STREAM_ABI_ID
@@ -6210,6 +6211,45 @@ object JbrSkiaCommandRecorder {
                     endIndex = payloadSize,
                 )
             }
+        }
+
+        private fun moveImageCacheClearsToFront() {
+            if (!hasOp(COMMAND_CLEAR_IMAGE_CACHE)) return
+            var readOffset = 0
+            var clearWriteOffset = 0
+            var otherWriteOffset = 0
+            val clearRecords = IntArray(payloadSize)
+            val otherRecords = IntArray(payloadSize)
+            while (readOffset < payloadSize) {
+                val recordLength = validRecordLengthAt(readOffset) ?: return
+                val target = if (payload[readOffset] == COMMAND_CLEAR_IMAGE_CACHE) {
+                    clearRecords
+                } else {
+                    otherRecords
+                }
+                val targetOffset = if (target === clearRecords) clearWriteOffset else otherWriteOffset
+                payload.copyInto(
+                    destination = target,
+                    destinationOffset = targetOffset,
+                    startIndex = readOffset,
+                    endIndex = readOffset + recordLength,
+                )
+                if (target === clearRecords) {
+                    clearWriteOffset += recordLength
+                } else {
+                    otherWriteOffset += recordLength
+                }
+                readOffset += recordLength
+            }
+            if (clearWriteOffset == 0 || otherWriteOffset == 0) return
+            clearRecords.copyInto(payload, destinationOffset = 0, startIndex = 0, endIndex = clearWriteOffset)
+            otherRecords.copyInto(
+                payload,
+                destinationOffset = clearWriteOffset,
+                startIndex = 0,
+                endIndex = otherWriteOffset,
+            )
+            recordIndexDirty = true
         }
 
         private fun dropInvalidPayload() {

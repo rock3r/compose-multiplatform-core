@@ -4938,6 +4938,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(1, afterClear.imageCacheClearCount)
         assertEquals(1, afterClear.commands!!.countCommand(18))
+        assertEquals(18, afterClear.commands.commandRecords()[0][0])
         assertEquals(3, afterClear.commands.countCommand(56))
         assertEquals(1, afterClear.commands.countCommand(58))
     }
@@ -4974,6 +4975,7 @@ class JbrSkiaCommandRecorderTest {
 
         assertEquals(1, afterClear.imageCacheClearCount)
         assertEquals(1, afterClear.commands!!.countCommand(18))
+        assertEquals(18, afterClear.commands.commandRecords()[0][0])
         assertEquals(3, afterClear.commands.countCommand(56))
         assertEquals(1, afterClear.commands.countCommand(58))
     }
@@ -5022,6 +5024,62 @@ class JbrSkiaCommandRecorderTest {
             assertEquals(5, shaderDescriptors[2][5])
             assertEquals(7, shaderDescriptors[3][5])
         }
+    }
+
+    @Test
+    fun redefinesCompositeShaderColorFilterDescriptorForInteropSurfaceChange() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        val shader = CompositeShader(
+            dst = LinearGradientShader(
+                from = Offset(1f, 2f),
+                to = Offset(11f, 12f),
+                colors = listOf(Color.Red, Color.Blue),
+                colorStops = listOf(0.25f, 0.75f),
+                tileMode = TileMode.Clamp,
+            ),
+            src = RadialGradientShader(
+                center = Offset(6f, 7f),
+                radius = 8f,
+                colors = listOf(Color.Green, Color.White),
+                colorStops = listOf(0.2f, 0.8f),
+                tileMode = TileMode.Clamp,
+            ),
+            blendMode = BlendMode.SrcOver,
+        )
+
+        JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    this.shader = shader
+                    colorFilter = ColorFilter.tint(Color.Cyan, BlendMode.SrcIn)
+                },
+            )
+        }
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+
+        val afterClear = JbrSkiaCommandRecorder.recordFrame {
+            JbrSkiaCommandRecorder.drawRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                paint = Paint().apply {
+                    this.shader = shader
+                    colorFilter = ColorFilter.tint(Color.Cyan, BlendMode.SrcIn)
+                },
+            )
+        }
+
+        assertEquals(1, afterClear.imageCacheClearCount)
+        assertEquals(1, afterClear.commands!!.countCommand(18))
+        assertEquals(18, afterClear.commands.commandRecords()[0][0])
+        assertEquals(1, afterClear.commands.countCommand(49))
+        assertEquals(4, afterClear.commands.countCommand(56))
+        assertEquals(1, afterClear.commands.countCommand(58))
     }
 
     @Test
@@ -7040,6 +7098,46 @@ class JbrSkiaCommandRecorderTest {
             ),
             records[1],
         )
+    }
+
+    @Test
+    fun keepsSurfaceChangeImageCacheClearBeforeCompactedImageAndRoundRectRecord() {
+        JbrSkiaCommandRecorder.clearImageCacheForTesting()
+        JbrSkiaCommandRecorder.clearInteropCachesForSurfaceChange()
+        val image = onePixelImage(0x55)
+
+        val commands = JbrSkiaCommandRecorder.record {
+            JbrSkiaCommandRecorder.drawImageRect(
+                image = image,
+                srcLeft = 0f,
+                srcTop = 0f,
+                srcRight = 1f,
+                srcBottom = 1f,
+                dstLeft = 10f,
+                dstTop = 20f,
+                dstRight = 30f,
+                dstBottom = 40f,
+                paint = Paint(),
+            )
+            JbrSkiaCommandRecorder.drawRoundRect(
+                left = 1f,
+                top = 2f,
+                right = 11f,
+                bottom = 12f,
+                radiusX = 3f,
+                radiusY = 4f,
+                paint = Paint().apply {
+                    color = Color.Blue
+                    style = PaintingStyle.Stroke
+                    strokeWidth = 2f
+                },
+            )
+        }
+
+        val records = commands!!.commandRecords()
+        assertEquals(18, records[0][0])
+        assertEquals(73, records[1][0])
+        assertEquals(80, records[2][0])
     }
 
     @Test
