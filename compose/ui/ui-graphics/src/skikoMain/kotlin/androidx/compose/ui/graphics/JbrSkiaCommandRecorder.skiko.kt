@@ -133,6 +133,7 @@ object JbrSkiaCommandRecorder {
     private val confirmedColorFilterHandles = HashSet<Long>()
     private val shaderHandleLock = Any()
     private val definedShaderHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_SHADER_HANDLES, 0.75f, true)
+    private val confirmedShaderHandles = mutableSetOf<Long>()
     private val fontDataHandleLock = Any()
     private val definedFontDataHandles = LinkedHashMap<Long, Unit>(MAX_DEFINED_FONT_DATA_HANDLES, 0.75f, true)
     private val pendingImageCacheClear = AtomicBoolean(false)
@@ -423,6 +424,14 @@ object JbrSkiaCommandRecorder {
         }
     }
 
+    @JvmStatic
+    fun markInteropShaderDefinitionsRendered(handles: LongArray) {
+        if (handles.isEmpty()) return
+        synchronized(shaderHandleLock) {
+            handles.forEach(confirmedShaderHandles::add)
+        }
+    }
+
     private fun clearInteropCaches() {
         synchronized(imageCacheLock) {
             definedImageKeys.clear()
@@ -437,6 +446,7 @@ object JbrSkiaCommandRecorder {
         }
         synchronized(shaderHandleLock) {
             definedShaderHandles.clear()
+            confirmedShaderHandles.clear()
         }
         synchronized(fontDataHandleLock) {
             definedFontDataHandles.clear()
@@ -3717,18 +3727,17 @@ object JbrSkiaCommandRecorder {
         private fun defineShaderHandleIfNeeded(handle: Long, type: Int, payload: IntArray) {
             var evictedHandle: Long? = null
             val shouldDefine = synchronized(shaderHandleLock) {
-                if (definedShaderHandles.containsKey(handle)) {
-                    definedShaderHandles[handle] = Unit
-                    forceResourceDefinitions
-                } else {
+                val alreadyDefined = definedShaderHandles.containsKey(handle)
+                if (!alreadyDefined) {
                     if (definedShaderHandles.size >= MAX_DEFINED_SHADER_HANDLES) {
                         val eldest = definedShaderHandles.keys.first()
                         definedShaderHandles.remove(eldest)
+                        confirmedShaderHandles.remove(eldest)
                         evictedHandle = eldest
                     }
-                    definedShaderHandles[handle] = Unit
-                    true
                 }
+                definedShaderHandles[handle] = Unit
+                forceResourceDefinitions || handle !in confirmedShaderHandles
             }
             evictedHandle?.let {
                 commands.addCommand(
