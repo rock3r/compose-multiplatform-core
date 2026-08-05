@@ -105,6 +105,23 @@ internal object ComposeFeatureFlags {
     val redispatchUnconsumedMouseWheelEvents = FeatureFlag {
         System.getProperty("compose.swing.redispatchMouseWheelEvents", "true").toBoolean()
     }
+
+    /**
+     * Indicates whether Swing-backed Compose layers pace invalidation-driven repaints to the
+     * display refresh using the JBR FramePacing service, coalescing to at most one repaint per
+     * display refresh tick. Without pacing, a continuously invalidating scene renders as fast
+     * as the EDT can paint, far above the refresh rate.
+     *
+     * Only affects rendering via [androidx.compose.ui.awt.RenderSettings.SwingGraphics]. Has no
+     * effect when the runtime does not provide the FramePacing service (non-JetBrains Runtime,
+     * or the `com.jetbrains.JBR` API classes are absent from the classpath); repaint behavior
+     * is then unchanged.
+     *
+     * Read at initialization time for each [ComposePanel].
+     */
+    val useSwingFramePacing = FeatureFlag {
+        System.getProperty("compose.swing.frame.pacing").toBoolean()
+    }
 }
 
 

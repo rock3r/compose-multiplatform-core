@@ -16,6 +16,7 @@
 
 package androidx.compose.ui.scene.skia
 
+import androidx.compose.ui.ComposeFeatureFlags
 import androidx.compose.ui.scene.ComposeSceneMediator
 import java.awt.Component
 import java.awt.Dimension
@@ -98,6 +99,16 @@ internal class SwingSkiaLayerComponent(
             }
         }
 
+    /**
+     * @see ComposeFeatureFlags.useSwingFramePacing
+     */
+    private val repaintPacer: SwingRepaintPacer? =
+        if (ComposeFeatureFlags.useSwingFramePacing.value) {
+            SwingRepaintPacer(hierarchyRoot)
+        } else {
+            null
+        }
+
     override val contentRoot: Component
         get() = hierarchyRoot
 
@@ -119,11 +130,18 @@ internal class SwingSkiaLayerComponent(
     override val windowHandle get() = 0L
 
     override fun dispose() {
+        repaintPacer?.dispose()
         hierarchyRoot.dispose()
     }
 
     override fun needRender() {
-        hierarchyRoot.repaint()
+        val repaintPacer = repaintPacer
+
+        if (repaintPacer != null) {
+            repaintPacer.requestRepaint()
+        } else {
+            hierarchyRoot.repaint()
+        }
     }
 
     override fun renderImmediately() {
