@@ -39,7 +39,6 @@ androidXMultiplatform {
                 it.returnDefaultValues = true
             }
         }
-        desktop()
         mingwX64()
         linux()
         mac()
@@ -49,9 +48,38 @@ androidXMultiplatform {
         js()
         wasmJs()
     }
+    desktop()
 
     defaultPlatform(PlatformIdentifier.ANDROID)
 
+    def composeVersion = project.redirectVersions.get("androidx.compose")
+    sourceSets {
+        commonMain.dependencies {
+            api(libs.kotlinCoroutinesCore)
+            api("androidx.compose.runtime:runtime-annotation:$composeVersion")
+            implementation("androidx.collection:collection:1.6.0")
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlinTest)
+            implementation(libs.kotlinCoroutinesTest)
+            implementation(libs.kotlinReflect)
+            implementation(project(":compose:runtime:runtime-test-utils"))
+        }
+        create("nonEmulatorCommonTest").dependsOn(commonTest)
+        nonEmulatorJvmTest {
+            dependsOn(nonEmulatorCommonTest)
+            dependencies {
+                implementation(project(":compose:ui:ui-unit"))
+            }
+        }
+        create("nonAndroidMain").dependsOn(commonMain)
+        create("nonAndroidTest").dependsOn(commonTest)
+        desktopMain.dependsOn(nonAndroidMain)
+        desktopTest {
+            dependsOn(nonEmulatorJvmTest)
+            dependsOn(nonAndroidTest)
+        }
+    }
 }
 
 androidx {
