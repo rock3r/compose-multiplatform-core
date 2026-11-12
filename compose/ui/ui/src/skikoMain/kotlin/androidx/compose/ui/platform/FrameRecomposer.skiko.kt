@@ -162,6 +162,17 @@ class FrameRecomposer(
             frameDispatcher.hasImmediateTasks() ||
             frameClock.hasAwaiters
 
+    /** Pauses recomposition and releases an existing parent-frame wait without starting new work. */
+    fun pauseCompositionFrameClock() {
+        pauseRecompositionForNonRendering(recomposer, frameClock)
+    }
+
+    /** Resumes queued recomposition on a real render. */
+    fun resumeCompositionFrameClock() {
+        resumeRecompositionForNonRendering(recomposer)
+        invalidate()
+    }
+
     /**
      * Cancels the host recomposer and releases host-owned resources.
      */
