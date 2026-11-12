@@ -51,6 +51,7 @@ import androidx.lifecycle.enableSavedStateHandles
 import androidx.savedstate.SavedState
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.Frame
 import java.awt.Insets
 import java.awt.Window
 import java.awt.event.ComponentAdapter
@@ -306,11 +307,13 @@ internal class ComposeContainer(
     override fun windowIconified(e: WindowEvent) {
         isMinimized = true
         updateLifecycleState()
+        mediator.onWindowMinimizedChanged(true)
         onWindowPositionChanged()
     }
     override fun windowDeiconified(e: WindowEvent) {
         isMinimized = false
         updateLifecycleState()
+        mediator.onWindowMinimizedChanged(false)
         onWindowPositionChanged()
     }
     override fun windowActivated(e: WindowEvent) = Unit
@@ -424,6 +427,10 @@ internal class ComposeContainer(
         }
         this.window = window
 
+        val isNowMinimized =
+            (window as? Frame)?.extendedState?.and(Frame.ICONIFIED) == Frame.ICONIFIED
+        isMinimized = isNowMinimized
+        mediator.onWindowMinimizedChanged(isNowMinimized)
         onWindowFocusChanged()
     }
 
