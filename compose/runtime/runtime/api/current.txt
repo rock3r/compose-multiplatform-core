@@ -696,7 +696,9 @@ package androidx.compose.runtime {
     method @InaccessibleFromKotlin @Deprecated public kotlinx.coroutines.flow.Flow<androidx.compose.runtime.Recomposer.State> getState();
     method public suspend Object? join(kotlin.coroutines.Continuation<? super kotlin.Unit>);
     method public void pauseCompositionFrameClock();
+    method @SuppressCompatibility @androidx.compose.runtime.InternalComposeApi public void pauseRecomposition();
     method public void resumeCompositionFrameClock();
+    method @SuppressCompatibility @androidx.compose.runtime.InternalComposeApi public void resumeRecomposition();
     method public suspend Object? runRecomposeAndApplyChanges(kotlin.coroutines.Continuation<? super kotlin.Unit>);
     method public androidx.compose.runtime.CancellationHandle scheduleFrameEndCallback(kotlin.jvm.functions.Function0<kotlin.Unit> action);
     property public long changeCount;

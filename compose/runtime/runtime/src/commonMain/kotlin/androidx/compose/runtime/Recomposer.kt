@@ -273,6 +273,7 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
     private var errorState = MutableStateFlow<RecomposerErrorState?>(null)
 
     private var frameClockPaused: Boolean = false
+    private var recompositionPaused: Boolean = false
     // End properties guarded by stateLock
 
     private val _state = MutableStateFlow(State.Inactive)
@@ -504,7 +505,7 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
         var compositions: List<ControlledComposition> = emptyList()
         val changes =
             synchronized(stateLock) {
-                if (snapshotInvalidations.isEmpty()) return hasFrameWorkLocked
+                if (snapshotInvalidations.isEmpty()) return !recompositionPaused && hasFrameWorkLocked
                 compositions = knownCompositionsLocked()
                 snapshotInvalidations.wrapIntoSet().also {
                     snapshotInvalidations = MutableScatterSet()
@@ -534,7 +535,7 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
             if (deriveStateLocked() != null) {
                 error("called outside of runRecomposeAndApplyChanges")
             }
-            hasFrameWorkLocked
+            if (recompositionPaused) false else hasFrameWorkLocked
         }
     }
 
@@ -622,7 +623,18 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
                 // We use the cached frame clock from above not just so that we don't locate it
                 // each time, but because we've installed the broadcastFrameClock as the scope
                 // clock above for user code to locate.
+                var frameExecuted = false
                 parentFrameClock.withFrameNanos { frameTime ->
+                    val shouldExecuteFrame =
+                        synchronized(stateLock) {
+                            if (recompositionPaused) {
+                                false
+                            } else {
+                                frameExecuted = true
+                                true
+                            }
+                        }
+                    if (!shouldExecuteFrame) return@withFrameNanos
                     // Dispatch MonotonicFrameClock frames first; this may produce new
                     // composer invalidations that we must handle during the same frame.
                     if (hasBroadcastFrameClockAwaiters) {
@@ -788,8 +800,10 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
                     }
                 }
 
-                discardUnusedMovableContentState()
-                nextFrameEndCallbackQueue.markFrameComplete()
+                if (frameExecuted) {
+                    discardUnusedMovableContentState()
+                    nextFrameEndCallbackQueue.markFrameComplete()
+                }
             }
         }
 
@@ -1052,10 +1066,14 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
     private val hasSchedulingWork: Boolean
         get() =
             synchronized(stateLock) {
-                snapshotInvalidations.isNotEmpty() ||
-                    compositionInvalidations.isNotEmpty() ||
-                    hasBroadcastFrameClockAwaitersLocked ||
-                    hasNextFrameEndAwaitersLocked
+                if (recompositionPaused) {
+                    snapshotInvalidations.isNotEmpty()
+                } else {
+                    snapshotInvalidations.isNotEmpty() ||
+                        compositionInvalidations.isNotEmpty() ||
+                        hasBroadcastFrameClockAwaitersLocked ||
+                        hasNextFrameEndAwaitersLocked
+                }
             }
 
     private suspend fun awaitWorkAvailable() {
@@ -1577,6 +1595,38 @@ public class Recomposer(effectCoroutineContext: CoroutineContext) : CompositionC
                     frameClockPaused = false
                     deriveStateLocked()
                 } else null
+            }
+            ?.resume(Unit)
+    }
+
+    /**
+     * Pauses recomposition while continuing to distribute snapshot modifications to known
+     * compositions. Composition effects and snapshot observation remain active; this does not
+     * dispose compositions or make them collectable. Queued work runs after [resumeRecomposition].
+     *
+     * Both pause flags change atomically. A frame that is already executing may complete before
+     * the pause takes effect.
+     */
+    @InternalComposeApi
+    public fun pauseRecomposition() {
+        synchronized(stateLock) {
+            recompositionPaused = true
+            frameClockPaused = true
+        }
+    }
+
+    /**
+     * Resumes queued recomposition on a real frame without invalidating every composition.
+     *
+     * The state transition and scheduler wakeup are atomic and do not depend on the previous state
+     * of the legacy frame-clock pause flag.
+     */
+    @InternalComposeApi
+    public fun resumeRecomposition() {
+        synchronized(stateLock) {
+                recompositionPaused = false
+                frameClockPaused = false
+                deriveStateLocked()
             }
             ?.resume(Unit)
     }

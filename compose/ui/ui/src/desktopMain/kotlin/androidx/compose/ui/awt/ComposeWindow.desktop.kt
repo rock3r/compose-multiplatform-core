@@ -93,6 +93,14 @@ class ComposeWindow @ExperimentalComposeUiApi constructor(
     @ExperimentalComposeUiApi
     var isClearFocusOnMouseDownEnabled: Boolean by composePanel::isClearFocusOnMouseDownEnabled
 
+    /**
+     * Pauses recomposition while this window cannot render, preserving snapshot writes for the
+     * next real render. Pausing does not dispose the composition.
+     */
+    @ExperimentalComposeUiApi
+    var isPauseCompositionWhenNotRendering: Boolean by
+        composePanel::pauseCompositionWhenNotRendering
+
     init {
         disableDoubleBuffering()  // To reduce memory use
         contentPane.add(composePanel)

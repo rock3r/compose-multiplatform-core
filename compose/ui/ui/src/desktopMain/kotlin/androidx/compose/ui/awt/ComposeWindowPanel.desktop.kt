@@ -91,6 +91,8 @@ internal class ComposeWindowPanel(
     val semanticsOwners by composeContainer::semanticsOwners
 
     var isClearFocusOnMouseDownEnabled: Boolean by composeContainer::isClearFocusOnMouseDownEnabled
+    var pauseCompositionWhenNotRendering: Boolean by
+        composeContainer::pauseCompositionWhenNotRendering
 
     var isWindowTransparent: Boolean = false
         set(value) {

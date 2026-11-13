@@ -151,6 +151,19 @@ class ComposePanel @ExperimentalComposeUiApi constructor(
         }
 
     /**
+     * Pauses recomposition while this panel cannot render because it is detached, hidden,
+     * minimized, or has no renderable size. Snapshot writes are preserved for the latest-state
+     * recomposition on the next real render. Composition is not disposed by pausing; [dispose]
+     * remains responsible for releasing it.
+     */
+    @ExperimentalComposeUiApi
+    var isPauseCompositionWhenNotRendering: Boolean = false
+        set(value) {
+            field = value
+            _composeContainer?.pauseCompositionWhenNotRendering = value
+        }
+
+    /**
      * Determines whether the Compose state in [ComposePanel] should be disposed
      * when the panel is detached from the Swing hierarchy (when [removeNotify] is called).
      *
@@ -398,6 +411,7 @@ class ComposePanel @ExperimentalComposeUiApi constructor(
             })
 
             isClearFocusOnMouseDownEnabled = this@ComposePanel.isClearFocusOnMouseDownEnabled
+            pauseCompositionWhenNotRendering = this@ComposePanel.isPauseCompositionWhenNotRendering
         }
     }
 

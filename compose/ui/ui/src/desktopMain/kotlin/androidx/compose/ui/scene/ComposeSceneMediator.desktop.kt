@@ -107,6 +107,8 @@ import java.awt.event.FocusEvent.Cause.TRAVERSAL
 import java.awt.event.FocusEvent.Cause.TRAVERSAL_BACKWARD
 import java.awt.event.FocusEvent.Cause.TRAVERSAL_FORWARD
 import java.awt.event.FocusListener
+import java.awt.event.HierarchyEvent
+import java.awt.event.HierarchyListener
 import java.awt.event.InputEvent
 import java.awt.event.InputMethodEvent
 import java.awt.event.InputMethodListener
@@ -161,6 +163,21 @@ internal class ComposeSceneMediator(
 ) : SkikoRenderDelegate {
     private var isDisposed = false
     private var isComponentAttached = false
+    private var isWindowMinimized = false
+    private var isCompositionPaused = false
+
+    /** Pauses recomposition while this mediator cannot render, preserving state for resume. */
+    internal var pauseCompositionWhenNotRendering = false
+        set(value) {
+            if (field == value) return
+            field = value
+            updateCompositionFrameClock()
+        }
+    private val hierarchyListener = HierarchyListener { event ->
+        if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) {
+            updateCompositionFrameClock()
+        }
+    }
     private val invisibleComponent = InvisibleComponent()
 
     private val semanticsOwnerManager = DesktopSemanticsOwnerManager()
@@ -448,6 +465,7 @@ internal class ComposeSceneMediator(
 
         container.add(invisibleComponent)
         container.add(contentComponent)
+        container.addHierarchyListener(hierarchyListener)
 
         // Because interopContainer.root == container, add a listener only after adding
         // [invisibleComponent] and [contentComponent] to react only on changes with [interopLayer].
@@ -635,6 +653,7 @@ internal class ComposeSceneMediator(
 
         container.remove(contentComponent)
         container.remove(invisibleComponent)
+        container.removeHierarchyListener(hierarchyListener)
         container.transferHandler = null
         container.dropTarget = null
 
@@ -656,6 +675,7 @@ internal class ComposeSceneMediator(
         require(!isDisposed) { "ComposeSceneMediator is already disposed" }
         isComponentAttached = true
         onChangeDensity()
+        updateCompositionFrameClock()
 
         architectureComponentsOwner.navigationEventDispatcherOwner
             .navigationEventDispatcher.addInput(navigationEventInput)
@@ -667,6 +687,7 @@ internal class ComposeSceneMediator(
     fun onComponentDetached() {
         require(!isDisposed) { "ComposeSceneMediator is already disposed" }
         isComponentAttached = false
+        updateCompositionFrameClock()
         architectureComponentsOwner.navigationEventDispatcherOwner
             .navigationEventDispatcher.removeInput(navigationEventInput)
         scene.focusManager.releaseFocus()
@@ -720,6 +741,32 @@ internal class ComposeSceneMediator(
         sceneRenderingScope.onSceneInvalidation()
     }
 
+    fun onWindowMinimizedChanged(isMinimized: Boolean) {
+        if (isWindowMinimized == isMinimized) return
+        isWindowMinimized = isMinimized
+        updateCompositionFrameClock()
+    }
+
+    private fun updateCompositionFrameClock() {
+        if (isDisposed) return
+        val shouldPause = pauseCompositionWhenNotRendering && !canRender()
+        if (shouldPause == isCompositionPaused) return
+        isCompositionPaused = shouldPause
+        if (shouldPause) {
+            frameRecomposer.pauseCompositionFrameClock()
+        } else {
+            frameRecomposer.resumeCompositionFrameClock()
+        }
+    }
+
+    @OptIn(ExperimentalSkikoApi::class)
+    private fun canRender(): Boolean {
+        val hasRenderableSize = contentComponent !is SkiaSwingLayer ||
+            (contentComponent.width > 0 && contentComponent.height > 0)
+        return isComponentAttached && contentComponent.isShowing &&
+            !isWindowMinimized && hasRenderableSize
+    }
+
     fun onComponentPositionChanged() = catchExceptions {
         if (!container.isDisplayable) return
 
@@ -735,6 +782,7 @@ internal class ComposeSceneMediator(
             width = size.width.fastCoerceAtLeast(0f).fastRoundToInt(),
             height = size.height.fastCoerceAtLeast(0f).fastRoundToInt()
         )
+        updateCompositionFrameClock()
     }
 
     fun onWindowPositionChanged() = catchExceptions {

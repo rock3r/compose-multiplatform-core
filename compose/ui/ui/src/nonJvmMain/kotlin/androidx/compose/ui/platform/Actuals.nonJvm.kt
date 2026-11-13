@@ -16,4 +16,16 @@
 
 package androidx.compose.ui.platform
 
+import androidx.compose.runtime.BroadcastFrameClock
+import androidx.compose.runtime.Recomposer
+
 internal actual fun Any.nativeClass(): Any = this::class
+
+// Non-rendering pause is Desktop-only. Other targets must not reference the new Recomposer
+// symbols because their runtime artifacts are redirected.
+internal actual fun pauseRecompositionForNonRendering(
+    recomposer: Recomposer,
+    frameClock: BroadcastFrameClock,
+) = Unit
+
+internal actual fun resumeRecompositionForNonRendering(recomposer: Recomposer) = Unit
