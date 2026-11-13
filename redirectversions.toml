@@ -11,6 +11,9 @@
 # androidx.compose.material3).
 [versions]
 "androidx.compose" = "1.13.0-beta01"
+# CMP-11138 requires the canonical runtime pause API.
+# Downstream integration is gated on publication of this distinct upstream version.
+"androidx.compose.runtime.runtime" = "1.13.0-beta03"
 "androidx.compose.material3" = "1.5.0-beta01"
 "androidx.compose.material3.adaptive" = "1.4.0-alpha03"
 "androidx.compose.material3.common" = "1.0.0-alpha01"
